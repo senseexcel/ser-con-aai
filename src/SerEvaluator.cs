@@ -35,6 +35,15 @@ namespace SerConAai
         private static Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
+        #region Enumerator
+        public enum SerFunction
+        {
+            CREATE = 1,
+            STATUS = 2,
+            DOWNLOAD = 3
+        }
+        #endregion
+
         #region Properties & Variables
         private SerOnDemandConfig OnDemandConfig;
         private QlikQrsHub QlikHub;
@@ -70,7 +79,7 @@ namespace SerConAai
                         {
                              FunctionId = 1,
                              FunctionType = FunctionType.Scalar,
-                             Name = "Create",
+                             Name = SerFunction.CREATE.ToString(),
                              Params =
                              {
                                 new Parameter() { Name = "TemplateFilename", DataType = DataType.String },
@@ -83,7 +92,7 @@ namespace SerConAai
                         {
                              FunctionId = 2,
                              FunctionType = FunctionType.Scalar,
-                             Name = "Status",
+                             Name = SerFunction.STATUS.ToString(),
                              Params =
                              {
                                  new Parameter() { Name = "TaskID", DataType = DataType.String }
@@ -94,7 +103,7 @@ namespace SerConAai
                         {
                              FunctionId = 3,
                              FunctionType = FunctionType.Scalar,
-                             Name = "Download",
+                             Name = SerFunction.DOWNLOAD.ToString(),
                              Params =
                              {
                                  new Parameter() { Name = "TaskID", DataType = DataType.String }
@@ -141,7 +150,7 @@ namespace SerConAai
                 var result = String.Empty;
                 logger.Debug($"Function id: {functionRequestHeader.FunctionId}");
                 var row = requestStream?.Current?.Rows.FirstOrDefault() ?? null;
-                if (functionRequestHeader.FunctionId == 1)
+                if (functionRequestHeader.FunctionId == (int)SerFunction.CREATE)
                 {
                     OnDemandConfig.TemplateFileName = GetParameterValue(0, row);
                     logger.Debug($"Template path: {OnDemandConfig.TemplateFileName}");
@@ -152,13 +161,13 @@ namespace SerConAai
                     OnDemandConfig.DownloadUrl = null;
                     result = CreateReport();
                 }
-                else if (functionRequestHeader.FunctionId == 2)
+                else if (functionRequestHeader.FunctionId == (int)SerFunction.STATUS)
                 {
                     var taskId = GetParameterValue(0, row);
                     logger.Debug($"TaskId: {taskId}");
                     result = Status(taskId);
                 }
-                else if (functionRequestHeader.FunctionId == 3)
+                else if (functionRequestHeader.FunctionId == (int)SerFunction.DOWNLOAD)
                 {
                     var taskId = GetParameterValue(0, row);
                     logger.Debug($"TaskId: {taskId}");

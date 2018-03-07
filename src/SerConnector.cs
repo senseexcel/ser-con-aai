@@ -36,11 +36,20 @@ namespace SerConAai
         #region Private Methods
         private static X509Certificate2 CreateCertificate(string savePath)
         {
-            var cert = new X509Certificate2();
-            cert = cert.GenerateQlikJWTConformCert($"CN={Environment.MachineName}",
-                                                   $"CN={Environment.MachineName}-CA");
-            cert.SavePem(savePath, true);
-            return cert;
+            try
+            {
+                var cert = new X509Certificate2();
+                cert = cert.GenerateQlikJWTConformCert($"CN={Environment.MachineName}",
+                                                       $"CN={Environment.MachineName}-CA");
+                cert.SavePem(savePath, true);
+                logger.Debug($"Certificate {savePath} created.");
+                return cert;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, $"The Method {nameof(CreateCertificate)} failed.");
+                return null;
+            }
         }
         #endregion
 
@@ -66,7 +75,9 @@ namespace SerConAai
                     if (mode == "-cert")
                     {
                         Console.WriteLine($"Certificate generate into file {config.CertPath}");
-                        CreateCertificate(config.CertPath);
+                        var cert = CreateCertificate(config.CertPath);
+                        if(cert == null)
+
                         Console.WriteLine("Please press any key to terminate.");
                         return;
                     }
