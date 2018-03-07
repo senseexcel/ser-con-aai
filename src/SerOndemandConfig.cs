@@ -12,6 +12,7 @@ namespace SerConAai
     #region Usings
     using Microsoft.Extensions.PlatformAbstractions;
     using Newtonsoft.Json;
+    using SerApi;
     using System;
     using System.Collections.Generic;
     using System.IO;
@@ -30,6 +31,7 @@ namespace SerConAai
         public int Port { get; set; } = 50059;
         public string Server { get; set; } = "https://localhost";
         public string Host { get; set; } = "localhost";
+        public string HubConnect { get; set; } = "https://localhost:4242";
         public int Wait { get; set; } = 250;
         public string Certificate { get; set; }
         public string ReportName { get; set; } = "OnDemandReport";
@@ -64,6 +66,6 @@ namespace SerConAai
         [JsonIgnore]
         public string DownloadUrl { get; set; }
         [JsonIgnore]
-        public string DomainUser { get; set; }
+        public DomainUser DomainUser { get; set; }
     }
 }

@@ -17,28 +17,36 @@ namespace SerConAai
     using System.Text;
     using Microsoft.Extensions.PlatformAbstractions;
     using System.Linq;
-    using PemCrypto;
+    using Q2gHelperPem;
     using System.Net;
     using System.Net.Http;
     using NLog;
     using System.Reflection;
-    using SerApiNuget;
+    using SerApi;
+    using System.Security.Claims;
     #endregion
 
     public class SessionManager
     {
+        class SessionInfo
+        {
+            public Cookie Cookie { get; set; }
+            public DomainUser User { get; set; }
+            public Uri ConnectUri { get; set; }
+        }
+
         #region Logger
         private static Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
         #region Variables & Properties
-        private Dictionary<Uri, Cookie> sessionList;
+        private List<SessionInfo> sessionList;
         #endregion
 
         #region Constructor
         public SessionManager()
         {
-            sessionList = new Dictionary<Uri, Cookie>();
+            sessionList = new List<SessionInfo>();
         }
         #endregion
 
@@ -87,17 +95,18 @@ namespace SerConAai
         #endregion
 
         #region Public Methods
-        public Cookie GetSession(Uri connectUri, string domainUser, string cookieName, string virtualProxy, string certName)
+        public Cookie GetSession(Uri connectUri, DomainUser domainUser, string cookieName, string virtualProxy, string certName)
         {
             try
             {
                 var cert = new X509Certificate2();
                 var fullUri = new Uri($"{connectUri.OriginalString}/{virtualProxy}");
-                var oldSession = sessionList?.FirstOrDefault(u => u.Key.OriginalString == connectUri.OriginalString) ?? null;
-                if (oldSession.Value.Key != null && oldSession.Value.Value != null)
-                    return oldSession.Value.Value;
+                var oldSession = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
+                                                             && u.User.Equals(domainUser)) ?? null;
+                if (oldSession != null)
+                    return oldSession.Cookie;
 
-                var certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath,certName);
+                var certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, certName);
                 if (!File.Exists(certPath))
                 {
                     var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
@@ -111,11 +120,24 @@ namespace SerConAai
                     cert = cert.LoadPem(certPath, privateFile);
                 }
 
-                var token = cert.GenerateQlikJWToken(TimeSpan.FromMinutes(20));
+                var claims = new[]
+                {
+                    new Claim("UserDirectory",  domainUser.UserDirectory),
+                    new Claim("UserId", domainUser.UserId),
+                    new Claim("Attributes", "[SerOnDemand]")
+                }.ToList();
+                var token = cert.GenerateQlikJWToken(claims, TimeSpan.FromMinutes(20));
+                logger.Debug($"Generate token {token}");
                 var cookie = GetJWTSession(fullUri, token, cookieName);
+                logger.Debug($"Generate cookie {cookie.Name} - {cookie.Value}");
                 if (cookie != null)
                 {
-                    sessionList.Add(connectUri, cookie);
+                    sessionList.Add(new SessionInfo()
+                    {
+                        Cookie = cookie,
+                        User = domainUser,
+                        ConnectUri = connectUri
+                    });
                     return cookie;
                 }
 

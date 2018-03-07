@@ -38,9 +38,9 @@ namespace SerConAai
     using System.Security.Claims;
     using Microsoft.IdentityModel.Tokens;
     using System.IdentityModel.Tokens.Jwt;
-    using Q2gHelperPemNuget;
-    using Q2gHelperQrsNuget;
-    using SerApiNuget;
+    using Q2gHelperPem;
+    using Q2gHelperQrs;
+    using SerApi;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -59,7 +59,7 @@ namespace SerConAai
         public SerEvaluator(SerOnDemandConfig config)
         {
             OnDemandConfig = config;
-            QlikHub = new QlikQrsHub(new Uri($"{OnDemandConfig.Server}:4242"));
+            QlikHub = new QlikQrsHub(new Uri(OnDemandConfig.HubConnect));
             sessionManager = new SessionManager();
         }
 
@@ -148,7 +148,7 @@ namespace SerConAai
                 logger.Info($"request from user: {commonHeader.UserId} for AppId: {commonHeader.AppId}");
                 OnDemandConfig.CurrentAppId = commonHeader.AppId;
                 var domainUser = GetFormatedUserId(commonHeader.UserId);
-                OnDemandConfig.DomainUser = commonHeader.UserId;
+                OnDemandConfig.DomainUser = new DomainUser(commonHeader.UserId);
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
    
@@ -221,7 +221,7 @@ namespace SerConAai
                 File.Copy(tplPath, tplCopyPath, true);
 
                 //Get a session
-                var cookie = sessionManager.GetSession(new Uri($"{OnDemandConfig.Server}"), OnDemandConfig.DomainUser, OnDemandConfig.CookieName,
+                var cookie = sessionManager.GetSession(new Uri(OnDemandConfig.Server), OnDemandConfig.DomainUser, OnDemandConfig.CookieName,
                                                         OnDemandConfig.VirtualProxyPath, OnDemandConfig.Certificate);
                 logger.Debug($"Session: {cookie?.Name} - {cookie?.Value}");
 
@@ -346,9 +346,8 @@ namespace SerConAai
                 File.Move(reportFile, renamePath);
 
                 //Upload Shared Content
-                var domainUser = new DomainUser(OnDemandConfig.DomainUser);
-                QlikHub.UserId = domainUser.UserId;
-                QlikHub.UserDirectory = domainUser.UserDirectory;
+                QlikHub.UserId = OnDemandConfig?.DomainUser?.UserId ?? null;
+                QlikHub.UserDirectory = OnDemandConfig?.DomainUser?.UserDirectory ?? null;
                 var name = Path.GetFileNameWithoutExtension(OnDemandConfig.ReportName);
                 var doc = QlikHub.GetFirstSharedContent(name);
                 if (doc == null)
@@ -403,26 +402,9 @@ namespace SerConAai
             {
                 logger.Error("No Report created.");
                 return "-1";
-            } 
+            }
             else
                 return "0";
-        }
-
-        private Cookie GetJWTSession(Uri connectUri, string cookieName = "X-Qlik-Session", string token = null)
-        {
-            var cookieContainer = new CookieContainer();
-            var connectionHandler = new HttpClientHandler
-            {
-                UseDefaultCredentials = true,
-                CookieContainer = cookieContainer
-            };
-
-            var connection = new HttpClient(connectionHandler);
-            connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-            connection.GetAsync(connectUri).Wait();
-
-            var responseCookies = cookieContainer?.GetCookies(connectUri)?.Cast<Cookie>() ?? null;
-            return responseCookies.FirstOrDefault(cookie => cookie.Name.Equals(cookieName)) ?? null;
         }
 
         private string GetResultFile(string taskId)

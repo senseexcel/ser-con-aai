@@ -19,7 +19,7 @@ namespace SerConAai
     using System.IO;
     using System.Linq;
     using System.Security.Cryptography.X509Certificates;
-    using PemCrypto;
+    using Q2gHelperPem;
     #endregion
 
     public class SSEtoSER
