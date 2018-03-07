@@ -22,23 +22,9 @@ namespace SerConAai
     using System.Threading.Tasks;
     using static Qlik.Sse.Connector;
     using NLog;
-    using System.Net.Sockets;
     using System.IO;
-    using System.Net.NetworkInformation;
-    using System.Reflection;
-    using System.Text.RegularExpressions;
-    using System.Text;
-    using System.Security.Cryptography;
-    using System.Collections.Concurrent;
-    using Microsoft.Extensions.PlatformAbstractions;
     using Newtonsoft.Json;
-    using System.Net.Http;
     using Newtonsoft.Json.Linq;
-    using System.IdentityModel.Tokens;
-    using System.Security.Claims;
-    using Microsoft.IdentityModel.Tokens;
-    using System.IdentityModel.Tokens.Jwt;
-    using Q2gHelperPem;
     using Q2gHelperQrs;
     using SerApi;
     #endregion
@@ -223,8 +209,6 @@ namespace SerConAai
                 //Get a session
                 var cookie = sessionManager.GetSession(new Uri(OnDemandConfig.Server), OnDemandConfig.DomainUser, OnDemandConfig.CookieName,
                                                         OnDemandConfig.VirtualProxyPath, OnDemandConfig.Certificate);
-                logger.Debug($"Session: {cookie?.Name} - {cookie?.Value}");
-
                 //Save config for SER engine
                 var savePath = Path.Combine(OnDemandConfig.CurrentWorkingDir, "job.json");
                 SaveSerConfig(savePath, tplCopyPath, cookie);
@@ -296,35 +280,42 @@ namespace SerConAai
 
         private void SaveSerConfig(string savePath, string templatePath, Cookie cookie)
         {
-            var task = new SerTask()
+            try
             {
-                General = new SerGeneral()
+                var task = new SerTask()
                 {
-                    UseUserSelections = OnDemandConfig.UseUserSelesction,
-                },
-                Template = new SerTemplate()
-                {
-                    FileName = templatePath,
-                    SaveFormats = OnDemandConfig.SaveFormats,
-                    ReportName = Path.GetFileNameWithoutExtension(templatePath),
-                },
-                Connection = new SerConnection()
-                {
-                    App = OnDemandConfig.CurrentAppId,
-                    ConnectUri = $"{OnDemandConfig.Server}/{OnDemandConfig.VirtualProxyPath}",
-                    VirtualProxyPath = OnDemandConfig.VirtualProxyPath,
-                    Credentials = new SerCredentials()
+                    General = new SerGeneral()
                     {
-                        Type = QlikCredentialType.SESSION,
-                        Key = cookie.Name,
-                        Value = cookie.Value,
+                        UseUserSelections = OnDemandConfig.UseUserSelesction,
+                    },
+                    Template = new SerTemplate()
+                    {
+                        FileName = templatePath,
+                        SaveFormats = OnDemandConfig.SaveFormats,
+                        ReportName = Path.GetFileNameWithoutExtension(templatePath),
+                    },
+                    Connection = new SerConnection()
+                    {
+                        App = OnDemandConfig.CurrentAppId,
+                        ConnectUri = $"{OnDemandConfig.Server}/{OnDemandConfig.VirtualProxyPath}",
+                        VirtualProxyPath = OnDemandConfig.VirtualProxyPath,
+                        Credentials = new SerCredentials()
+                        {
+                            Type = QlikCredentialType.SESSION,
+                            Key = cookie.Name,
+                            Value = cookie.Value,
+                        }
                     }
-                }
-            };
+                };
 
-            var appConfig = new SerConfig() { Tasks = new List<SerTask> { task } };
-            var json = JsonConvert.SerializeObject(appConfig);
-            File.WriteAllText(savePath, json);
+                var appConfig = new SerConfig() { Tasks = new List<SerTask> { task } };
+                var json = JsonConvert.SerializeObject(appConfig);
+                File.WriteAllText(savePath, json);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Config for SER-Engine not saved.");
+            }
         }
 
         private void Upload(string taskId)
