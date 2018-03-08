@@ -20,6 +20,7 @@ namespace SerConAai
     using System.Linq;
     using System.Security.Cryptography.X509Certificates;
     using Q2gHelperPemNuget;
+    using Hjson;
     #endregion
 
     public class SSEtoSER
@@ -58,10 +59,10 @@ namespace SerConAai
         {
             try
             {
-                var configPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, "config.json");
+                var configPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, "config.hjson");
                 if (!File.Exists(configPath))
                     throw new Exception($"config file {configPath} not found.");
-                var json = File.ReadAllText(configPath);
+                var json = HjsonValue.Load(configPath).ToString();
                 var config = JsonConvert.DeserializeObject<SerOnDemandConfig>(json);
 
                 logger.Info(config.Fullname);
