@@ -1,0 +1,13 @@
+{
+  workingDir: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Temp,
+  templateFolder: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Templates,
+  serEnginePath: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Engine\\SenseExcelReporting.exe,
+  qlikServer: https://nb-fc-208000,
+  bindingHost: localhost,
+  bindingPort: 50059,
+  virtualProxy: {
+    path: ser,
+    cookieName: X-Qlik-Session-ser,
+    certificate: serconnector.pem
+  }
+}
