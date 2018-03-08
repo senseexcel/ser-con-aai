@@ -22,7 +22,6 @@ namespace SerConAai
 
     public class SerOnDemandConfig
     {
-        public string JwtToken { get; set; }
         public string VirtualProxyPath { get; set; }
         public string CookieName { get; set; }
         public string TemplateFolder { get; set; }
@@ -32,7 +31,6 @@ namespace SerConAai
         public string Server { get; set; } = "https://localhost";
         public string Host { get; set; } = "localhost";
         public string HubConnect { get; set; } = "https://localhost:4242";
-        public int Wait { get; set; } = 250;
         public string Certificate { get; set; }
         public string ReportName { get; set; } = "OnDemandReport";
         public string Framework { get; private set; } = RuntimeInformation.FrameworkDescription;

@@ -124,7 +124,7 @@ namespace SerConAai
             {
                 logger.Debug("ExecuteFunction was called");
 
-                Thread.Sleep(OnDemandConfig.Wait);
+                Thread.Sleep(200);
                 var functionRequestHeaderStream = context.RequestHeaders.SingleOrDefault(header => header.Key == "qlik-functionrequestheader-bin");
                 if (functionRequestHeaderStream == null)
                 {
