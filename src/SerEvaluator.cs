@@ -46,7 +46,6 @@ namespace SerConAai
 
         #region Properties & Variables
         private SerOnDemandConfig OnDemandConfig;
-        private QlikQrsHub QlikHub;
         private SessionManager sessionManager;
         #endregion
 
@@ -54,7 +53,6 @@ namespace SerConAai
         public SerEvaluator(SerOnDemandConfig config)
         {
             OnDemandConfig = config;
-            QlikHub = new QlikQrsHub(new Uri(OnDemandConfig.HubConnect));
             sessionManager = new SessionManager();
         }
 
@@ -106,7 +104,7 @@ namespace SerConAai
                              Name = SerFunction.DOWNLOAD.ToString(),
                              Params =
                              {
-                                 new Parameter() { Name = "TaskID", DataType = DataType.String }
+                                 new Parameter() { Name = "ReportName", DataType = DataType.String }
                              },
                              ReturnType = DataType.String
                         }
@@ -141,9 +139,11 @@ namespace SerConAai
 
                 var commonHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<CommonRequestHeader>();
                 logger.Info($"request from user: {commonHeader.UserId} for AppId: {commonHeader.AppId}");
-                OnDemandConfig.CurrentAppId = commonHeader.AppId;
-                var domainUser = GetFormatedUserId(commonHeader.UserId);
-                OnDemandConfig.DomainUser = new DomainUser(commonHeader.UserId);
+                var userParameter = new UserParameter()
+                {
+                    AppId = commonHeader.AppId,
+                    DomainUser = new DomainUser(commonHeader.UserId),
+                };
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
    
@@ -152,26 +152,30 @@ namespace SerConAai
                 var row = requestStream?.Current?.Rows.FirstOrDefault() ?? null;
                 if (functionRequestHeader.FunctionId == (int)SerFunction.CREATE)
                 {
-                    OnDemandConfig.TemplateFileName = GetParameterValue(0, row);
-                    logger.Debug($"Template path: {OnDemandConfig.TemplateFileName}");
-                    OnDemandConfig.SaveFormats = GetParameterValue(1, row);
-                    logger.Debug($"SaveFormat: {OnDemandConfig.SaveFormats}");
-                    OnDemandConfig.UseUserSelesction = Boolean.TryParse(GetParameterValue(2, row), out var boolResult);
-                    logger.Debug($"UseSelection: {OnDemandConfig.UseUserSelesction}");
-                    OnDemandConfig.DownloadUrl = null;
-                    result = CreateReport();
+                    userParameter.TemplateFileName = GetParameterValue(0, row);
+                    logger.Debug($"Template path: {userParameter.TemplateFileName}");
+                    userParameter.SaveFormats = GetParameterValue(1, row);
+                    logger.Debug($"SaveFormat: {userParameter.SaveFormats}");
+                    userParameter.UseUserSelesction = Boolean.TryParse(GetParameterValue(2, row), out var boolResult);
+                    logger.Debug($"UseSelection: {userParameter.UseUserSelesction}");
+                    result = CreateReport(userParameter);
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.STATUS)
                 {
                     var taskId = GetParameterValue(0, row);
                     logger.Debug($"TaskId: {taskId}");
-                    result = Status(taskId);
+                    result = Status(taskId, userParameter);
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.DOWNLOAD)
                 {
                     var taskId = GetParameterValue(0, row);
                     logger.Debug($"TaskId: {taskId}");
-                    result = OnDemandConfig.DownloadUrl;
+                    var domainUser = new DomainUser(commonHeader.UserId);
+                    var doc = GetFirstUserReport(domainUser);
+                    if (doc == null)
+                        logger.Error("No Download Document found.");
+                    else
+                        result = $"{OnDemandConfig.Server}{doc?.References.FirstOrDefault().ExternalPath}";
                     logger.Debug($"Download url {result}");
                 }
                 else
@@ -195,11 +199,11 @@ namespace SerConAai
         #endregion
 
         #region Private Functions
-        private string CreateReport()
+        private string CreateReport(UserParameter parameter)
         {
             try
             {
-                var tplPath = OnDemandConfig.TemplateFileName;
+                var tplPath = parameter.TemplateFileName;
                 if (!File.Exists(tplPath))
                     tplPath = Path.Combine(OnDemandConfig.TemplateFolder, tplPath);
 
@@ -209,28 +213,31 @@ namespace SerConAai
                 //Copy Template
                 var workDir = OnDemandConfig.WorkingDir;
                 var taskId = Guid.NewGuid().ToString();
-                OnDemandConfig.CurrentWorkingDir = Path.Combine(workDir, taskId);
-                logger.Debug($"TempFolder: {OnDemandConfig.CurrentWorkingDir}");
-                Directory.CreateDirectory(OnDemandConfig.CurrentWorkingDir);
-                var tplCopyPath = Path.Combine(OnDemandConfig.CurrentWorkingDir, Path.GetFileName(tplPath));
+                logger.Debug($"New Task-ID: {taskId}");
+                var currentWorkingDir = Path.Combine(workDir, taskId);
+                logger.Debug($"TempFolder: {currentWorkingDir}");
+                Directory.CreateDirectory(currentWorkingDir);
+                var tplCopyPath = Path.Combine(currentWorkingDir, Path.GetFileName(tplPath));
                 File.Copy(tplPath, tplCopyPath, true);
 
                 //Get a session
-                var cookie = sessionManager.GetSession(new Uri(OnDemandConfig.Server), OnDemandConfig.DomainUser, OnDemandConfig.CookieName,
+                var cookie = sessionManager.GetSession(new Uri(OnDemandConfig.Server), parameter.DomainUser, OnDemandConfig.CookieName,
                                                         OnDemandConfig.VirtualProxyPath, OnDemandConfig.Certificate);
                 //Save config for SER engine
-                var savePath = Path.Combine(OnDemandConfig.CurrentWorkingDir, "job.json");
-                SaveSerConfig(savePath, tplCopyPath, cookie);
+                var savePath = Path.Combine(currentWorkingDir, "job.json");
+                logger.Debug($"Save SER config file \"{savePath}\"");
+                SaveSerConfig(savePath, tplCopyPath, cookie, parameter);
 
                 //Start SER Engine as Process
+                logger.Debug($"Start Engine \"{currentWorkingDir}\"");
                 var serProcess = new Process();
                 serProcess.StartInfo.FileName = OnDemandConfig.SerEnginePath;
-                serProcess.StartInfo.Arguments = $"--workdir \"{OnDemandConfig.CurrentWorkingDir}\"";
+                serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\"";
                 serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 serProcess.Start();
 
                 //wait for finish and upload
-                var uploadThread = new Thread(() => Upload(taskId))
+                var uploadThread = new Thread(() => Upload(taskId, currentWorkingDir, parameter))
                 {
                     IsBackground = true
                 };
@@ -274,20 +281,7 @@ namespace SerConAai
             return resultBundle;
         }
 
-        private string GetFormatedUserId(string userIdStr)
-        {
-            var split = userIdStr.Split(';');
-            var userDirectory = split[0].Split('=');
-            if (userDirectory.Length == 1)
-                return userDirectory[0];
-            else
-            {
-                var userId = split[1].Split('=');
-                return $"{userDirectory.ElementAtOrDefault(1).Trim()}\\{userId.ElementAtOrDefault(1).Trim()}";
-            }
-        }
-
-        private void SaveSerConfig(string savePath, string templatePath, Cookie cookie)
+        private void SaveSerConfig(string savePath, string templatePath, Cookie cookie, UserParameter parameter)
         {
             try
             {
@@ -295,17 +289,17 @@ namespace SerConAai
                 {
                     General = new SerGeneral()
                     {
-                        UseUserSelections = OnDemandConfig.UseUserSelesction,
+                        UseUserSelections = parameter.UseUserSelesction,
                     },
                     Template = new SerTemplate()
                     {
                         FileName = templatePath,
-                        SaveFormats = OnDemandConfig.SaveFormats,
+                        SaveFormats = parameter.SaveFormats,
                         ReportName = Path.GetFileNameWithoutExtension(templatePath),
                     },
                     Connection = new SerConnection()
                     {
-                        App = OnDemandConfig.CurrentAppId,
+                        App = parameter.AppId,
                         ConnectUri = $"{OnDemandConfig.Server}/{OnDemandConfig.VirtualProxyPath}",
                         VirtualProxyPath = OnDemandConfig.VirtualProxyPath,
                         Credentials = new SerCredentials()
@@ -327,7 +321,7 @@ namespace SerConAai
             }
         }
 
-        private void Upload(string taskId)
+        private void Upload(string taskId, string currentWorkingDir, UserParameter parameter)
         {
             try
             {
@@ -335,36 +329,34 @@ namespace SerConAai
                 while (status != "100")
                 {
                     Thread.Sleep(250);
-                    status = Status(taskId);
+                    status = Status(taskId, parameter);
                     if (status == "-1")
                         return;
                 }
-                 
+
                 //Rename file name
                 var reportFile = GetReportFile(taskId);
-                var renamePath = Path.Combine(Path.GetDirectoryName(reportFile), $"{OnDemandConfig.ReportName}.{OnDemandConfig.SaveFormats}");
+                var renamePath = Path.Combine(Path.GetDirectoryName(reportFile), $"{OnDemandConfig.ReportName}.{parameter.SaveFormats}");
                 File.Move(reportFile, renamePath);
 
                 //Upload Shared Content
-                QlikHub.UserId = OnDemandConfig?.DomainUser?.UserId ?? null;
-                QlikHub.UserDirectory = OnDemandConfig?.DomainUser?.UserDirectory ?? null;
-                var name = Path.GetFileNameWithoutExtension(OnDemandConfig.ReportName);
-                var doc = QlikHub.GetFirstSharedContent(name);
+                var qlikHub = new QlikQrsHub(new Uri(OnDemandConfig.HubConnect))
+                {
+                    UserId = parameter?.DomainUser?.UserId ?? null,
+                    UserDirectory = parameter?.DomainUser?.UserDirectory ?? null,
+                };
+                var doc = GetFirstUserReport(parameter.DomainUser);
                 if (doc == null)
-                    QlikHub.Create(name, renamePath, $"{taskId} - Created by SERConnector.");
+                    qlikHub.Create(OnDemandConfig.ReportName, renamePath, $"Created by SER OnDemand Connector.");
                 else
-                    QlikHub.Update(name, renamePath);
+                    qlikHub.Update(OnDemandConfig.ReportName, renamePath);
                 logger.Debug($"upload file {reportFile}");
 
-                //Delete job files after upload
-                SoftDelete(OnDemandConfig.CurrentWorkingDir);
+                //Wait for Status Success 
+                Thread.Sleep(1000);
 
-                //Download Url
-                doc = QlikHub.GetFirstSharedContent(name);
-                if (doc == null)
-                    logger.Error("No Download Document found.");
-                else
-                    OnDemandConfig.DownloadUrl = $"{OnDemandConfig.Server}{doc?.References.FirstOrDefault().ExternalPath}";
+                //Delete job files after upload
+                SoftDelete(currentWorkingDir);
             }
             catch (Exception ex)
             {
@@ -387,11 +379,8 @@ namespace SerConAai
             }
         }
 
-        private string Status(string taskId)
+        private string Status(string taskId, UserParameter parameter)
         {
-            if (OnDemandConfig.DownloadUrl != null)
-                return "100";
-
             var status = GetStatus(taskId);
             logger.Debug($"Report status {status}");
             if (status == "SUCCESS")
@@ -418,6 +407,18 @@ namespace SerConAai
             }
 
             return null;
+        }
+
+        private HubInfo GetFirstUserReport(DomainUser user)
+        {
+            var qlikHub = new QlikQrsHub(new Uri(OnDemandConfig.HubConnect))
+            {
+                UserId = user?.UserId ?? null,
+                UserDirectory = user?.UserDirectory ?? null,
+            };
+
+            return qlikHub?.GetAllSharedContent($"Name eq '{OnDemandConfig?.ReportName}'")?.Where(d => d?.Owner?.UserId == user?.UserId &&
+                                                d?.Owner?.UserDirectory == user?.UserDirectory).FirstOrDefault() ?? null;
         }
 
         private JObject GetJsonObject(string taskId = null)

@@ -17,7 +17,7 @@ namespace SerConAai
     using System.Text;
     using Microsoft.Extensions.PlatformAbstractions;
     using System.Linq;
-    using Q2gHelperPemNuget;
+    using Q2gHelperPem;
     using System.Net;
     using System.Net.Http;
     using NLog;
@@ -101,11 +101,13 @@ namespace SerConAai
             {
                 var cert = new X509Certificate2();
                 var fullUri = new Uri($"{connectUri.OriginalString}/{virtualProxy}");
-                var oldSession = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
-                                                             && u.User.Equals(domainUser)) ?? null;
-                if (oldSession != null)
-                    return oldSession.Cookie;
-
+                lock (this)
+                {
+                    var oldSession = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
+                                                                 && u.User.Equals(domainUser)) ?? null;
+                    if (oldSession != null)
+                        return oldSession.Cookie;
+                }
                 var certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, certName);
                 if (!File.Exists(certPath))
                 {

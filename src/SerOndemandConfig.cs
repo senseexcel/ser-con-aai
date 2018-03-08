@@ -53,19 +53,6 @@ namespace SerConAai
             get => Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, Certificate);
         }
 
-        [JsonIgnore]
-        public string TemplateFileName { get; set; }
-        [JsonIgnore]
-        public string SaveFormats { get; set; }
-        [JsonIgnore]
-        public bool UseUserSelesction { get; set; }
-        [JsonIgnore]
-        public string CurrentAppId { get; set; }
-        [JsonIgnore]
-        public string CurrentWorkingDir { get; set; }
-        [JsonIgnore]
-        public string DownloadUrl { get; set; }
-        [JsonIgnore]
-        public DomainUser DomainUser { get; set; }
+        
     }
 }
