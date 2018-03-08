@@ -77,8 +77,6 @@ namespace SerConAai
                     {
                         Console.WriteLine($"Certificate generate into file {config.CertPath}");
                         var cert = CreateCertificate(config.CertPath);
-                        if(cert == null)
-
                         Console.WriteLine("Please press any key to terminate.");
                         return;
                     }
