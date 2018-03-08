@@ -17,7 +17,7 @@ namespace SerConAai
     using System.Text;
     using Microsoft.Extensions.PlatformAbstractions;
     using System.Linq;
-    using Q2gHelperPem;
+    using Q2gHelperPemNuget;
     using System.Net;
     using System.Net.Http;
     using NLog;
