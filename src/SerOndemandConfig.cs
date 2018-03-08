@@ -20,19 +20,24 @@ namespace SerConAai
     using System.Text;
     #endregion
 
+    public class VirtualProxyConfig
+    {
+        public string Path { get; set; }
+        public string CookieName { get; set; }
+        public string Certificate { get; set; }
+    }
+
     public class SerOnDemandConfig
     {
-        public string VirtualProxyPath { get; set; }
-        public string CookieName { get; set; }
         public string TemplateFolder { get; set; }
         public string WorkingDir { get; set; }
         public string SerEnginePath { get; set; }
-        public int Port { get; set; } = 50059;
-        public string Server { get; set; } = "https://localhost";
-        public string Host { get; set; } = "localhost";
-        public string HubConnect { get; set; } = "https://localhost:4242";
-        public string Certificate { get; set; }
+        public string QlikServer { get; set; } = "https://localhost";
+        public int BindingPort { get; set; } = 50059;
+        public string BindingHost { get; set; } = "localhost";
         public string ReportName { get; set; } = "OnDemandReport";
+        public VirtualProxyConfig VirtualProxy { get; set; }
+
         public string Framework { get; private set; } = RuntimeInformation.FrameworkDescription;
         public string OS { get; private set; } = RuntimeInformation.OSDescription;
         public string Architecture { get; private set; } = RuntimeInformation.OSArchitecture.ToString();
@@ -48,7 +53,7 @@ namespace SerConAai
         [JsonIgnore]
         public string CertPath
         {
-            get => Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, Certificate);
+            get => Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, VirtualProxy.Certificate);
         }
 
         

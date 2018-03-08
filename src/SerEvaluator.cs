@@ -175,7 +175,7 @@ namespace SerConAai
                     if (doc == null)
                         logger.Error("No Download Document found.");
                     else
-                        result = $"{OnDemandConfig.Server}{doc?.References.FirstOrDefault().ExternalPath}";
+                        result = $"{OnDemandConfig.QlikServer}{doc?.References.FirstOrDefault().ExternalPath}";
                     logger.Debug($"Download url {result}");
                 }
                 else
@@ -221,8 +221,8 @@ namespace SerConAai
                 File.Copy(tplPath, tplCopyPath, true);
 
                 //Get a session
-                var cookie = sessionManager.GetSession(new Uri(OnDemandConfig.Server), parameter.DomainUser, OnDemandConfig.CookieName,
-                                                        OnDemandConfig.VirtualProxyPath, OnDemandConfig.Certificate);
+                var cookie = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser, OnDemandConfig.VirtualProxy.CookieName,
+                                                        OnDemandConfig.VirtualProxy.Path, OnDemandConfig.VirtualProxy.Certificate);
                 //Save config for SER engine
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
@@ -300,8 +300,8 @@ namespace SerConAai
                     Connection = new SerConnection()
                     {
                         App = parameter.AppId,
-                        ConnectUri = $"{OnDemandConfig.Server}/{OnDemandConfig.VirtualProxyPath}",
-                        VirtualProxyPath = OnDemandConfig.VirtualProxyPath,
+                        ConnectUri = $"{OnDemandConfig.QlikServer}/{OnDemandConfig.VirtualProxy.Path}",
+                        VirtualProxyPath = OnDemandConfig.VirtualProxy.Path,
                         Credentials = new SerCredentials()
                         {
                             Type = QlikCredentialType.SESSION,
@@ -340,7 +340,7 @@ namespace SerConAai
                 File.Move(reportFile, renamePath);
 
                 //Upload Shared Content
-                var qlikHub = new QlikQrsHub(new Uri(OnDemandConfig.HubConnect))
+                var qlikHub = new QlikQrsHub(new Uri($"{OnDemandConfig.QlikServer}:4242"))
                 {
                     UserId = parameter?.DomainUser?.UserId ?? null,
                     UserDirectory = parameter?.DomainUser?.UserDirectory ?? null,
@@ -411,7 +411,7 @@ namespace SerConAai
 
         private HubInfo GetFirstUserReport(DomainUser user)
         {
-            var qlikHub = new QlikQrsHub(new Uri(OnDemandConfig.HubConnect))
+            var qlikHub = new QlikQrsHub(new Uri($"{OnDemandConfig.QlikServer}:4242"))
             {
                 UserId = user?.UserId ?? null,
                 UserDirectory = user?.UserDirectory ?? null,

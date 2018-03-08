@@ -84,7 +84,7 @@ namespace SerConAai
                 }
 
                 Console.WriteLine("Service running...");
-                Console.WriteLine($"Start Service on Port \"{config.Port}\" with Host \"{config.Host}\"...");
+                Console.WriteLine($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}\"...");
                 logger.Info($"Server start...");
 
                 using (serEvaluator = new SerEvaluator(config))
@@ -92,11 +92,11 @@ namespace SerConAai
                     server = new Server()
                     {
                         Services = { Connector.BindService(serEvaluator) },
-                        Ports = { new ServerPort(config.Host, config.Port, ServerCredentials.Insecure) },
+                        Ports = { new ServerPort(config.BindingHost, config.BindingPort, ServerCredentials.Insecure) },
                     };
 
                     server.Start();
-                    logger.Info($"gRPC listening on port {config.Port} on Host {config.Host}");
+                    logger.Info($"gRPC listening on port {config.BindingPort} on Host {config.BindingHost}");
                     logger.Info($"Ready...");
                 }
             }
