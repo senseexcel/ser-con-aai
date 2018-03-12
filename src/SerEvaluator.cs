@@ -40,7 +40,9 @@ namespace SerConAai
         {
             CREATE = 1,
             STATUS = 2,
-            DOWNLOAD = 3
+            DOWNLOAD = 3,
+            ABORT = 4,
+            START = 5
         }
         #endregion
 
@@ -104,9 +106,31 @@ namespace SerConAai
                              Name = SerFunction.DOWNLOAD.ToString(),
                              Params =
                              {
-                                 new Parameter() { Name = "ReportName", DataType = DataType.String }
+                                 new Parameter() { Name = "TaskID", DataType = DataType.String }
                              },
                              ReturnType = DataType.String
+                        },
+                        new FunctionDefinition()
+                        {
+                            FunctionId = 4,
+                            FunctionType = FunctionType.Scalar,
+                            Name = SerFunction.ABORT.ToString(),
+                            Params =
+                            {
+                                new Parameter() { Name = "TaskID", DataType = DataType.String }
+                            },
+                            ReturnType = DataType.String
+                        },
+                        new FunctionDefinition()
+                        {
+                            FunctionId = 5,
+                            FunctionType = FunctionType.Scalar,
+                            Name = SerFunction.START.ToString(),
+                            Params =
+                            {
+                                new Parameter() { Name = "Script", DataType = DataType.String }
+                            },
+                            ReturnType = DataType.String
                         }
                     }
                 });
@@ -171,13 +195,22 @@ namespace SerConAai
                     var taskId = GetParameterValue(0, row);
                     logger.Debug($"TaskId: {taskId}");
                     var domainUser = new DomainUser(commonHeader.UserId);
-                    var doc = GetFirstUserReport(domainUser);
+                    var cookie = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), domainUser, 
+                                                           OnDemandConfig.VirtualProxy.CookieName,
+                                                           OnDemandConfig.VirtualProxy.Path, 
+                                                           OnDemandConfig.VirtualProxy.Certificate);
+                    var doc = GetFirstUserReport(domainUser, cookie);
                     if (doc == null)
                         logger.Error("No Download Document found.");
                     else
                         result = $"{OnDemandConfig.QlikServer}{doc?.References.FirstOrDefault().ExternalPath}";
                     logger.Debug($"Download url {result}");
                 }
+                else if(functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
+                {
+
+                }
+
                 else
                 {
                     throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
@@ -340,18 +373,29 @@ namespace SerConAai
                 File.Move(reportFile, renamePath);
 
                 //Upload Shared Content
-                var qlikHub = new QlikQrsHub(new Uri(OnDemandConfig.QlikServer), parameter.ConnectCookie)
+                var qlikHub = new QlikQrsHub(new Uri(OnDemandConfig.QlikServer), parameter.ConnectCookie);
+                var hubInfo = GetFirstUserReport(parameter.DomainUser, parameter.ConnectCookie);
+                if (hubInfo == null)
                 {
-                    
-                    UserId = parameter?.DomainUser?.UserId ?? null,
-                    UserDirectory = parameter?.DomainUser?.UserDirectory ?? null,
-                };
-                var doc = GetFirstUserReport(parameter.DomainUser);
-                if (doc == null)
-                    qlikHub.Create(OnDemandConfig.ReportName, renamePath, $"Created by SER OnDemand Connector.");
+                    var createRequest = new HubCreateRequest()
+                    {
+                        Name = OnDemandConfig.ReportName,
+                        Description = $"Created by SER OnDemand Connector.",
+                        Data = GetContentData(renamePath),
+                    };
+                    qlikHub.CreateSharedContentAsync(createRequest).Wait();
+                    logger.Debug($"upload new file {reportFile} - Create");
+                }
                 else
-                    qlikHub.Update(OnDemandConfig.ReportName, renamePath);
-                logger.Debug($"upload file {reportFile}");
+                {
+                    var updateRequest = new HubUpdateRequest()
+                    {
+                        Info = hubInfo,
+                        Data = GetContentData(renamePath),
+                    };
+                    qlikHub.UpdateSharedContentAsync(updateRequest).Wait();
+                    logger.Debug($"upload new file {reportFile} - Update");
+                }
 
                 //Wait for Status Success 
                 Thread.Sleep(1000);
@@ -363,6 +407,18 @@ namespace SerConAai
             {
                 logger.Error(ex);
             }
+        }
+
+        private HubContentData GetContentData(string fullname)
+        {
+            var contentData = new HubContentData()
+            {
+                ContentType = $"application/{Path.GetExtension(fullname).Replace(".", "")}",
+                ExternalPath = Path.GetFileName(fullname),
+                FileData = File.ReadAllBytes(fullname),
+            };
+
+            return contentData;
         }
 
         private bool SoftDelete(string folder)
@@ -410,16 +466,18 @@ namespace SerConAai
             return null;
         }
 
-        private HubInfo GetFirstUserReport(DomainUser user)
+        private HubInfo GetFirstUserReport(DomainUser user, Cookie cookie)
         {
-            var qlikHub = new QlikQrsHub(new Uri($"{OnDemandConfig.QlikServer}:4242"))
+            var qlikHub = new QlikQrsHub(new Uri(OnDemandConfig.QlikServer), cookie);
+            var selectRequest = new HubSelectRequest()
             {
-                UserId = user?.UserId ?? null,
-                UserDirectory = user?.UserDirectory ?? null,
+                Filter = HubSelectRequest.GetNameFilter(OnDemandConfig?.ReportName),
             };
 
-            return qlikHub?.GetAllSharedContent($"Name eq '{OnDemandConfig?.ReportName}'")?.Where(d => d?.Owner?.UserId == user?.UserId &&
-                                                d?.Owner?.UserDirectory == user?.UserDirectory).FirstOrDefault() ?? null;
+            var results = qlikHub.GetSharedContentAsync(selectRequest).Result;
+            var result = results.Where(d => d?.Owner?.UserId == user?.UserId && 
+                                     d?.Owner?.UserDirectory == user?.UserDirectory).FirstOrDefault() ?? null;
+            return result;
         }
 
         private JObject GetJsonObject(string taskId = null)
