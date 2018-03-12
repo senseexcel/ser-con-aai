@@ -4,6 +4,7 @@
     using SerApi;
     using System;
     using System.Collections.Generic;
+    using System.Net;
     using System.Text;
     #endregion
 
@@ -14,5 +15,6 @@
         public bool UseUserSelesction { get; set; }
         public string AppId { get; set; }
         public DomainUser DomainUser { get; set; }
+        public Cookie ConnectCookie { get; set; }
     }
 }

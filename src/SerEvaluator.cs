@@ -221,12 +221,12 @@ namespace SerConAai
                 File.Copy(tplPath, tplCopyPath, true);
 
                 //Get a session
-                var cookie = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser, OnDemandConfig.VirtualProxy.CookieName,
+                parameter.ConnectCookie = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser, OnDemandConfig.VirtualProxy.CookieName,
                                                         OnDemandConfig.VirtualProxy.Path, OnDemandConfig.VirtualProxy.Certificate);
                 //Save config for SER engine
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
-                SaveSerConfig(savePath, tplCopyPath, cookie, parameter);
+                SaveSerConfig(savePath, tplCopyPath, parameter.ConnectCookie, parameter);
 
                 //Start SER Engine as Process
                 logger.Debug($"Start Engine \"{currentWorkingDir}\"");
@@ -340,8 +340,9 @@ namespace SerConAai
                 File.Move(reportFile, renamePath);
 
                 //Upload Shared Content
-                var qlikHub = new QlikQrsHub(new Uri($"{OnDemandConfig.QlikServer}:4242"))
+                var qlikHub = new QlikQrsHub(new Uri(OnDemandConfig.QlikServer), parameter.ConnectCookie)
                 {
+                    
                     UserId = parameter?.DomainUser?.UserId ?? null,
                     UserDirectory = parameter?.DomainUser?.UserDirectory ?? null,
                 };
