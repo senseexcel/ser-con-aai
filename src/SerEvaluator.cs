@@ -206,9 +206,12 @@ namespace SerConAai
                 }
                 else if(functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
                 {
-
+                    logger.Error(new NotImplementedException());
                 }
-
+                else if (functionRequestHeader.FunctionId == (int)SerFunction.START)
+                {
+                    logger.Error(new NotImplementedException());
+                }
                 else
                 {
                     throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
@@ -371,7 +374,8 @@ namespace SerConAai
                 File.Move(reportFile, renamePath);
 
                 //Upload Shared Content
-                var qlikHub = new QlikQrsHub(new Uri(OnDemandConfig.QlikServer), parameter.ConnectCookie);
+                var qlikHub = new QlikQrsHub(new Uri($"{OnDemandConfig.QlikServer}/{OnDemandConfig.VirtualProxy.Path}"), 
+                                             parameter.ConnectCookie);
                 var hubInfo = GetFirstUserReport(parameter.DomainUser, parameter.ConnectCookie);
                 if (hubInfo == null)
                 {
@@ -466,15 +470,15 @@ namespace SerConAai
 
         private HubInfo GetFirstUserReport(DomainUser user, Cookie cookie)
         {
-            var qlikHub = new QlikQrsHub(new Uri(OnDemandConfig.QlikServer), cookie);
+            var qlikHub = new QlikQrsHub(new Uri($"{ OnDemandConfig.QlikServer}/{OnDemandConfig.VirtualProxy.Path}"), cookie);
             var selectRequest = new HubSelectRequest()
             {
                 Filter = HubSelectRequest.GetNameFilter(OnDemandConfig?.ReportName),
             };
 
             var results = qlikHub.GetSharedContentAsync(selectRequest).Result;
-            var result = results.Where(d => d?.Owner?.UserId == user?.UserId && 
-                                     d?.Owner?.UserDirectory == user?.UserDirectory).FirstOrDefault() ?? null;
+            var result = results?.Where(d => d?.Owner?.UserId == user?.UserId && 
+                                     d?.Owner?.UserDirectory == user?.UserDirectory)?.FirstOrDefault() ?? null;
             return result;
         }
 
