@@ -95,12 +95,12 @@ namespace SerConAai
         #endregion
 
         #region Public Methods
-        public Cookie GetSession(Uri connectUri, DomainUser domainUser, string cookieName, string virtualProxy, string certName)
+        public Cookie GetSession(Uri connectUri, DomainUser domainUser, VirtualProxyConfig proxyConfig)
         {
             try
             {
                 var cert = new X509Certificate2();
-                var fullUri = new Uri($"{connectUri.OriginalString}/{virtualProxy}");
+                var fullUri = new Uri($"{connectUri.OriginalString}/{proxyConfig.Path}");
                 lock (this)
                 {
                     var oldSession = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
@@ -108,20 +108,30 @@ namespace SerConAai
                     if (oldSession != null)
                         return oldSession.Cookie;
                 }
-                var certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, certName);
+
+                var certPath = proxyConfig.Certificate;
                 if (!File.Exists(certPath))
                 {
-                    var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
-                    logger.Warn($"No Certificate {certPath} exists. Please generate a Certificate with \"{exeName} -cert\"");
-                }
-                else
-                {
-                    var name = Path.GetFileNameWithoutExtension(certPath);
-                    var privateFile = Directory.GetFiles(Path.GetDirectoryName(certPath), $"{name}_private.key",
-                                                         SearchOption.TopDirectoryOnly).FirstOrDefault() ?? null;
-                    cert = cert.LoadPem(certPath, privateFile);
+                    certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, certPath);
+                    if (!File.Exists(certPath))
+                    {
+                        var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
+                        logger.Warn($"No Certificate {certPath} exists. Please generate a Certificate with \"{exeName} -cert\"");
+                    }
                 }
 
+                var privateKey = proxyConfig.PrivateKey;
+                if (!File.Exists(privateKey))
+                {
+                    certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, privateKey);
+                    if (!File.Exists(certPath))
+                    {
+                        var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
+                        logger.Warn($"No private key {certPath} exists. Please generate a private Key with \"{exeName} -cert\"");
+                    }
+                }
+
+                cert = cert.LoadPem(certPath, privateKey);
                 var claims = new[]
                 {
                     new Claim("UserDirectory",  domainUser.UserDirectory),
@@ -130,7 +140,7 @@ namespace SerConAai
                 }.ToList();
                 var token = cert.GenerateQlikJWToken(claims, TimeSpan.FromMinutes(20));
                 logger.Debug($"Generate token {token}");
-                var cookie = GetJWTSession(fullUri, token, cookieName);
+                var cookie = GetJWTSession(fullUri, token, proxyConfig.CookieName);
                 logger.Debug($"Generate cookie {cookie.Name} - {cookie.Value}");
                 if (cookie != null)
                 {

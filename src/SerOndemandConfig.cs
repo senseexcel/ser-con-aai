@@ -25,6 +25,7 @@ namespace SerConAai
         public string Path { get; set; }
         public string CookieName { get; set; }
         public string Certificate { get; set; }
+        public string PrivateKey { get; set; }
     }
 
     public class SerOnDemandConfig
@@ -55,7 +56,5 @@ namespace SerConAai
         {
             get => Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, VirtualProxy.Certificate);
         }
-
-        
     }
 }

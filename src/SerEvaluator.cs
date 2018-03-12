@@ -196,9 +196,7 @@ namespace SerConAai
                     logger.Debug($"TaskId: {taskId}");
                     var domainUser = new DomainUser(commonHeader.UserId);
                     var cookie = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), domainUser, 
-                                                           OnDemandConfig.VirtualProxy.CookieName,
-                                                           OnDemandConfig.VirtualProxy.Path, 
-                                                           OnDemandConfig.VirtualProxy.Certificate);
+                                                           OnDemandConfig.VirtualProxy);
                     var doc = GetFirstUserReport(domainUser, cookie);
                     if (doc == null)
                         logger.Error("No Download Document found.");
@@ -254,8 +252,8 @@ namespace SerConAai
                 File.Copy(tplPath, tplCopyPath, true);
 
                 //Get a session
-                parameter.ConnectCookie = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser, OnDemandConfig.VirtualProxy.CookieName,
-                                                        OnDemandConfig.VirtualProxy.Path, OnDemandConfig.VirtualProxy.Certificate);
+                parameter.ConnectCookie = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser, 
+                                                                    OnDemandConfig.VirtualProxy);
                 //Save config for SER engine
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");

@@ -1,33 +1,33 @@
 {
   # Creating a temporary directory for the report process
-  workingDir: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Temp,
+  workingDir: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Temp
   
   # Folder for Sense Excel Reporting Reporting templates
-  templateFolder: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Templates,
+  templateFolder: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Templates
   
   # Path to the Sense Excel Reporting engine
-  serEnginePath: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Engine\\SenseExcelReporting.exe,
+  serEnginePath: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Engine\\SenseExcelReporting.exe
   
   # Host binding on gRPC Server
-  bindingHost: localhost,
+  bindingHost: localhost
   
   # Port binding on gRPC Server
-  bindingPort: 50059,
+  bindingPort: 50059
   
   # Url to Qlik Server
-  qlikServer: https://nb-fc-208000,
+  qlikServer: https://nb-fc-208000
   
   # Qlik Server proxy settings
   virtualProxy: {
    
    # virtual proxy path
-	path: ser,
+	path: ser
     
 	# Name of the session cookie
-	cookieName: X-Qlik-Session-ser,
+	cookieName: X-Qlik-Session-ser
 	
 	# FileName of the certificate in the App folder to generate the JWt token
-    certificate: serconnector.pem,
+    certificate: serconnector.pem
 	
 	#FileName of the private key to generate the JWT token
 	privateKey: serconnector_private.key
