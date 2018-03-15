@@ -17,4 +17,11 @@
         public DomainUser DomainUser { get; set; }
         public Cookie ConnectCookie { get; set; }
     }
+
+    public class OnDemandResult
+    {
+        public int Status { get; set; }
+        public string Link { get; set; }
+        public string Log { get; set; }
+    }
 }

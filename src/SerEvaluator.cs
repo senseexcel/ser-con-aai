@@ -40,9 +40,8 @@ namespace SerConAai
         {
             CREATE = 1,
             STATUS = 2,
-            DOWNLOAD = 3,
-            ABORT = 4,
-            START = 5
+            ABORT = 3,
+            START = 4
         }
         #endregion
 
@@ -93,37 +92,18 @@ namespace SerConAai
                              FunctionId = 2,
                              FunctionType = FunctionType.Scalar,
                              Name = SerFunction.STATUS.ToString(),
-                             Params =
-                             {
-                                 new Parameter() { Name = "TaskID", DataType = DataType.String }
-                             },
                              ReturnType = DataType.String
                         },
                         new FunctionDefinition()
                         {
-                             FunctionId = 3,
-                             FunctionType = FunctionType.Scalar,
-                             Name = SerFunction.DOWNLOAD.ToString(),
-                             Params =
-                             {
-                                 new Parameter() { Name = "TaskID", DataType = DataType.String }
-                             },
-                             ReturnType = DataType.String
-                        },
-                        new FunctionDefinition()
-                        {
-                            FunctionId = 4,
+                            FunctionId = 3,
                             FunctionType = FunctionType.Scalar,
                             Name = SerFunction.ABORT.ToString(),
-                            Params =
-                            {
-                                new Parameter() { Name = "TaskID", DataType = DataType.String }
-                            },
                             ReturnType = DataType.String
                         },
                         new FunctionDefinition()
                         {
-                            FunctionId = 5,
+                            FunctionId = 4,
                             FunctionType = FunctionType.Scalar,
                             Name = SerFunction.START.ToString(),
                             Params =
@@ -163,17 +143,19 @@ namespace SerConAai
 
                 var commonHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<CommonRequestHeader>();
                 logger.Info($"request from user: {commonHeader.UserId} for AppId: {commonHeader.AppId}");
+                var domainUser = new DomainUser(commonHeader.UserId);
+                logger.Debug($"DomainUser: {domainUser.UserId.ToString()}\\{domainUser.UserDirectory.ToString()}");
                 var userParameter = new UserParameter()
                 {
                     AppId = commonHeader.AppId,
-                    DomainUser = new DomainUser(commonHeader.UserId),
+                    DomainUser = domainUser,
                 };
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
    
-                var result = String.Empty;
                 logger.Debug($"Function id: {functionRequestHeader.FunctionId}");
                 var row = requestStream?.Current?.Rows.FirstOrDefault() ?? null;
+                var result = new OnDemandResult() { Status = -1 };
                 if (functionRequestHeader.FunctionId == (int)SerFunction.CREATE)
                 {
                     userParameter.TemplateFileName = GetParameterValue(0, row);
@@ -186,23 +168,9 @@ namespace SerConAai
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.STATUS)
                 {
-                    var taskId = GetParameterValue(0, row);
-                    logger.Debug($"TaskId: {taskId}");
-                    result = Status(taskId, userParameter);
-                }
-                else if (functionRequestHeader.FunctionId == (int)SerFunction.DOWNLOAD)
-                {
-                    var taskId = GetParameterValue(0, row);
-                    logger.Debug($"TaskId: {taskId}");
-                    var domainUser = new DomainUser(commonHeader.UserId);
-                    var cookie = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), domainUser, 
-                                                           OnDemandConfig.VirtualProxy);
-                    var doc = GetFirstUserReport(domainUser, cookie);
-                    if (doc == null)
-                        logger.Error("No Download Document found.");
-                    else
-                        result = $"{OnDemandConfig.QlikServer}{doc?.References.FirstOrDefault().ExternalPath}";
-                    logger.Debug($"Download url {result}");
+                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.QlikServer), domainUser);
+                    userParameter.ConnectCookie = session.Cookie;
+                    result = Status(session.TaskId, userParameter);
                 }
                 else if(functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
                 {
@@ -223,7 +191,11 @@ namespace SerConAai
             catch (Exception ex)
             {
                 logger.Error(ex, "ExecuteFunction has errors");
-                await responseStream.WriteAsync(GetResult("-1"));
+                await responseStream.WriteAsync(GetResult(new OnDemandResult()
+                {
+                    Log = ex.ToString(),
+                    Status = -1
+                }));
             }
             finally
             {
@@ -233,7 +205,7 @@ namespace SerConAai
         #endregion
 
         #region Private Functions
-        private string CreateReport(UserParameter parameter)
+        private OnDemandResult CreateReport(UserParameter parameter)
         {
             try
             {
@@ -255,12 +227,14 @@ namespace SerConAai
                 File.Copy(tplPath, tplCopyPath, true);
 
                 //Get a session
-                parameter.ConnectCookie = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser, 
-                                                                    OnDemandConfig.VirtualProxy);
+                var session = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser,
+                                                        OnDemandConfig.VirtualProxy, taskId);
+                parameter.ConnectCookie = session.Cookie;
+
                 //Save config for SER engine
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
-                SaveSerConfig(savePath, tplCopyPath, parameter.ConnectCookie, parameter);
+                SaveSerConfig(savePath, tplCopyPath, parameter);
 
                 //Start SER Engine as Process
                 logger.Debug($"Start Engine \"{currentWorkingDir}\"");
@@ -277,13 +251,11 @@ namespace SerConAai
                 };
                 uploadThread.Start();
 
-                //TaskId
-                return taskId;
+                return new OnDemandResult() { Status = 0 };
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "The report could not created.");
-                return "-1";
+                throw new Exception("The report could not be created.", ex);
             }
         }
 
@@ -306,16 +278,16 @@ namespace SerConAai
             }
         }
 
-        private BundledRows GetResult(string resultValue)
+        private BundledRows GetResult(OnDemandResult result)
         {
             var resultBundle = new BundledRows();
             var resultRow = new Row();
-            resultRow.Duals.Add(new Dual { StrData = resultValue });
+            resultRow.Duals.Add(new Dual { StrData = JsonConvert.SerializeObject(result) });
             resultBundle.Rows.Add(resultRow);
             return resultBundle;
         }
 
-        private void SaveSerConfig(string savePath, string templatePath, Cookie cookie, UserParameter parameter)
+        private void SaveSerConfig(string savePath, string templatePath, UserParameter parameter)
         {
             try
             {
@@ -339,8 +311,8 @@ namespace SerConAai
                         Credentials = new SerCredentials()
                         {
                             Type = QlikCredentialType.SESSION,
-                            Key = cookie.Name,
-                            Value = cookie.Value,
+                            Key = parameter.ConnectCookie.Name,
+                            Value = parameter.ConnectCookie.Value,
                         }
                     }
                 };
@@ -359,12 +331,13 @@ namespace SerConAai
         {
             try
             {
-                var status = "0";
-                while (status != "100")
+                var status = 0;
+                while (status != 100)
                 {
                     Thread.Sleep(250);
-                    status = Status(taskId, parameter);
-                    if (status == "-1")
+                    var result = Status(taskId, parameter);
+                    status = result.Status;
+                    if (status == -1)
                         return;
                 }
 
@@ -438,21 +411,35 @@ namespace SerConAai
             }
         }
 
-        private string Status(string taskId, UserParameter parameter)
+        private OnDemandResult Status(string taskId, UserParameter parameter)
         {
             var status = GetStatus(taskId);
             logger.Debug($"Report status {status}");
             if (status == "SUCCESS")
-                return "100";
+            {
+                //Download Url
+                var doc = GetFirstUserReport(parameter.DomainUser, parameter.ConnectCookie);
+                if (doc == null)
+                {
+                    logger.Error("No Download document found.");
+                    return new OnDemandResult() { Status = -1 };
+                }
+                else
+                {
+                    var result = $"{OnDemandConfig.QlikServer}{doc?.References.FirstOrDefault().ExternalPath}";
+                    logger.Debug($"Download url {result}");
+                    return new OnDemandResult() { Status = 100, Link = result };
+                }
+            }
             else if (status == "ABORT")
-                return "1";
+                return new OnDemandResult() { Status = 1 };
             else if (status == "ERROR")
             {
                 logger.Error("No Report created.");
-                return "-1";
+                return new OnDemandResult() { Status = -1 };
             }
             else
-                return "0";
+                return new OnDemandResult() { Status = 0 };
         }
 
         private string GetResultFile(string taskId)

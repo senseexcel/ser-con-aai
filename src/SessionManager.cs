@@ -26,15 +26,16 @@ namespace SerConAai
     using System.Security.Claims;
     #endregion
 
+    public class SessionInfo
+    {
+        public Cookie Cookie { get; set; }
+        public DomainUser User { get; set; }
+        public Uri ConnectUri { get; set; }
+        public string TaskId { get; set; }
+    }
+
     public class SessionManager
     {
-        class SessionInfo
-        {
-            public Cookie Cookie { get; set; }
-            public DomainUser User { get; set; }
-            public Uri ConnectUri { get; set; }
-        }
-
         #region Logger
         private static Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
@@ -95,7 +96,14 @@ namespace SerConAai
         #endregion
 
         #region Public Methods
-        public Cookie GetSession(Uri connectUri, DomainUser domainUser, VirtualProxyConfig proxyConfig)
+        public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser)
+        {
+            var result = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
+                                                                 && u.User.Equals(domainUser)) ?? null;
+            return result;
+        }
+
+        public SessionInfo GetSession(Uri connectUri, DomainUser domainUser, VirtualProxyConfig proxyConfig, string taskId)
         {
             try
             {
@@ -103,10 +111,9 @@ namespace SerConAai
                 var fullUri = new Uri($"{connectUri.OriginalString}/{proxyConfig.Path}");
                 lock (this)
                 {
-                    var oldSession = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
-                                                                 && u.User.Equals(domainUser)) ?? null;
+                    var oldSession = GetExistsSession(connectUri, domainUser);
                     if (oldSession != null)
-                        return oldSession.Cookie;
+                        return oldSession;
                 }
 
                 var certPath = proxyConfig.Certificate;
@@ -144,13 +151,15 @@ namespace SerConAai
                 logger.Debug($"Generate cookie {cookie.Name} - {cookie.Value}");
                 if (cookie != null)
                 {
-                    sessionList.Add(new SessionInfo()
+                    var sessionInfo = new SessionInfo()
                     {
                         Cookie = cookie,
                         User = domainUser,
-                        ConnectUri = connectUri
-                    });
-                    return cookie;
+                        ConnectUri = connectUri,
+                        TaskId = taskId,
+                    };
+                    sessionList.Add(sessionInfo);
+                    return sessionInfo;
                 }
 
                 return null;
