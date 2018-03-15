@@ -174,7 +174,10 @@ namespace SerConAai
                 }
                 else if(functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
                 {
-                    logger.Error(new NotImplementedException());
+                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.QlikServer), domainUser);
+                    var process = Process.GetProcessById(session.ProcessId);
+                    SoftDelete($"{OnDemandConfig.WorkingDir}\\{session.TaskId}");
+                    process?.Kill();
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.START)
                 {
@@ -226,11 +229,6 @@ namespace SerConAai
                 var tplCopyPath = Path.Combine(currentWorkingDir, Path.GetFileName(tplPath));
                 File.Copy(tplPath, tplCopyPath, true);
 
-                //Get a session
-                var session = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser,
-                                                        OnDemandConfig.VirtualProxy, taskId);
-                parameter.ConnectCookie = session.Cookie;
-
                 //Save config for SER engine
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
@@ -243,6 +241,11 @@ namespace SerConAai
                 serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\"";
                 serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 serProcess.Start();
+
+                //Get a session
+                var session = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser,
+                                                        OnDemandConfig.VirtualProxy, taskId, serProcess.Id);
+                parameter.ConnectCookie = session.Cookie;
 
                 //wait for finish and upload
                 var uploadThread = new Thread(() => Upload(taskId, currentWorkingDir, parameter))
