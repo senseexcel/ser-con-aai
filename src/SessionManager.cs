@@ -104,8 +104,7 @@ namespace SerConAai
             return result;
         }
 
-        public SessionInfo GetSession(Uri connectUri, DomainUser domainUser, VirtualProxyConfig proxyConfig, 
-                                      string taskId, int processId)
+        public SessionInfo GetSession(Uri connectUri, DomainUser domainUser, VirtualProxyConfig proxyConfig, string taskId)
         {
             try
             {
@@ -159,7 +158,6 @@ namespace SerConAai
                         User = domainUser,
                         ConnectUri = connectUri,
                         TaskId = taskId,
-                        ProcessId = processId,
                     };
                     sessionList.Add(sessionInfo);
                     return sessionInfo;

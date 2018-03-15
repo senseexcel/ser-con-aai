@@ -162,7 +162,7 @@ namespace SerConAai
                     logger.Debug($"Template path: {userParameter.TemplateFileName}");
                     userParameter.SaveFormats = GetParameterValue(1, row);
                     logger.Debug($"SaveFormat: {userParameter.SaveFormats}");
-                    userParameter.UseUserSelesction = Boolean.TryParse(GetParameterValue(2, row), out var boolResult);
+                    userParameter.UseUserSelesction = GetBoolean(GetParameterValue(2, row));
                     logger.Debug($"UseSelection: {userParameter.UseUserSelesction}");
                     result = CreateReport(userParameter);
                 }
@@ -229,6 +229,11 @@ namespace SerConAai
                 var tplCopyPath = Path.Combine(currentWorkingDir, Path.GetFileName(tplPath));
                 File.Copy(tplPath, tplCopyPath, true);
 
+                //Get a session
+                var session = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser,
+                                                        OnDemandConfig.VirtualProxy, taskId);
+                parameter.ConnectCookie = session.Cookie;
+
                 //Save config for SER engine
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
@@ -241,11 +246,7 @@ namespace SerConAai
                 serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\"";
                 serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 serProcess.Start();
-
-                //Get a session
-                var session = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser,
-                                                        OnDemandConfig.VirtualProxy, taskId, serProcess.Id);
-                parameter.ConnectCookie = session.Cookie;
+                session.ProcessId = serProcess.Id;
 
                 //wait for finish and upload
                 var uploadThread = new Thread(() => Upload(taskId, currentWorkingDir, parameter))
@@ -387,6 +388,16 @@ namespace SerConAai
             }
         }
 
+        private bool GetBoolean(string value)
+        {
+            if (value.ToLowerInvariant() == "true")
+                return true;
+            else if (value.ToLowerInvariant() == "false")
+                return false;
+            else
+                return Boolean.TryParse(value, out var boolResult);
+        }
+
         private HubContentData GetContentData(string fullname)
         {
             var contentData = new HubContentData()
@@ -421,15 +432,15 @@ namespace SerConAai
             if (status == "SUCCESS")
             {
                 //Download Url
-                var doc = GetFirstUserReport(parameter.DomainUser, parameter.ConnectCookie);
-                if (doc == null)
+                var report = GetFirstUserReport(parameter.DomainUser, parameter.ConnectCookie);
+                if (report == null)
                 {
                     logger.Error("No Download document found.");
                     return new OnDemandResult() { Status = -1 };
                 }
                 else
                 {
-                    var result = $"{OnDemandConfig.QlikServer}{doc?.References.FirstOrDefault().ExternalPath}";
+                    var result = $"{OnDemandConfig.QlikServer}{report?.References.FirstOrDefault().ExternalPath}";
                     logger.Debug($"Download url {result}");
                     return new OnDemandResult() { Status = 100, Link = result };
                 }
