@@ -33,6 +33,7 @@ namespace SerConAai
         public Uri ConnectUri { get; set; }
         public string TaskId { get; set; }
         public int ProcessId { get; set; }
+        public string DownloadLink { get; set; }
     }
 
     public class SessionManager
@@ -100,7 +101,8 @@ namespace SerConAai
         public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser)
         {
             var result = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
-                                                                 && u.User.Equals(domainUser)) ?? null;
+                                                                 && u.User.UserId == domainUser.UserId 
+                                                                 && u.User.UserDirectory == domainUser.UserDirectory) ?? null;
             return result;
         }
 
