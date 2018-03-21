@@ -162,7 +162,7 @@ namespace SerConAai
                     logger.Debug($"SaveFormat: {userParameter.SaveFormats}");
                     userParameter.UseUserSelesction = GetBoolean(GetParameterValue(2, row));
                     logger.Debug($"UseSelection: {userParameter.UseUserSelesction}");
-                    result = CreateReport(userParameter);
+                    result = CreateReport(userParameter, true);
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.STATUS)
                 {
@@ -185,23 +185,24 @@ namespace SerConAai
                     process?.Kill();
                     Thread.Sleep(1000);
                     SoftDelete($"{OnDemandConfig.WorkingDir}\\{session.TaskId}");
+                    result = new OnDemandResult() { Status = 100 };
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.START)
                 {
+                    //Path und Script?
                     var jsonOrPath = GetParameterValue(0, row);
-                    if(jsonOrPath.EndsWith(".hjson") || jsonOrPath.EndsWith(".json"))
+                    if (jsonOrPath.EndsWith(".hjson") || jsonOrPath.EndsWith(".json"))
                         jsonOrPath = File.ReadAllText(jsonOrPath);
-
-                    var json = HjsonValue.Load(jsonOrPath);
-                    var validateResult = JsonConvert.DeserializeObject<SerConfig>(json.ToString());
-                    if (validateResult != null)
+                    var json = HjsonValue.Parse(jsonOrPath);
+                    var jsonSerConfig = JsonConvert.DeserializeObject<SerConfig>(json.ToString());
+                    if (jsonSerConfig != null)
                     {
-                        logger.Debug("Script is valid.");
-                        result = CreateReport(userParameter, jsonOrPath);
+                        logger.Debug("Json config is valid.");
+                        result = CreateReport(userParameter, false, jsonOrPath);
                     }
                     else
                     {
-                        throw new Exception("Json Script is invalid.");
+                        throw new Exception("Json config is invalid.");
                     }
                 }
                 else
@@ -229,38 +230,45 @@ namespace SerConAai
         #endregion
 
         #region Private Functions
-        private OnDemandResult CreateReport(UserParameter parameter, string json = null)
+        private OnDemandResult CreateReport(UserParameter parameter, bool onDemandMode, string json = null)
         {
             try
             {
-                var tplPath = parameter.TemplateFileName;
-                if (!File.Exists(tplPath))
-                    tplPath = Path.Combine(OnDemandConfig.TemplateFolder, tplPath);
-
-                if (!File.Exists(tplPath))
-                    throw new Exception($"Template path {tplPath} not exits.");
-
-                //Template aus App exportieren
-                //Copy Template
-                var workDir = OnDemandConfig.WorkingDir;
                 var taskId = Guid.NewGuid().ToString();
                 logger.Debug($"New Task-ID: {taskId}");
+                var workDir = OnDemandConfig.WorkingDir;
                 var currentWorkingDir = Path.Combine(workDir, taskId);
                 logger.Debug($"TempFolder: {currentWorkingDir}");
-                Directory.CreateDirectory(currentWorkingDir);
-                var tplCopyPath = Path.Combine(currentWorkingDir, Path.GetFileName(tplPath));
-                File.Copy(tplPath, tplCopyPath, true);
 
                 //Get a session
                 var session = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser,
                                                         OnDemandConfig.VirtualProxy, taskId);
                 parameter.ConnectCookie = session.Cookie;
 
+                var tplPath = parameter.TemplateFileName;
+                if (tplPath == null && onDemandMode == false)
+                {
+                    json = GetNewJson(parameter, json, session.Cookie);
+                }
+                else
+                {
+                    if (!File.Exists(tplPath))
+                        tplPath = Path.Combine(OnDemandConfig.TemplateFolder, tplPath);
+                    if (!File.Exists(tplPath))
+                        throw new Exception($"Template path {tplPath} not exits.");
+
+                    //Template aus App exportieren
+                    //Copy Template
+                    Directory.CreateDirectory(currentWorkingDir);
+                    var tplCopyPath = Path.Combine(currentWorkingDir, Path.GetFileName(tplPath));
+                    File.Copy(tplPath, tplCopyPath, true);
+                    //generate ser config for ondemand
+                    json = GetNewSerConfig(tplCopyPath, parameter);
+                }
+
                 //Save config for SER engine
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
-                if (json == null)
-                    json = GetNewSerConfig(tplCopyPath, parameter);
                 File.WriteAllText(savePath, json);
 
                 //Start SER Engine as Process
@@ -284,6 +292,66 @@ namespace SerConAai
             catch (Exception ex)
             {
                 throw new Exception("The report could not be created.", ex);
+            }
+        }
+
+        private string GetNewJson(UserParameter parameter, string json, Cookie cookie)
+        {
+            try
+            {
+                var appId = parameter.AppId;
+                var host = $"{new Uri(OnDemandConfig.QlikServer).Host}/{OnDemandConfig.VirtualProxy.Path}";
+                logger.Debug($"Websocket host: {host}");
+                var contentFiles = GetLibraryContent(host, appId, cookie);
+                logger.Debug($"Content file count: {contentFiles?.Count}");
+                var serConfig = JObject.Parse(HjsonValue.Parse(json).ToString());
+                var tasks = serConfig["tasks"].ToList();
+                foreach (var task in tasks)
+                {
+                    var fileName = task["template"]["fileName"].ToString();
+                    var contentPath = $"/appcontent/{appId}/{fileName}";
+                    var fileResult = contentFiles?.FirstOrDefault(n => n == contentPath) ?? null;
+                    if (fileResult != null)
+                    {
+                        var relPath = contentPath.Replace("/", "\\");
+                        var newPath = $"C:\\QlikShare\\StaticContent{relPath}";
+                        task["template"]["fileName"] = newPath;
+                    }
+                }
+                return serConfig.ToString();
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, $"Filenames for ser config could not set. Json: {json}");
+                return null;
+            }
+        }
+
+        private List<string> GetLibraryContent(string host, string appId, Cookie cookie)
+        {
+            try
+            {
+                var results = new List<string>();
+                var qlikWebSocket = new QlikWebSocket(host, cookie);
+                var isOpen = qlikWebSocket.OpenSocket();
+                var response = qlikWebSocket.OpenDoc(appId);
+                var handle = response["result"]["qReturn"]["qHandle"].ToString();
+                response = qlikWebSocket.GetContentLibraries(handle);
+                var qItems = response["result"]["qList"]["qItems"].ToList();
+                var qNames = qItems.Select(j => j["qName"].ToString()).ToList();
+                foreach (var qName in qNames)
+                {
+                    response = qlikWebSocket.GetLibraryContent(handle, qName);
+                    qItems = response["result"]["qList"]["qItems"].ToList();
+                    var qUrls = qItems.Select(j => j["qUrl"].ToString()).ToList();
+                    results.AddRange(qUrls);
+                }
+                return results;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Could not read the content library.");
+                return new List<string>();
             }
         }
 
