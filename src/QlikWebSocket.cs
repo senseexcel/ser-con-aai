@@ -137,6 +137,12 @@
             return Send(msg);
         }
 
+        public JObject GetConnections(string handle)
+        {
+            var msg = @"{'method':'GetConnections','handle':" + handle + ",'params':{},'jsonrpc':'2.0'}";
+            return Send(msg);
+        }
+
         public JObject IsDesktop()
         {
             var msg = @"{'method':'OpenDoc','handle':-1,'params':{'qDocName':'ee9799d9-55b0-4225-99cb-b3d5ddf7a9d6', 'qNoData':false},'jsonrpc':'2.0'}";

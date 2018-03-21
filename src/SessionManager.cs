@@ -98,11 +98,12 @@ namespace SerConAai
         #endregion
 
         #region Public Methods
-        public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser)
+        public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser, string taskId)
         {
             var result = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
                                                                  && u.User.UserId == domainUser.UserId 
-                                                                 && u.User.UserDirectory == domainUser.UserDirectory) ?? null;
+                                                                 && u.User.UserDirectory == domainUser.UserDirectory
+                                                                 && u.TaskId == taskId) ?? null;
             return result;
         }
 
@@ -114,7 +115,7 @@ namespace SerConAai
                 var fullUri = new Uri($"{connectUri.OriginalString}/{proxyConfig.Path}");
                 lock (this)
                 {
-                    var oldSession = GetExistsSession(connectUri, domainUser);
+                    var oldSession = GetExistsSession(connectUri, domainUser, taskId);
                     if (oldSession != null)
                         return oldSession;
                 }
