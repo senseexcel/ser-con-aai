@@ -107,12 +107,12 @@ namespace SerConAai
             return result;
         }
 
-        public SessionInfo GetSession(Uri connectUri, DomainUser domainUser, VirtualProxyConfig proxyConfig, string taskId)
+        public SessionInfo GetSession(Uri connectUri, DomainUser domainUser, SerConnection connection, string taskId)
         {
             try
             {
                 var cert = new X509Certificate2();
-                var fullUri = new Uri($"{connectUri.OriginalString}/{proxyConfig.Path}");
+                var fullUri = new Uri($"{connectUri.OriginalString}/{connection.VirtualProxyPath}");
                 lock (this)
                 {
                     var oldSession = GetExistsSession(connectUri, domainUser, taskId);
@@ -120,7 +120,7 @@ namespace SerConAai
                         return oldSession;
                 }
 
-                var certPath = proxyConfig.Certificate;
+                var certPath = connection.Credentials.Cert;
                 if (!File.Exists(certPath))
                 {
                     certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, certPath);
@@ -131,7 +131,7 @@ namespace SerConAai
                     }
                 }
 
-                var privateKey = proxyConfig.PrivateKey;
+                var privateKey = connection.Credentials.PrivateKey;
                 if (!File.Exists(privateKey))
                 {
                     certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, privateKey);
@@ -151,7 +151,7 @@ namespace SerConAai
                 }.ToList();
                 var token = cert.GenerateQlikJWToken(claims, TimeSpan.FromMinutes(20));
                 logger.Debug($"Generate token {token}");
-                var cookie = GetJWTSession(fullUri, token, proxyConfig.CookieName);
+                var cookie = GetJWTSession(fullUri, token, connection.Credentials.Key);
                 logger.Debug($"Generate cookie {cookie.Name} - {cookie.Value}");
                 if (cookie != null)
                 {

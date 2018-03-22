@@ -162,7 +162,7 @@ namespace SerConAai
    
                 logger.Debug($"Function id: {functionRequestHeader.FunctionId}");
                 var row = GetParameter(requestStream);
-                object result = -1;
+                var result = new OnDemandResult() { Status = -1 };
                 if (functionRequestHeader.FunctionId == (int)SerFunction.CREATE)
                 {
                     userParameter.TemplateFileName = GetParameterValue(0, row);
@@ -172,34 +172,6 @@ namespace SerConAai
                     userParameter.UseUserSelesction = GetBoolean(GetParameterValue(2, row));
                     logger.Debug($"UseSelection: {userParameter.UseUserSelesction}");
                     result = CreateReport(userParameter, true);
-                }
-                else if (functionRequestHeader.FunctionId == (int)SerFunction.STATUS)
-                {
-                    var taskId = GetParameterValue(0, row)?.Replace("\"","");
-                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.QlikServer), domainUser, taskId);
-                    if (session == null)
-                        throw new Exception("No existing session found.");
-
-                    userParameter.ConnectCookie = session.Cookie;
-                    if (session.DownloadLink != null)
-                        result = new OnDemandResult() { Status = 100, Link = session.DownloadLink };
-                    else
-                        result = Status(taskId, userParameter);
-                }
-                else if (functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
-                {
-                    var taskId = GetParameterValue(0, row)?.Replace("\"", "");
-                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.QlikServer), domainUser, taskId);
-                    if (session == null)
-                        throw new Exception("No existing session found.");
-                    var process = Process.GetProcessById(session.ProcessId);
-                    if (!process.HasExited)
-                    {
-                        process?.Kill();
-                        Thread.Sleep(1000);
-                    }
-                    SoftDelete($"{OnDemandConfig.WorkingDir}\\{taskId}");
-                    result = new OnDemandResult() { Status = 100 };
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.START)
                 {
@@ -216,6 +188,34 @@ namespace SerConAai
                     {
                         throw new Exception("Json config is invalid.");
                     }
+                }
+                else if (functionRequestHeader.FunctionId == (int)SerFunction.STATUS)
+                {
+                    var taskId = GetParameterValue(0, row)?.Replace("\"","");
+                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser, taskId);
+                    if (session == null)
+                        throw new Exception("No existing session found.");
+
+                    userParameter.ConnectCookie = session.Cookie;
+                    if (session.DownloadLink != null)
+                        result = new OnDemandResult() { Status = 2, Link = session.DownloadLink };
+                    else
+                        result = Status(taskId, userParameter);
+                }
+                else if (functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
+                {
+                    var taskId = GetParameterValue(0, row)?.Replace("\"", "");
+                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser, taskId);
+                    if (session == null)
+                        throw new Exception("No existing session found.");
+                    var process = Process.GetProcessById(session.ProcessId);
+                    if (!process.HasExited)
+                    {
+                        process?.Kill();
+                        Thread.Sleep(1000);
+                    }
+                    SoftDelete($"{OnDemandConfig.WorkingDir}\\{taskId}");
+                    result = new OnDemandResult() { Status = 4 };
                 }
                 else
                 {
@@ -242,7 +242,7 @@ namespace SerConAai
         #endregion
 
         #region Private Functions
-        private string CreateReport(UserParameter parameter, bool onDemandMode, string json = null)
+        private OnDemandResult CreateReport(UserParameter parameter, bool onDemandMode, string json = null)
         {
             try
             {
@@ -254,27 +254,27 @@ namespace SerConAai
                 Directory.CreateDirectory(currentWorkingDir);
 
                 //Get a session
-                var session = sessionManager.GetSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser,
-                                                        OnDemandConfig.VirtualProxy, taskId);
+                var session = sessionManager.GetSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser,
+                                                        OnDemandConfig.Connection, taskId);
                 parameter.ConnectCookie = session.Cookie;
 
                 var tplPath = parameter.TemplateFileName;
                 if (tplPath == null && onDemandMode == false)
                 {
-                    json = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
+                    //ser standard config
+                    var ojson = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
+                    json = ojson.ToString();
                 }
                 else
                 {
-                    if (!File.Exists(tplPath))
-                        tplPath = Path.Combine(OnDemandConfig.TemplateFolder, tplPath);
-                    if (!File.Exists(tplPath))
-                        throw new Exception($"Template path {tplPath} not exits.");
+                    //Template holen
+                    var host = GetHost();
+                    var contentFiles = GetLibraryContent(host, parameter.AppId, session.Cookie, true);
+                    var relUrl = contentFiles.FirstOrDefault(f => f.EndsWith(parameter.TemplateFileName));
+                    var downloadPath = DownloadFile(relUrl, currentWorkingDir, session.Cookie);
 
-                    //Copy Template
-                    var tplCopyPath = Path.Combine(currentWorkingDir, Path.GetFileName(tplPath));
-                    File.Copy(tplPath, tplCopyPath, true);
                     //generate ser config for ondemand
-                    json = GetNewSerConfig(tplCopyPath, parameter);
+                    json = GetNewSerConfig(downloadPath, parameter);
                 }
 
                 //Save config for SER engine
@@ -302,7 +302,7 @@ namespace SerConAai
                     uploadThread.Start();
                 }
 
-                return taskId;
+                return new OnDemandResult() { TaskId = taskId };
             }
             catch (Exception ex)
             {
@@ -310,62 +310,83 @@ namespace SerConAai
             }
         }
 
-        private string GetNewJson(UserParameter parameter, string json, string workdir, Cookie cookie)
+        private JObject GetNewJson(UserParameter parameter, string json, string workdir, Cookie cookie)
         {
             try
             {
-                var appId = parameter.AppId;
-                var host = $"{new Uri(OnDemandConfig.QlikServer).Host}/{OnDemandConfig.VirtualProxy.Path}";
+                var host = GetHost();
                 logger.Debug($"Websocket host: {host}");
                 var serConfig = JObject.Parse(HjsonValue.Parse(json).ToString());
                 var tasks = serConfig["tasks"].ToList();
                 foreach (var task in tasks)
                 {
+                    var appId = task["connection"]["app"].ToString();
                     var fileName = task["template"]["fileName"].ToString();
                     if (fileName.ToLowerInvariant().StartsWith("content://"))
                     {
-                        fileName = fileName.Replace("content://", "");
-                        var contentFiles = GetLibraryContent(host, appId, cookie);
-                        logger.Debug($"Content file count: {contentFiles?.Count}");
-                        var contentPath = $"/appcontent/{appId}/{fileName}";
-                        var contentResult = contentFiles?.FirstOrDefault(n => n == contentPath) ?? null;
-                        if (contentResult != null)
+                        var contentFiles = new List<string>();
+                        var contentUri = new Uri(fileName);
+                        if (String.IsNullOrEmpty(contentUri.Host))
                         {
-                            var savePath = Path.Combine(workdir, Path.GetFileName(contentResult));
-                            var url = $"{OnDemandConfig.QlikServer}/{OnDemandConfig.VirtualProxy.Path}{contentResult}";
-                            var webClient = new WebClient();
-                            webClient.Headers.Add(HttpRequestHeader.Cookie, $"{cookie.Name}={cookie.Value}");
-                            webClient.DownloadFile(url, savePath);
+                            contentUri = new Uri($"content://{appId}{contentUri.AbsolutePath}");
+                            contentFiles = GetLibraryContent(host, appId, cookie, true);
+                        }
+                        else
+                            contentFiles = GetLibraryContent(host, appId, cookie, false, contentUri.Host);
+
+                        logger.Debug($"File count in content library: {contentFiles?.Count}");
+                        var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(contentUri.AbsolutePath));
+                        if (filterFile != null)
+                        {
+                            var savePath = DownloadFile(filterFile, workdir, cookie);
                             task["template"]["fileName"] = Path.GetFileName(savePath);
                             logger.Debug($"Filename {fileName} in content library found.");
                         }
                         else
-                            logger.Warn($"No filename {fileName} in content library found.");
+                            logger.Warn($"No file in content library found.");
                     }
                     else if (fileName.ToLowerInvariant().StartsWith("lib://"))
                     {
-                        var lowerFileName = fileName.ToLowerInvariant().Replace("lib://", "");
-                        var splitList = lowerFileName?.Split('/') ?? null;
-                        if (splitList == null || splitList.Length == 0)
-                            logger.Warn($"The lib:// has no name. {fileName}");
-                        else
-                        {
-                            var segments = splitList.ToList();
-                            var connections = GetConnections(host, appId, cookie);
-                            var libResult = connections.FirstOrDefault(n => n["qName"].ToString().ToLowerInvariant() == segments[0]);
-                            var libPath = libResult["qConnectionString"].ToString();
-                            segments.RemoveAt(0);
-                            task["template"]["fileName"] = $"{libPath}{String.Join('\\', segments)}";
-                        }
+                        var libUri = new Uri(fileName);
+                        if (String.IsNullOrEmpty(libUri.Host))
+                            throw new Exception("Unknown Name of the lib connection.");
+
+                        var connections = GetConnections(host, appId, cookie);
+                        var libResult = connections.FirstOrDefault(n => n["qName"].ToString().ToLowerInvariant() == libUri.Host);
+                        var libPath = libResult["qConnectionString"].ToString();
+                        var relPath = libUri.LocalPath.TrimStart(new char[] { '\\', '/' }).Replace("/", "\\");
+                        task["template"]["fileName"] = $"{libPath}{relPath}";
+                    }
+                    else
+                    {
+                        throw new Exception($"Unknown Sheme in Filename Uri {fileName}.");
                     }
                 }
-                return serConfig.ToString();
+                return serConfig;
             }
             catch (Exception ex)
             {
-                logger.Error(ex, $"Filenames for ser config could not set. Json: {json}");
+                logger.Error(ex, $"The propertys for ser config could not be set. Json: {json}");
                 return null;
             }
+        }
+
+        private string GetHost()
+        {
+            var url = $"{OnDemandConfig.Connection.ConnectUri}";
+            if (!String.IsNullOrEmpty(OnDemandConfig?.Connection?.VirtualProxyPath))
+                url += $"/{OnDemandConfig.Connection.VirtualProxyPath}";
+            return url;
+        }
+
+        private string DownloadFile(string relUrl, string workdir, Cookie cookie)
+        {
+            var savePath = Path.Combine(workdir, Path.GetFileName(relUrl));
+            var url = $"{GetHost()}{relUrl}";
+            var webClient = new WebClient();
+            webClient.Headers.Add(HttpRequestHeader.Cookie, $"{cookie.Name}={cookie.Value}");
+            webClient.DownloadFile(url, savePath);
+            return savePath;
         }
 
         private List<JToken> GetConnections(string host, string appId, Cookie cookie)
@@ -379,7 +400,15 @@ namespace SerConAai
             return response["result"]["qConnections"].ToList();
         }
 
-        private List<string> GetLibraryContent(string host, string appId, Cookie cookie)
+        private List<string> GetLibraryContentInternal(QlikWebSocket qlikWebSocket, string handle, string qName)
+        {
+            var response = qlikWebSocket.GetLibraryContent(handle, qName);
+            var qItems = response["result"]["qList"]["qItems"].ToList();
+            var qUrls = qItems.Select(j => j["qUrl"].ToString()).ToList();
+            return qUrls;
+        }
+
+        private List<string> GetLibraryContent(string host, string appId, Cookie cookie, bool qAppSpecific = true, string qName = null)
         {
             try
             {
@@ -390,12 +419,21 @@ namespace SerConAai
                 var handle = response["result"]["qReturn"]["qHandle"].ToString();
                 response = qlikWebSocket.GetContentLibraries(handle);
                 var qItems = response["result"]["qList"]["qItems"].ToList();
-                var qNames = qItems.Select(j => j["qName"].ToString()).ToList();
-                foreach (var qName in qNames)
+                if (qAppSpecific == true)
+                    qItems = qItems.Where(s => s["qAppSpecific"]?.Value<bool>() == true).ToList();
+
+                if (String.IsNullOrEmpty(qName))
                 {
-                    response = qlikWebSocket.GetLibraryContent(handle, qName);
-                    qItems = response["result"]["qList"]["qItems"].ToList();
-                    var qUrls = qItems.Select(j => j["qUrl"].ToString()).ToList();
+                    foreach (var item in qItems)
+                    {
+                        var name = item["qName"].ToString();
+                        var qUrls = GetLibraryContentInternal(qlikWebSocket, handle, name);
+                        results.AddRange(qUrls);
+                    }
+                }
+                else
+                {
+                    var qUrls = GetLibraryContentInternal(qlikWebSocket, handle, qName);
                     results.AddRange(qUrls);
                 }
                 return results;
@@ -451,15 +489,15 @@ namespace SerConAai
                     },
                     Template = new SerTemplate()
                     {
-                        FileName = templatePath,
+                        FileName = Path.GetFileName(templatePath),
                         SaveFormats = parameter.SaveFormats,
                         ReportName = Path.GetFileNameWithoutExtension(templatePath),
                     },
                     Connection = new SerConnection()
                     {
                         App = parameter.AppId,
-                        ConnectUri = $"{OnDemandConfig.QlikServer}/{OnDemandConfig.VirtualProxy.Path}",
-                        VirtualProxyPath = OnDemandConfig.VirtualProxy.Path,
+                        ConnectUri = GetHost(),
+                        VirtualProxyPath = OnDemandConfig.Connection.VirtualProxyPath,
                         Credentials = new SerCredentials()
                         {
                             Type = QlikCredentialType.SESSION,
@@ -499,8 +537,7 @@ namespace SerConAai
                 File.Move(reportFile, renamePath);
 
                 //Upload Shared Content
-                var qlikHub = new QlikQrsHub(new Uri($"{OnDemandConfig.QlikServer}/{OnDemandConfig.VirtualProxy.Path}"), 
-                                             parameter.ConnectCookie);
+                var qlikHub = new QlikQrsHub(new Uri(GetHost()), parameter.ConnectCookie);
                 var hubInfo = GetFirstUserReport(parameter.DomainUser, parameter.ConnectCookie);
                 if (hubInfo == null)
                 {
@@ -533,9 +570,9 @@ namespace SerConAai
                     logger.Debug("No Document uploaded.");
                 else
                 {
-                    var url = $"{OnDemandConfig.QlikServer}{hubInfo?.References.FirstOrDefault().ExternalPath}";
+                    var url = $"{OnDemandConfig.Connection.ConnectUri}{hubInfo?.References.FirstOrDefault().ExternalPath}";
                     logger.Debug($"Set Download Url {url}");
-                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.QlikServer), parameter.DomainUser, taskId);
+                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
                     session.DownloadLink = url;
                 }
 
@@ -600,12 +637,31 @@ namespace SerConAai
             }
         }
 
+        private OnDemandResult StartDeliveryTool(string workdir)
+        {
+            try
+            {
+                var serDeliveryProc = new Process();
+                serDeliveryProc.StartInfo.FileName = OnDemandConfig.DeliveryToolPath;
+                serDeliveryProc.StartInfo.Arguments = $"{workdir}\\JobResults"; //without files jail
+                serDeliveryProc.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                serDeliveryProc.Start();
+                serDeliveryProc.WaitForExit();
+                return new OnDemandResult() { Status = 3 };
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The delivery tool could not start as process.");
+                return new OnDemandResult() { Status = -1 };
+            }
+        }
+
         private OnDemandResult Status(string taskId, UserParameter parameter)
         {
             var status = GetStatus(taskId);
             logger.Debug($"Report status {status}");
             if (status == "SUCCESS")
-                return new OnDemandResult() { Status = 100 };
+                return new OnDemandResult() { Status = 2 };
             else if (status == "ABORT")
                 return new OnDemandResult() { Status = 1 };
             else if (status == "ERROR")
@@ -632,7 +688,7 @@ namespace SerConAai
 
         private HubInfo GetFirstUserReport(DomainUser user, Cookie cookie)
         {
-            var qlikHub = new QlikQrsHub(new Uri($"{ OnDemandConfig.QlikServer}/{OnDemandConfig.VirtualProxy.Path}"), cookie);
+            var qlikHub = new QlikQrsHub(new Uri(GetHost()), cookie);
             var selectRequest = new HubSelectRequest()
             {
                 Filter = HubSelectRequest.GetNameFilter(OnDemandConfig?.ReportName),

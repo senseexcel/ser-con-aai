@@ -17,7 +17,7 @@
     <PackageReference Include="Q2gHelperPem" Version="1.0.1" />
     <PackageReference Include="Q2gHelperQrs" Version="1.0.5" />
     <PackageReference Include="qlik-sseapi" Version="1.0.0" />
-    <PackageReference Include="SerApi" Version="1.0.0" />
+    <PackageReference Include="SerApi" Version="1.0.1" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.2.1" />
     <PackageReference Include="WebSocket4Net" Version="0.15.2" />
   </ItemGroup>

@@ -30,14 +30,13 @@ namespace SerConAai
 
     public class SerOnDemandConfig
     {
-        public string TemplateFolder { get; set; }
         public string WorkingDir { get; set; }
         public string SerEnginePath { get; set; }
-        public string QlikServer { get; set; } = "https://localhost";
+        public string DeliveryToolPath { get; set; }
         public int BindingPort { get; set; } = 50059;
         public string BindingHost { get; set; } = "localhost";
         public string ReportName { get; set; } = "OnDemandReport";
-        public VirtualProxyConfig VirtualProxy { get; set; }
+        public SerConnection Connection { get; set; }
 
         public string Framework { get; private set; } = RuntimeInformation.FrameworkDescription;
         public string OS { get; private set; } = RuntimeInformation.OSDescription;
@@ -51,10 +50,15 @@ namespace SerConAai
             get => $"{AppName} {AppVersion.ToString()}";
         }
 
-        [JsonIgnore]
-        public string CertPath
+        public string GetCertPath()
         {
-            get => Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, VirtualProxy.Certificate);
+            if (String.IsNullOrEmpty(Connection?.Credentials?.Cert))
+                return null;
+
+            if (File.Exists(Connection?.Credentials?.Cert))
+                return Connection.Credentials.Cert;
+
+            return Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, Connection?.Credentials?.Cert);
         }
     }
 }
