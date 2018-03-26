@@ -34,6 +34,7 @@ namespace SerConAai
         public string TaskId { get; set; }
         public int ProcessId { get; set; }
         public string DownloadLink { get; set; }
+        public int Status { get; set; }
     }
 
     public class SessionManager
@@ -68,10 +69,12 @@ namespace SerConAai
 
                 var connection = new HttpClient(connectionHandler);
                 connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-                connection.GetAsync(connectUri).Wait();
+                var message = connection.GetAsync(connectUri);
+                message.Wait();
+                
                 var responseCookies = cookieContainer?.GetCookies(connectUri)?.Cast<Cookie>() ?? null;
                 var cookie = responseCookies.FirstOrDefault(c => c.Name.Equals(cookieName)) ?? null;
-                logger.Debug($"The session cookie was found. {cookie.Name} - {cookie.Value}");
+                logger.Debug($"The session cookie was found. {cookie?.Name} - {cookie?.Value}");
                 return cookie;
             }
             catch (Exception ex)
@@ -152,7 +155,7 @@ namespace SerConAai
                 var token = cert.GenerateQlikJWToken(claims, TimeSpan.FromMinutes(20));
                 logger.Debug($"Generate token {token}");
                 var cookie = GetJWTSession(fullUri, token, connection.Credentials.Key);
-                logger.Debug($"Generate cookie {cookie.Name} - {cookie.Value}");
+                logger.Debug($"Generate cookie {cookie?.Name} - {cookie?.Value}");
                 if (cookie != null)
                 {
                     var sessionInfo = new SessionInfo()
@@ -172,6 +175,20 @@ namespace SerConAai
             {
                 logger.Error(ex, "The session could not be created.");
                 return null;
+            }
+        }
+
+        public void DeleteSession(Uri connectUri, DomainUser domainUser, string taskId)
+        {
+            try
+            {
+                var session = GetExistsSession(connectUri, domainUser, taskId);
+                if (session != null)
+                    sessionList.Remove(session);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, $"Session {taskId} could not deleted.");
             }
         }
         #endregion

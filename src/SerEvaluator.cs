@@ -152,6 +152,7 @@ namespace SerConAai
                 logger.Info($"request from user: {commonHeader.UserId} for AppId: {commonHeader.AppId}");
                 var domainUser = new DomainUser(commonHeader.UserId);
                 logger.Debug($"DomainUser: {domainUser.UserId.ToString()}\\{domainUser.UserDirectory.ToString()}");
+
                 var userParameter = new UserParameter()
                 {
                     AppId = commonHeader.AppId,
@@ -191,16 +192,19 @@ namespace SerConAai
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.STATUS)
                 {
+                    //Status -1=Fail 1=Running, 2=Success, 3=DeleverySuccess, 4=StopSuccess, 5=Download
                     var taskId = GetParameterValue(0, row)?.Replace("\"","");
                     var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser, taskId);
                     if (session == null)
-                        throw new Exception("No existing session found.");
+                    {
+                        logger.Error($"No existing session with id {taskId} found.");
+                        result = new OnDemandResult() { Status = -1 };
+                    }
 
-                    userParameter.ConnectCookie = session.Cookie;
                     if (session.DownloadLink != null)
-                        result = new OnDemandResult() { Status = 2, Link = session.DownloadLink };
+                        result = new OnDemandResult() { Status = 5, Link = session.DownloadLink };
                     else
-                        result = Status(taskId, userParameter);
+                        result = new OnDemandResult() { Status = session.Status };
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
                 {
@@ -253,17 +257,36 @@ namespace SerConAai
                 logger.Debug($"TempFolder: {currentWorkingDir}");
                 Directory.CreateDirectory(currentWorkingDir);
 
+                //Prüfen auf hier running task!!!
+
+
+                //Caution: Personal//Me => Desktop Mode
+                if (parameter.DomainUser.UserId == "sa_scheduler" &&
+                    parameter.DomainUser.UserDirectory == "INTERNAL")
+                {
+                    //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
+                    var tmpsession = sessionManager.GetSession(new Uri(OnDemandConfig.Connection.ConnectUri), 
+                                                               new DomainUser("INTERNAL\\ser_scheduler"),
+                                                               OnDemandConfig.Connection, taskId);
+                    var qrshub = new QlikQrsHub(new Uri(GetHost()), tmpsession.Cookie);
+                    var result = qrshub.GetAppContent(new Uri($"https://nb-fc-208000/ser/qrs/app/{parameter.AppId}")).Result;
+                    var hubInfo = JsonConvert.DeserializeObject<HubInfo>(result);
+                    if (hubInfo == null)
+                        throw new Exception($"No app owner for app id {parameter.AppId} found.");
+                    parameter.DomainUser = new DomainUser($"{hubInfo.Owner.UserDirectory}\\{hubInfo.Owner.UserId}");
+                }
+
                 //Get a session
                 var session = sessionManager.GetSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser,
                                                         OnDemandConfig.Connection, taskId);
-                parameter.ConnectCookie = session.Cookie;
+                session.User = parameter.DomainUser;
+                parameter.ConnectCookie = session?.Cookie;
 
                 var tplPath = parameter.TemplateFileName;
                 if (tplPath == null && onDemandMode == false)
                 {
                     //ser standard config
-                    var ojson = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
-                    json = ojson.ToString();
+                    json = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
                 }
                 else
                 {
@@ -301,6 +324,14 @@ namespace SerConAai
                     };
                     uploadThread.Start();
                 }
+                else
+                {
+                    var statusThread = new Thread(() => CheckStatus(taskId, currentWorkingDir, parameter))
+                    {
+                        IsBackground = true
+                    };
+                    statusThread.Start();
+                }
 
                 return new OnDemandResult() { TaskId = taskId };
             }
@@ -310,18 +341,35 @@ namespace SerConAai
             }
         }
 
-        private JObject GetNewJson(UserParameter parameter, string json, string workdir, Cookie cookie)
+        private string GetNewJson(UserParameter parameter, string json, string workdir, Cookie cookie)
         {
             try
             {
+                //dynamic gb = task;
+                //var appID2 = gb.connection.app.ToString();
+
                 var host = GetHost();
                 logger.Debug($"Websocket host: {host}");
                 var serConfig = JObject.Parse(HjsonValue.Parse(json).ToString());
                 var tasks = serConfig["tasks"].ToList();
                 foreach (var task in tasks)
                 {
+                    var scriptCon = JObject.Parse(task["connection"].ToString());
+                    OnDemandConfig.Connection.Credentials.Value = cookie.Value;
+                    var configCon = JObject.Parse(JsonConvert.SerializeObject(OnDemandConfig.Connection, Formatting.None,
+                                                  new JsonSerializerSettings
+                                                  {
+                                                     NullValueHandling = NullValueHandling.Ignore
+                                                  }));
+                    configCon.Merge(scriptCon);
+                    var currentConnection = configCon.Value<JObject>();
+                    task["connection"] = currentConnection;
+                    var value = task["evaluate"]["hub"]["connection"].Value<string>();
+                    if(value == "@CONFIGCONNECTION@")
+                      task["evaluate"]["hub"]["connection"] = currentConnection;
+
                     var appId = task["connection"]["app"].ToString();
-                    var fileName = task["template"]["fileName"].ToString();
+                    var fileName = task["template"]["input"].ToString();
                     if (fileName.ToLowerInvariant().StartsWith("content://"))
                     {
                         var contentFiles = new List<string>();
@@ -329,17 +377,17 @@ namespace SerConAai
                         if (String.IsNullOrEmpty(contentUri.Host))
                         {
                             contentUri = new Uri($"content://{appId}{contentUri.AbsolutePath}");
-                            contentFiles = GetLibraryContent(host, appId, cookie, true);
+                            contentFiles = GetLibraryContent(GetNativeHost(host), appId, cookie, true);
                         }
                         else
-                            contentFiles = GetLibraryContent(host, appId, cookie, false, contentUri.Host);
+                            contentFiles = GetLibraryContent(GetNativeHost(host), appId, cookie, false, contentUri.Host);
 
                         logger.Debug($"File count in content library: {contentFiles?.Count}");
                         var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(contentUri.AbsolutePath));
                         if (filterFile != null)
                         {
                             var savePath = DownloadFile(filterFile, workdir, cookie);
-                            task["template"]["fileName"] = Path.GetFileName(savePath);
+                            task["template"]["input"] = Path.GetFileName(savePath);
                             logger.Debug($"Filename {fileName} in content library found.");
                         }
                         else
@@ -355,14 +403,14 @@ namespace SerConAai
                         var libResult = connections.FirstOrDefault(n => n["qName"].ToString().ToLowerInvariant() == libUri.Host);
                         var libPath = libResult["qConnectionString"].ToString();
                         var relPath = libUri.LocalPath.TrimStart(new char[] { '\\', '/' }).Replace("/", "\\");
-                        task["template"]["fileName"] = $"{libPath}{relPath}";
+                        task["template"]["input"] = $"{libPath}{relPath}";
                     }
                     else
                     {
                         throw new Exception($"Unknown Sheme in Filename Uri {fileName}.");
                     }
                 }
-                return serConfig;
+                return serConfig.ToString();
             }
             catch (Exception ex)
             {
@@ -371,9 +419,16 @@ namespace SerConAai
             }
         }
 
-        private string GetHost()
+        private string GetNativeHost(string host)
+        {
+            return host.Replace("https://", "").Replace("http://", "");
+        }
+
+        private string GetHost(bool withProxy = true)
         {
             var url = $"{OnDemandConfig.Connection.ConnectUri}";
+            if (withProxy == false)
+                return url;
             if (!String.IsNullOrEmpty(OnDemandConfig?.Connection?.VirtualProxyPath))
                 url += $"/{OnDemandConfig.Connection.VirtualProxyPath}";
             return url;
@@ -517,6 +572,33 @@ namespace SerConAai
             }
         }
 
+        private void CheckStatus(string taskId, string currentWorkingDir, UserParameter parameter)
+        {
+            var status = 0;
+            var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
+            session.Status = 1;
+            while (status != 2)
+            {
+                Thread.Sleep(250);
+                var result = Status(taskId);
+                status = result.Status;
+                if (status == -1)
+                    break;
+            }
+
+            session.Status = status;
+            if (status != 2)
+                return;
+
+            status = StartDeliveryTool(currentWorkingDir);
+            if (status == 3)
+            {
+                SoftDelete(currentWorkingDir);
+                sessionManager.DeleteSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
+            }
+            session.Status = status;
+        }
+
         private void Upload(string taskId, string currentWorkingDir, UserParameter parameter)
         {
             try
@@ -525,7 +607,7 @@ namespace SerConAai
                 while (status != 100)
                 {
                     Thread.Sleep(250);
-                    var result = Status(taskId, parameter);
+                    var result = Status(taskId);
                     status = result.Status;
                     if (status == -1)
                         return;
@@ -637,7 +719,7 @@ namespace SerConAai
             }
         }
 
-        private OnDemandResult StartDeliveryTool(string workdir)
+        private int StartDeliveryTool(string workdir)
         {
             try
             {
@@ -647,16 +729,16 @@ namespace SerConAai
                 serDeliveryProc.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 serDeliveryProc.Start();
                 serDeliveryProc.WaitForExit();
-                return new OnDemandResult() { Status = 3 };
+                return 3;
             }
             catch (Exception ex)
             {
                 logger.Error(ex, "The delivery tool could not start as process.");
-                return new OnDemandResult() { Status = -1 };
+                return -1;
             }
         }
 
-        private OnDemandResult Status(string taskId, UserParameter parameter)
+        private OnDemandResult Status(string taskId)
         {
             var status = GetStatus(taskId);
             logger.Debug($"Report status {status}");
