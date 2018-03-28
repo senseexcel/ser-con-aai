@@ -29,6 +29,8 @@ namespace SerConAai
     using SerApi;
     using Hjson;
     using System.Net.Http;
+    using Newtonsoft.Json.Serialization;
+    using SerDistribute;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -257,19 +259,16 @@ namespace SerConAai
                 logger.Debug($"TempFolder: {currentWorkingDir}");
                 Directory.CreateDirectory(currentWorkingDir);
 
-                //Prüfen auf hier running task!!!
-
-
                 //Caution: Personal//Me => Desktop Mode
                 if (parameter.DomainUser.UserId == "sa_scheduler" &&
                     parameter.DomainUser.UserDirectory == "INTERNAL")
                 {
                     //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
-                    var tmpsession = sessionManager.GetSession(new Uri(OnDemandConfig.Connection.ConnectUri), 
+                    var tmpsession = sessionManager.GetSession(new Uri(OnDemandConfig.Connection.ConnectUri),
                                                                new DomainUser("INTERNAL\\ser_scheduler"),
                                                                OnDemandConfig.Connection, taskId);
                     var qrshub = new QlikQrsHub(new Uri(GetHost()), tmpsession.Cookie);
-                    var result = qrshub.GetAppContent(new Uri($"https://nb-fc-208000/ser/qrs/app/{parameter.AppId}")).Result;
+                    var result = qrshub.SendRequestAsync(new Uri($"https://nb-fc-208000/ser/qrs/app/{parameter.AppId}"), HttpMethod.Get).Result;
                     var hubInfo = JsonConvert.DeserializeObject<HubInfo>(result);
                     if (hubInfo == null)
                         throw new Exception($"No app owner for app id {parameter.AppId} found.");
@@ -290,8 +289,12 @@ namespace SerConAai
                 }
                 else
                 {
+                    //Prüfen auf hier running task!!!
+                    if (session.Status == 1)
+                        throw new Exception("A Process is already running.");
+
                     //Template holen
-                    var host = GetHost();
+                    var host = GetHost(false);
                     var contentFiles = GetLibraryContent(host, parameter.AppId, session.Cookie, true);
                     var relUrl = contentFiles.FirstOrDefault(f => f.EndsWith(parameter.TemplateFileName));
                     var downloadPath = DownloadFile(relUrl, currentWorkingDir, session.Cookie);
@@ -315,23 +318,11 @@ namespace SerConAai
                 serProcess.Start();
                 session.ProcessId = serProcess.Id;
 
-                if (onDemandMode)
+                var statusThread = new Thread(() => CheckStatus(taskId, currentWorkingDir, parameter))
                 {
-                    //wait for finish and upload
-                    var uploadThread = new Thread(() => Upload(taskId, currentWorkingDir, parameter))
-                    {
-                        IsBackground = true
-                    };
-                    uploadThread.Start();
-                }
-                else
-                {
-                    var statusThread = new Thread(() => CheckStatus(taskId, currentWorkingDir, parameter))
-                    {
-                        IsBackground = true
-                    };
-                    statusThread.Start();
-                }
+                    IsBackground = true
+                };
+                statusThread.Start();
 
                 return new OnDemandResult() { TaskId = taskId };
             }
@@ -359,14 +350,23 @@ namespace SerConAai
                     var configCon = JObject.Parse(JsonConvert.SerializeObject(OnDemandConfig.Connection, Formatting.None,
                                                   new JsonSerializerSettings
                                                   {
-                                                     NullValueHandling = NullValueHandling.Ignore
+                                                      NullValueHandling = NullValueHandling.Ignore,
+                                                      ContractResolver = new CamelCasePropertyNamesContractResolver(),
                                                   }));
                     configCon.Merge(scriptCon);
                     var currentConnection = configCon.Value<JObject>();
+                    currentConnection["credentials"] = currentConnection["credentials"].RemoveFields(new string[] { "cert", "privateKey" });
                     task["connection"] = currentConnection;
-                    var value = task["evaluate"]["hub"]["connection"].Value<string>();
-                    if(value == "@CONFIGCONNECTION@")
-                      task["evaluate"]["hub"]["connection"] = currentConnection;
+
+                    var children = task["evaluate"].Children().Children();
+                    foreach (var child in children)
+                    {
+                        var connection = child["connection"] ?? null;
+                        if (connection?.ToString() == "@CONFIGCONNECTION@")
+                        {
+                            child["connection"] = currentConnection;
+                        }
+                    }
 
                     var appId = task["connection"]["app"].ToString();
                     var fileName = task["template"]["input"].ToString();
@@ -424,13 +424,20 @@ namespace SerConAai
             return host.Replace("https://", "").Replace("http://", "");
         }
 
-        private string GetHost(bool withProxy = true)
+        private string GetHost(bool withSheme = true, bool withProxy = true)
         {
             var url = $"{OnDemandConfig.Connection.ConnectUri}";
             if (withProxy == false)
                 return url;
             if (!String.IsNullOrEmpty(OnDemandConfig?.Connection?.VirtualProxyPath))
                 url += $"/{OnDemandConfig.Connection.VirtualProxyPath}";
+
+            if (!withSheme)
+            {
+                var uri = new Uri(url);
+                return url.Replace($"{uri.Scheme.ToString()}://", "");
+            }
+
             return url;
         }
 
@@ -491,6 +498,7 @@ namespace SerConAai
                     var qUrls = GetLibraryContentInternal(qlikWebSocket, handle, qName);
                     results.AddRange(qUrls);
                 }
+
                 return results;
             }
             catch (Exception ex)
@@ -544,14 +552,13 @@ namespace SerConAai
                     },
                     Template = new SerTemplate()
                     {
-                        FileName = Path.GetFileName(templatePath),
-                        SaveFormats = parameter.SaveFormats,
-                        ReportName = Path.GetFileNameWithoutExtension(templatePath),
+                        Input = Path.GetFileName(templatePath),
+                        Output = $"OnDemandReport.{parameter.SaveFormats}",
                     },
                     Connection = new SerConnection()
                     {
                         App = parameter.AppId,
-                        ConnectUri = GetHost(),
+                        ConnectUri = GetHost(true, false),
                         VirtualProxyPath = OnDemandConfig.Connection.VirtualProxyPath,
                         Credentials = new SerCredentials()
                         {
@@ -562,8 +569,32 @@ namespace SerConAai
                     }
                 };
 
+                var hubSettings = new HubSettings()
+                {
+                    Active = true,
+                    Mode = HubMode.OVERRIDE,
+                    Type = SettingsType.HUB,
+                    HubUser = $"{parameter.DomainUser.UserDirectory}\\{parameter.DomainUser.UserId}",
+                    Connection = task.Connection,
+                };
+
+                var hubContent = JObject.Parse(JsonConvert.SerializeObject(hubSettings, 
+                                               new JsonSerializerSettings()
+                                               {
+                                                   NullValueHandling = NullValueHandling.Ignore
+                                               }).ToString());
+
+                task.Evaluate = new JObject(new JProperty("hub", hubContent)); 
                 var appConfig = new SerConfig() { Tasks = new List<SerTask> { task } }; 
-                return JsonConvert.SerializeObject(appConfig);
+                var jConfig = JsonConvert.SerializeObject(appConfig, new JsonSerializerSettings()
+                {
+                    ContractResolver = new CamelCasePropertyNamesContractResolver(),
+                    NullValueHandling = NullValueHandling.Ignore,
+                });
+
+                var resultConfig = JObject.Parse(jConfig);
+                resultConfig.RemoveFields(new string[] { "taskCount" });
+                return resultConfig.ToString();
             }
             catch (Exception ex)
             {
@@ -592,79 +623,10 @@ namespace SerConAai
 
             status = StartDeliveryTool(currentWorkingDir);
             if (status == 3)
-            {
-                SoftDelete(currentWorkingDir);
                 sessionManager.DeleteSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
-            }
+
+            SoftDelete(currentWorkingDir);
             session.Status = status;
-        }
-
-        private void Upload(string taskId, string currentWorkingDir, UserParameter parameter)
-        {
-            try
-            {
-                var status = 0;
-                while (status != 100)
-                {
-                    Thread.Sleep(250);
-                    var result = Status(taskId);
-                    status = result.Status;
-                    if (status == -1)
-                        return;
-                }
-
-                //Rename file name
-                var reportFile = GetReportFile(taskId);
-                var renamePath = Path.Combine(Path.GetDirectoryName(reportFile), $"{OnDemandConfig.ReportName}.{parameter.SaveFormats}");
-                File.Move(reportFile, renamePath);
-
-                //Upload Shared Content
-                var qlikHub = new QlikQrsHub(new Uri(GetHost()), parameter.ConnectCookie);
-                var hubInfo = GetFirstUserReport(parameter.DomainUser, parameter.ConnectCookie);
-                if (hubInfo == null)
-                {
-                    var createRequest = new HubCreateRequest()
-                    {
-                        Name = OnDemandConfig.ReportName,
-                        Description = $"Created by SER OnDemand Connector.",
-                        Data = GetContentData(renamePath),
-                    };
-                    qlikHub.CreateSharedContentAsync(createRequest).Wait();
-                    logger.Debug($"upload new file {reportFile} - Create");
-                }
-                else
-                {
-                    var updateRequest = new HubUpdateRequest()
-                    {
-                        Info = hubInfo,
-                        Data = GetContentData(renamePath),
-                    };
-                    qlikHub.UpdateSharedContentAsync(updateRequest).Wait();
-                    logger.Debug($"upload new file {reportFile} - Update");
-                }
-
-                //Wait for Status Success 
-                Thread.Sleep(1000);
-
-                //Download Url
-                hubInfo = GetFirstUserReport(parameter.DomainUser, parameter.ConnectCookie);
-                if (hubInfo == null)
-                    logger.Debug("No Document uploaded.");
-                else
-                {
-                    var url = $"{OnDemandConfig.Connection.ConnectUri}{hubInfo?.References.FirstOrDefault().ExternalPath}";
-                    logger.Debug($"Set Download Url {url}");
-                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
-                    session.DownloadLink = url;
-                }
-
-                //Delete job files after upload
-                SoftDelete(currentWorkingDir);
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex);
-            }
         }
 
         private Row GetParameter(IAsyncStreamReader<BundledRows> requestStream)
@@ -692,9 +654,9 @@ namespace SerConAai
                 return Boolean.TryParse(value, out var boolResult);
         }
 
-        private HubContentData GetContentData(string fullname)
+        private ContentData GetContentData(string fullname)
         {
-            var contentData = new HubContentData()
+            var contentData = new ContentData()
             {
                 ContentType = $"application/{Path.GetExtension(fullname).Replace(".", "")}",
                 ExternalPath = Path.GetFileName(fullname),
@@ -723,13 +685,13 @@ namespace SerConAai
         {
             try
             {
-                var serDeliveryProc = new Process();
-                serDeliveryProc.StartInfo.FileName = OnDemandConfig.DeliveryToolPath;
-                serDeliveryProc.StartInfo.Arguments = $"{workdir}\\JobResults"; //without files jail
-                serDeliveryProc.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                serDeliveryProc.Start();
-                serDeliveryProc.WaitForExit();
-                return 3;
+                var jobResultPath = Path.Combine(workdir, "JobResults");
+                var distribute = new Distribute();
+                var result = distribute.Run(jobResultPath);
+                if (result == 0)
+                    return 3;
+                else
+                    return -1;
             }
             catch (Exception ex)
             {
