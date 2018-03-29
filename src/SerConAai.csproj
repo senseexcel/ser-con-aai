@@ -24,7 +24,7 @@
 
   <ItemGroup>
     <Reference Include="SerDistribute">
-      <HintPath>..\..\ser-distribute\src\bin\Debug\netcoreapp2.0\SerDistribute.dll</HintPath>
+      <HintPath>..\..\ser-distribute-nuget\src\bin\Debug\netcoreapp2.0\SerDistribute.dll</HintPath>
     </Reference>
   </ItemGroup>
 

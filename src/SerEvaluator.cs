@@ -85,9 +85,7 @@ namespace SerConAai
                              Name = SerFunction.CREATE.ToString(),
                              Params =
                              {
-                                new Parameter() { Name = "TemplateFilename", DataType = DataType.String },
-                                new Parameter() { Name = "OutputFormat", DataType = DataType.String },
-                                new Parameter() { Name = "UseSelection", DataType = DataType.String },
+                                new Parameter() { Name = "Request", DataType = DataType.String },
                              },
                              ReturnType = DataType.String,
                         },
@@ -168,11 +166,14 @@ namespace SerConAai
                 var result = new OnDemandResult() { Status = -1 };
                 if (functionRequestHeader.FunctionId == (int)SerFunction.CREATE)
                 {
-                    userParameter.TemplateFileName = GetParameterValue(0, row);
+                    userParameter.OnDemand = true;
+                    var json = GetParameterValue(0, row);
+                    var extParam = JObject.Parse(json);
+                    userParameter.TemplateFileName = extParam["template"].ToString();
                     logger.Debug($"Template path: {userParameter.TemplateFileName}");
-                    userParameter.SaveFormats = GetParameterValue(1, row);
+                    userParameter.SaveFormats = extParam["output"].ToString();
                     logger.Debug($"SaveFormat: {userParameter.SaveFormats}");
-                    var mode = GetBoolean(GetParameterValue(2, row));
+                    var mode = GetBoolean(extParam["selectionMode"].ToString());
                     if (mode)
                         userParameter.UseUserSelesction = SelectionMode.OnDemandOn;
                     else
@@ -199,7 +200,8 @@ namespace SerConAai
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.STATUS)
                 {
                     //Status -1=Fail 1=Running, 2=Success, 3=DeleverySuccess, 4=StopSuccess, 5=Download
-                    var taskId = GetParameterValue(0, row)?.Replace("\"","");
+                    var json = GetParameterValue(0, row);
+                    var taskId = JObject.Parse(json)["TaskId"].ToString();
                     var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser, taskId);
                     if (session == null)
                     {
@@ -214,7 +216,8 @@ namespace SerConAai
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
                 {
-                    var taskId = GetParameterValue(0, row)?.Replace("\"", "");
+                    var json = GetParameterValue(0, row);
+                    var taskId = JObject.Parse(json)["TaskId"].ToString();
                     var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser, taskId);
                     if (session == null)
                         throw new Exception("No existing session found.");
@@ -627,9 +630,9 @@ namespace SerConAai
                 return;
 
             //Delivery finish
-            status = StartDeliveryTool(currentWorkingDir, session);
+            status = StartDeliveryTool(currentWorkingDir, session, parameter.OnDemand);
 
-            sessionManager.DeleteSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
+            //sessionManager.DeleteSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
             SoftDelete(currentWorkingDir);
             session.Status = status;
         }
@@ -686,18 +689,18 @@ namespace SerConAai
             }
         }
 
-        private int StartDeliveryTool(string workdir, SessionInfo session)
+        private int StartDeliveryTool(string workdir, SessionInfo session, bool ondemand = false)
         {
             try
             {
                 var jobResultPath = Path.Combine(workdir, "JobResults");
                 var distribute = new Distribute();
-                var result = distribute.Run(jobResultPath);
+                var result = distribute.Run(jobResultPath, ondemand);
                 if (result != null)
                 {
                     session.DownloadLink = result;
                     return 3;
-                }   
+                }
                 else
                     return -1;
             }

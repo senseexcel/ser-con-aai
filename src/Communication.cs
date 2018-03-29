@@ -16,6 +16,7 @@
         public string AppId { get; set; }
         public DomainUser DomainUser { get; set; }
         public Cookie ConnectCookie { get; set; }
+        public bool OnDemand { get; set; }
     }
 
     public class OnDemandResult
