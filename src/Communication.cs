@@ -22,7 +22,7 @@
     public class OnDemandResult
     {
         public int Status { get; set; }
-        public string TaskId { get; set; }
+        public string TaskName { get; set; }
         public string Link { get; set; }
         public string Log { get; set; }
     }

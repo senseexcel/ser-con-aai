@@ -24,6 +24,7 @@ namespace SerConAai
     using System.Reflection;
     using SerApi;
     using System.Security.Claims;
+    using Newtonsoft.Json;
     #endregion
 
     public class SessionInfo
@@ -58,7 +59,9 @@ namespace SerConAai
         {
             try
             {
+                logger.Debug($"ConnectUri: {connectUri}");
                 connectUri = new Uri($"{connectUri.OriginalString}/sense/app");
+                logger.Debug($"Full ConnectUri: {connectUri}");
                 var cookieContainer = new CookieContainer();
                 var connectionHandler = new HttpClientHandler
                 {
@@ -67,10 +70,11 @@ namespace SerConAai
                 };
 
                 var connection = new HttpClient(connectionHandler);
+                logger.Debug($"Bearer token: {token}");
                 connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-                var message = connection.GetAsync(connectUri);
-                message.Wait();
-                
+                var message = connection.GetAsync(connectUri).Result;
+                logger.Debug($"Message: {message}");
+
                 var responseCookies = cookieContainer?.GetCookies(connectUri)?.Cast<Cookie>() ?? null;
                 var cookie = responseCookies.FirstOrDefault(c => c.Name.Equals(cookieName)) ?? null;
                 logger.Debug($"The session cookie was found. {cookie?.Name} - {cookie?.Value}");
@@ -78,7 +82,7 @@ namespace SerConAai
             }
             catch (Exception ex)
             {
-                logger.Debug(ex, "Can´t create session cookie with JWT.");
+                logger.Error(ex, "Can´t create session cookie with JWT.");
                 return null;
             }
         }
@@ -121,7 +125,7 @@ namespace SerConAai
                         return oldSession;
                 }
 
-                var certPath = connection.Credentials.Cert;
+                var certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, connection.Credentials.Cert);
                 if (!File.Exists(certPath))
                 {
                     certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, certPath);
@@ -132,17 +136,19 @@ namespace SerConAai
                     }
                 }
 
-                var privateKey = connection.Credentials.PrivateKey;
+                logger.Debug($"CERTPATH: {certPath}");
+                var privateKey = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, connection.Credentials.PrivateKey);
                 if (!File.Exists(privateKey))
                 {
-                    certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, privateKey);
-                    if (!File.Exists(certPath))
+                    privateKey = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, privateKey);
+                    if (!File.Exists(privateKey))
                     {
                         var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
-                        logger.Warn($"No private key {certPath} exists. Please generate a private Key with \"{exeName} -cert\"");
+                        logger.Warn($"No private key {privateKey} exists. Please generate a private Key with \"{exeName} -cert\"");
                     }
                 }
 
+                logger.Debug($"PRIVATEKEY: {privateKey}");
                 cert = cert.LoadPem(certPath, privateKey);
                 var claims = new[]
                 {

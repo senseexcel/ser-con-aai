@@ -336,7 +336,7 @@ namespace SerConAai
                 };
                 statusThread.Start();
 
-                return new OnDemandResult() { TaskId = taskId };
+                return new OnDemandResult() { TaskName = taskId };
             }
             catch (Exception ex)
             {
@@ -547,7 +547,8 @@ namespace SerConAai
             {
                 NullValueHandling = NullValueHandling.Ignore
             };
-            resultRow.Duals.Add(new Dual { StrData = JsonConvert.SerializeObject(result, settings) });
+
+            resultRow.Duals.Add(new Dual { StrData = JsonConvert.SerializeObject(result, settings), NumData = 0 });
             resultBundle.Rows.Add(resultRow);
             return resultBundle;
         }
@@ -645,7 +646,7 @@ namespace SerConAai
         private Row GetParameter(IAsyncStreamReader<BundledRows> requestStream)
         {
             try
-            {
+            {                
                 if (requestStream.MoveNext().Result == false)
                     logger.Debug("The Request has no parameters.");
 

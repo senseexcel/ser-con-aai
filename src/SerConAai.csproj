@@ -15,7 +15,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
     <PackageReference Include="NLog" Version="5.0.0-beta11" />
     <PackageReference Include="Q2gHelperPem" Version="1.0.2" />
-    <PackageReference Include="Q2gHelperQrs" Version="1.0.7" />
+    <PackageReference Include="Q2gHelperQrs" Version="1.0.8" />
     <PackageReference Include="qlik-sseapi" Version="1.0.0" />
     <PackageReference Include="SerApi" Version="1.0.5" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.2.1" />
