@@ -172,7 +172,11 @@ namespace SerConAai
                     logger.Debug($"Template path: {userParameter.TemplateFileName}");
                     userParameter.SaveFormats = GetParameterValue(1, row);
                     logger.Debug($"SaveFormat: {userParameter.SaveFormats}");
-                    userParameter.UseUserSelesction = GetBoolean(GetParameterValue(2, row));
+                    var mode = GetBoolean(GetParameterValue(2, row));
+                    if (mode)
+                        userParameter.UseUserSelesction = 1;
+                    else
+                        userParameter.UseUserSelesction = 2;
                     logger.Debug($"UseSelection: {userParameter.UseUserSelesction}");
                     result = CreateReport(userParameter, true);
                 }
@@ -281,8 +285,7 @@ namespace SerConAai
                 session.User = parameter.DomainUser;
                 parameter.ConnectCookie = session?.Cookie;
 
-                var tplPath = parameter.TemplateFileName;
-                if (tplPath == null && onDemandMode == false)
+                if (onDemandMode == false)
                 {
                     //ser standard config
                     json = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
@@ -295,8 +298,9 @@ namespace SerConAai
 
                     //Template holen
                     var host = GetHost(false);
-                    var contentFiles = GetLibraryContent(host, parameter.AppId, session.Cookie, true);
-                    var relUrl = contentFiles.FirstOrDefault(f => f.EndsWith(parameter.TemplateFileName));
+                    var templateUri = new Uri(parameter.TemplateFileName);
+                    var contentFiles = GetLibraryContent(host, parameter.AppId, session.Cookie, true, templateUri.Host);
+                    var relUrl = contentFiles.FirstOrDefault(f => f.EndsWith(templateUri.AbsolutePath));
                     var downloadPath = DownloadFile(relUrl, currentWorkingDir, session.Cookie);
 
                     //generate ser config for ondemand
@@ -623,7 +627,13 @@ namespace SerConAai
 
             status = StartDeliveryTool(currentWorkingDir);
             if (status == 3)
-                sessionManager.DeleteSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
+            {
+                var qrshub = new QlikQrsHub(new Uri(GetHost()), session.Cookie);
+                var result = qrshub.GetSharedContentAsync(new HubSelectRequest()).Result;
+                session.DownloadLink = "????";
+            }
+                
+            //    sessionManager.DeleteSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
 
             SoftDelete(currentWorkingDir);
             session.Status = status;
@@ -728,20 +738,6 @@ namespace SerConAai
             }
 
             return null;
-        }
-
-        private HubInfo GetFirstUserReport(DomainUser user, Cookie cookie)
-        {
-            var qlikHub = new QlikQrsHub(new Uri(GetHost()), cookie);
-            var selectRequest = new HubSelectRequest()
-            {
-                Filter = HubSelectRequest.GetNameFilter(OnDemandConfig?.ReportName),
-            };
-
-            var results = qlikHub.GetSharedContentAsync(selectRequest).Result;
-            var result = results?.Where(d => d?.Owner?.UserId == user?.UserId && 
-                                     d?.Owner?.UserDirectory == user?.UserDirectory)?.FirstOrDefault() ?? null;
-            return result;
         }
 
         private JObject GetJsonObject(string taskId = null)
