@@ -174,9 +174,9 @@ namespace SerConAai
                     logger.Debug($"SaveFormat: {userParameter.SaveFormats}");
                     var mode = GetBoolean(GetParameterValue(2, row));
                     if (mode)
-                        userParameter.UseUserSelesction = 1;
+                        userParameter.UseUserSelesction = SelectionMode.OnDemandOn;
                     else
-                        userParameter.UseUserSelesction = 2;
+                        userParameter.UseUserSelesction = SelectionMode.OnDemandOff;
                     logger.Debug($"UseSelection: {userParameter.UseUserSelesction}");
                     result = CreateReport(userParameter, true);
                 }
