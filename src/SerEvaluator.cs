@@ -621,20 +621,15 @@ namespace SerConAai
                     break;
             }
 
+            //Engine finish
             session.Status = status;
             if (status != 2)
                 return;
 
-            status = StartDeliveryTool(currentWorkingDir);
-            if (status == 3)
-            {
-                var qrshub = new QlikQrsHub(new Uri(GetHost()), session.Cookie);
-                var result = qrshub.GetSharedContentAsync(new HubSelectRequest()).Result;
-                session.DownloadLink = "????";
-            }
-                
-            //    sessionManager.DeleteSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
+            //Delivery finish
+            status = StartDeliveryTool(currentWorkingDir, session);
 
+            sessionManager.DeleteSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
             SoftDelete(currentWorkingDir);
             session.Status = status;
         }
@@ -691,15 +686,18 @@ namespace SerConAai
             }
         }
 
-        private int StartDeliveryTool(string workdir)
+        private int StartDeliveryTool(string workdir, SessionInfo session)
         {
             try
             {
                 var jobResultPath = Path.Combine(workdir, "JobResults");
                 var distribute = new Distribute();
                 var result = distribute.Run(jobResultPath);
-                if (result == 0)
+                if (result != null)
+                {
+                    session.DownloadLink = result;
                     return 3;
+                }   
                 else
                     return -1;
             }
