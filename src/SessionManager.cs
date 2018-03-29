@@ -31,7 +31,6 @@ namespace SerConAai
         public Cookie Cookie { get; set; }
         public DomainUser User { get; set; }
         public Uri ConnectUri { get; set; }
-        public string TaskId { get; set; }
         public int ProcessId { get; set; }
         public string DownloadLink { get; set; }
         public int Status { get; set; }
@@ -101,16 +100,15 @@ namespace SerConAai
         #endregion
 
         #region Public Methods
-        public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser, string taskId)
+        public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser)
         {
             var result = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
                                                                  && u.User.UserId == domainUser.UserId 
-                                                                 && u.User.UserDirectory == domainUser.UserDirectory
-                                                                 && u.TaskId == taskId) ?? null;
+                                                                 && u.User.UserDirectory == domainUser.UserDirectory) ?? null;
             return result;
         }
 
-        public SessionInfo GetSession(Uri connectUri, DomainUser domainUser, SerConnection connection, string taskId)
+        public SessionInfo GetSession(Uri connectUri, DomainUser domainUser, SerConnection connection)
         {
             try
             {
@@ -118,7 +116,7 @@ namespace SerConAai
                 var fullUri = new Uri($"{connectUri.OriginalString}/{connection.VirtualProxyPath}");
                 lock (this)
                 {
-                    var oldSession = GetExistsSession(connectUri, domainUser, taskId);
+                    var oldSession = GetExistsSession(connectUri, domainUser);
                     if (oldSession != null)
                         return oldSession;
                 }
@@ -162,8 +160,7 @@ namespace SerConAai
                     {
                         Cookie = cookie,
                         User = domainUser,
-                        ConnectUri = connectUri,
-                        TaskId = taskId,
+                        ConnectUri = connectUri
                     };
                     sessionList.Add(sessionInfo);
                     return sessionInfo;
@@ -182,7 +179,7 @@ namespace SerConAai
         {
             try
             {
-                var session = GetExistsSession(connectUri, domainUser, taskId);
+                var session = GetExistsSession(connectUri, domainUser);
                 if (session != null)
                     sessionList.Remove(session);
             }

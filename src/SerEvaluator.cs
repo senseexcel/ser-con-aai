@@ -202,7 +202,7 @@ namespace SerConAai
                     //Status -1=Fail 1=Running, 2=Success, 3=DeleverySuccess, 4=StopSuccess, 5=Download
                     var json = GetParameterValue(0, row);
                     var taskId = JObject.Parse(json)["TaskId"].ToString();
-                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser, taskId);
+                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser);
                     if (session == null)
                     {
                         logger.Error($"No existing session with id {taskId} found.");
@@ -210,7 +210,10 @@ namespace SerConAai
                     }
 
                     if (session.DownloadLink != null)
+                    {
+                        session.Status = 5;
                         result = new OnDemandResult() { Status = 5, Link = session.DownloadLink };
+                    } 
                     else
                         result = new OnDemandResult() { Status = session.Status };
                 }
@@ -218,7 +221,7 @@ namespace SerConAai
                 {
                     var json = GetParameterValue(0, row);
                     var taskId = JObject.Parse(json)["TaskId"].ToString();
-                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser, taskId);
+                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser);
                     if (session == null)
                         throw new Exception("No existing session found.");
                     var process = Process.GetProcessById(session.ProcessId);
@@ -228,6 +231,7 @@ namespace SerConAai
                         Thread.Sleep(1000);
                     }
                     SoftDelete($"{OnDemandConfig.WorkingDir}\\{taskId}");
+                    session.Status = 4;
                     result = new OnDemandResult() { Status = 4 };
                 }
                 else
@@ -273,7 +277,7 @@ namespace SerConAai
                     //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
                     var tmpsession = sessionManager.GetSession(new Uri(OnDemandConfig.Connection.ConnectUri),
                                                                new DomainUser("INTERNAL\\ser_scheduler"),
-                                                               OnDemandConfig.Connection, taskId);
+                                                               OnDemandConfig.Connection);
                     var qrshub = new QlikQrsHub(new Uri(GetHost()), tmpsession.Cookie);
                     var result = qrshub.SendRequestAsync(new Uri($"https://nb-fc-208000/ser/qrs/app/{parameter.AppId}"), HttpMethod.Get).Result;
                     var hubInfo = JsonConvert.DeserializeObject<HubInfo>(result);
@@ -284,9 +288,10 @@ namespace SerConAai
 
                 //Get a session
                 var session = sessionManager.GetSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser,
-                                                        OnDemandConfig.Connection, taskId);
+                                                        OnDemandConfig.Connection);
                 session.User = parameter.DomainUser;
                 parameter.ConnectCookie = session?.Cookie;
+                session.DownloadLink = null;
 
                 if (onDemandMode == false)
                 {
@@ -613,7 +618,7 @@ namespace SerConAai
         private void CheckStatus(string taskId, string currentWorkingDir, UserParameter parameter)
         {
             var status = 0;
-            var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
+            var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser);
             session.Status = 1;
             while (status != 2)
             {
