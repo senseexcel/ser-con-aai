@@ -22,19 +22,13 @@ namespace SerConAai
 
     public class SerOnDemandConfig
     {
-        public string JwtToken { get; set; }
-        public string VirtualProxyPath { get; set; }
-        public string CookieName { get; set; }
-        public string TemplateFolder { get; set; }
         public string WorkingDir { get; set; }
         public string SerEnginePath { get; set; }
-        public int Port { get; set; } = 50059;
-        public string Server { get; set; } = "https://localhost";
-        public string Host { get; set; } = "localhost";
-        public string HubConnect { get; set; } = "https://localhost:4242";
-        public int Wait { get; set; } = 250;
-        public string Certificate { get; set; }
-        public string ReportName { get; set; } = "OnDemandReport";
+        public string DeliveryToolPath { get; set; }
+        public int BindingPort { get; set; } = 50059;
+        public string BindingHost { get; set; } = "localhost";
+        public SerConnection Connection { get; set; }
+
         public string Framework { get; private set; } = RuntimeInformation.FrameworkDescription;
         public string OS { get; private set; } = RuntimeInformation.OSDescription;
         public string Architecture { get; private set; } = RuntimeInformation.OSArchitecture.ToString();
@@ -47,25 +41,15 @@ namespace SerConAai
             get => $"{AppName} {AppVersion.ToString()}";
         }
 
-        [JsonIgnore]
-        public string CertPath
+        public string GetCertPath()
         {
-            get => Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, Certificate);
-        }
+            if (String.IsNullOrEmpty(Connection?.Credentials?.Cert))
+                return null;
 
-        [JsonIgnore]
-        public string TemplateFileName { get; set; }
-        [JsonIgnore]
-        public string SaveFormats { get; set; }
-        [JsonIgnore]
-        public bool UseUserSelesction { get; set; }
-        [JsonIgnore]
-        public string CurrentAppId { get; set; }
-        [JsonIgnore]
-        public string CurrentWorkingDir { get; set; }
-        [JsonIgnore]
-        public string DownloadUrl { get; set; }
-        [JsonIgnore]
-        public DomainUser DomainUser { get; set; }
+            if (File.Exists(Connection?.Credentials?.Cert))
+                return Connection.Credentials.Cert;
+
+            return Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, Connection?.Credentials?.Cert);
+        }
     }
 }

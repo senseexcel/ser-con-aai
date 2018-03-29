@@ -17,24 +17,28 @@ namespace SerConAai
     using System.Text;
     using Microsoft.Extensions.PlatformAbstractions;
     using System.Linq;
-    using Q2gHelperPemNuget;
+    using Q2gHelperPem;
     using System.Net;
     using System.Net.Http;
     using NLog;
     using System.Reflection;
     using SerApi;
     using System.Security.Claims;
+    using Newtonsoft.Json;
     #endregion
+
+    public class SessionInfo
+    {
+        public Cookie Cookie { get; set; }
+        public DomainUser User { get; set; }
+        public Uri ConnectUri { get; set; }
+        public int ProcessId { get; set; }
+        public string DownloadLink { get; set; }
+        public int Status { get; set; }
+    }
 
     public class SessionManager
     {
-        class SessionInfo
-        {
-            public Cookie Cookie { get; set; }
-            public DomainUser User { get; set; }
-            public Uri ConnectUri { get; set; }
-        }
-
         #region Logger
         private static Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
@@ -55,7 +59,9 @@ namespace SerConAai
         {
             try
             {
+                logger.Debug($"ConnectUri: {connectUri}");
                 connectUri = new Uri($"{connectUri.OriginalString}/sense/app");
+                logger.Debug($"Full ConnectUri: {connectUri}");
                 var cookieContainer = new CookieContainer();
                 var connectionHandler = new HttpClientHandler
                 {
@@ -64,16 +70,19 @@ namespace SerConAai
                 };
 
                 var connection = new HttpClient(connectionHandler);
+                logger.Debug($"Bearer token: {token}");
                 connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-                connection.GetAsync(connectUri).Wait();
+                var message = connection.GetAsync(connectUri).Result;
+                logger.Debug($"Message: {message}");
+
                 var responseCookies = cookieContainer?.GetCookies(connectUri)?.Cast<Cookie>() ?? null;
                 var cookie = responseCookies.FirstOrDefault(c => c.Name.Equals(cookieName)) ?? null;
-                logger.Debug($"The session cookie was found. {cookie.Name} - {cookie.Value}");
+                logger.Debug($"The session cookie was found. {cookie?.Name} - {cookie?.Value}");
                 return cookie;
             }
             catch (Exception ex)
             {
-                logger.Debug(ex, "Can´t create session cookie with JWT.");
+                logger.Error(ex, "Can´t create session cookie with JWT.");
                 return null;
             }
         }
@@ -95,31 +104,52 @@ namespace SerConAai
         #endregion
 
         #region Public Methods
-        public Cookie GetSession(Uri connectUri, DomainUser domainUser, string cookieName, string virtualProxy, string certName)
+        public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser)
+        {
+            var result = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
+                                                                 && u.User.UserId == domainUser.UserId 
+                                                                 && u.User.UserDirectory == domainUser.UserDirectory) ?? null;
+            return result;
+        }
+
+        public SessionInfo GetSession(Uri connectUri, DomainUser domainUser, SerConnection connection)
         {
             try
             {
                 var cert = new X509Certificate2();
-                var fullUri = new Uri($"{connectUri.OriginalString}/{virtualProxy}");
-                var oldSession = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
-                                                             && u.User.Equals(domainUser)) ?? null;
-                if (oldSession != null)
-                    return oldSession.Cookie;
+                var fullUri = new Uri($"{connectUri.OriginalString}/{connection.VirtualProxyPath}");
+                lock (this)
+                {
+                    var oldSession = GetExistsSession(connectUri, domainUser);
+                    if (oldSession != null)
+                        return oldSession;
+                }
 
-                var certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, certName);
+                var certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, connection.Credentials.Cert);
                 if (!File.Exists(certPath))
                 {
-                    var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
-                    logger.Warn($"No Certificate {certPath} exists. Please generate a Certificate with \"{exeName} -cert\"");
-                }
-                else
-                {
-                    var name = Path.GetFileNameWithoutExtension(certPath);
-                    var privateFile = Directory.GetFiles(Path.GetDirectoryName(certPath), $"{name}_private.key",
-                                                         SearchOption.TopDirectoryOnly).FirstOrDefault() ?? null;
-                    cert = cert.LoadPem(certPath, privateFile);
+                    certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, certPath);
+                    if (!File.Exists(certPath))
+                    {
+                        var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
+                        logger.Warn($"No Certificate {certPath} exists. Please generate a Certificate with \"{exeName} -cert\"");
+                    }
                 }
 
+                logger.Debug($"CERTPATH: {certPath}");
+                var privateKey = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, connection.Credentials.PrivateKey);
+                if (!File.Exists(privateKey))
+                {
+                    privateKey = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, privateKey);
+                    if (!File.Exists(privateKey))
+                    {
+                        var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
+                        logger.Warn($"No private key {privateKey} exists. Please generate a private Key with \"{exeName} -cert\"");
+                    }
+                }
+
+                logger.Debug($"PRIVATEKEY: {privateKey}");
+                cert = cert.LoadPem(certPath, privateKey);
                 var claims = new[]
                 {
                     new Claim("UserDirectory",  domainUser.UserDirectory),
@@ -128,17 +158,18 @@ namespace SerConAai
                 }.ToList();
                 var token = cert.GenerateQlikJWToken(claims, TimeSpan.FromMinutes(20));
                 logger.Debug($"Generate token {token}");
-                var cookie = GetJWTSession(fullUri, token, cookieName);
-                logger.Debug($"Generate cookie {cookie.Name} - {cookie.Value}");
+                var cookie = GetJWTSession(fullUri, token, connection.Credentials.Key);
+                logger.Debug($"Generate cookie {cookie?.Name} - {cookie?.Value}");
                 if (cookie != null)
                 {
-                    sessionList.Add(new SessionInfo()
+                    var sessionInfo = new SessionInfo()
                     {
                         Cookie = cookie,
                         User = domainUser,
                         ConnectUri = connectUri
-                    });
-                    return cookie;
+                    };
+                    sessionList.Add(sessionInfo);
+                    return sessionInfo;
                 }
 
                 return null;
@@ -147,6 +178,20 @@ namespace SerConAai
             {
                 logger.Error(ex, "The session could not be created.");
                 return null;
+            }
+        }
+
+        public void DeleteSession(Uri connectUri, DomainUser domainUser, string taskId)
+        {
+            try
+            {
+                var session = GetExistsSession(connectUri, domainUser);
+                if (session != null)
+                    sessionList.Remove(session);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, $"Session {taskId} could not deleted.");
             }
         }
         #endregion

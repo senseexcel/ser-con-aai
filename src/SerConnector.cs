@@ -19,7 +19,8 @@ namespace SerConAai
     using System.IO;
     using System.Linq;
     using System.Security.Cryptography.X509Certificates;
-    using Q2gHelperPemNuget;
+    using Q2gHelperPem;
+    using Hjson;
     #endregion
 
     public class SSEtoSER
@@ -58,10 +59,10 @@ namespace SerConAai
         {
             try
             {
-                var configPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, "config.json");
+                var configPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, "config.hjson");
                 if (!File.Exists(configPath))
                     throw new Exception($"config file {configPath} not found.");
-                var json = File.ReadAllText(configPath);
+                var json = HjsonValue.Load(configPath).ToString();
                 var config = JsonConvert.DeserializeObject<SerOnDemandConfig>(json);
 
                 logger.Info(config.Fullname);
@@ -74,17 +75,15 @@ namespace SerConAai
                 {
                     if (mode == "-cert")
                     {
-                        Console.WriteLine($"Certificate generate into file {config.CertPath}");
-                        var cert = CreateCertificate(config.CertPath);
-                        if(cert == null)
-
+                        Console.WriteLine($"Certificate generate into file {config.GetCertPath()}");
+                        var cert = CreateCertificate(config.GetCertPath());
                         Console.WriteLine("Please press any key to terminate.");
                         return;
                     }
                 }
 
                 Console.WriteLine("Service running...");
-                Console.WriteLine($"Start Service on Port \"{config.Port}\" with Host \"{config.Host}\"...");
+                Console.WriteLine($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}\"...");
                 logger.Info($"Server start...");
 
                 using (serEvaluator = new SerEvaluator(config))
@@ -92,11 +91,11 @@ namespace SerConAai
                     server = new Server()
                     {
                         Services = { Connector.BindService(serEvaluator) },
-                        Ports = { new ServerPort(config.Host, config.Port, ServerCredentials.Insecure) },
+                        Ports = { new ServerPort(config.BindingHost, config.BindingPort, ServerCredentials.Insecure) },
                     };
 
                     server.Start();
-                    logger.Info($"gRPC listening on port {config.Port} on Host {config.Host}");
+                    logger.Info($"gRPC listening on port {config.BindingPort} on Host {config.BindingHost}");
                     logger.Info($"Ready...");
                 }
             }
