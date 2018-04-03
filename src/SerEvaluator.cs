@@ -31,6 +31,8 @@ namespace SerConAai
     using System.Net.Http;
     using Newtonsoft.Json.Serialization;
     using SerDistribute;
+    using System.Security.Cryptography.X509Certificates;
+    using System.Net.Security;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -50,7 +52,7 @@ namespace SerConAai
         #endregion
 
         #region Properties & Variables
-        private SerOnDemandConfig OnDemandConfig;
+        private static SerOnDemandConfig OnDemandConfig;
         private SessionManager sessionManager;
         #endregion
 
@@ -59,6 +61,7 @@ namespace SerConAai
         {
             OnDemandConfig = config;
             sessionManager = new SessionManager();
+            ServicePointManager.ServerCertificateValidationCallback += ValidateRemoteCertificate;
         }
 
         public void Dispose() { }
@@ -259,6 +262,31 @@ namespace SerConAai
         #endregion
 
         #region Private Functions
+        private static bool ValidateRemoteCertificate(object sender, X509Certificate cert, X509Chain chain, 
+                                                      SslPolicyErrors error)
+        {
+            if (error == SslPolicyErrors.None)
+            {
+                return true;
+            }
+            else
+            {
+                if (OnDemandConfig.Connection.SslVerify)
+                {
+                    var client = sender as HttpClient;
+                    var thumbprints = OnDemandConfig.Connection.SslValidThumbprints;
+                    foreach (var thumbprint in thumbprints)
+                    {
+                        if (thumbprint.Thumbprint == cert.GetCertHashString() &&
+                           thumbprint.Url == client.BaseAddress.OriginalString)
+                            return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
         private OnDemandResult CreateReport(UserParameter parameter, bool onDemandMode, string json = null)
         {
             try
@@ -573,6 +601,8 @@ namespace SerConAai
                         App = parameter.AppId,
                         ConnectUri = GetHost(true, false),
                         VirtualProxyPath = OnDemandConfig.Connection.VirtualProxyPath,
+                        SslValidThumbprints = OnDemandConfig.Connection.SslValidThumbprints,
+                        SslVerify = OnDemandConfig.Connection.SslVerify,
                         Credentials = new SerCredentials()
                         {
                             Type = QlikCredentialType.SESSION,
@@ -584,8 +614,7 @@ namespace SerConAai
 
                 var hubSettings = new HubSettings()
                 {
-                    Active = true,
-                    Mode = HubMode.OVERRIDE,
+                    Mode = DistributeMode.OVERRIDE,
                     Type = SettingsType.HUB,
                     HubUser = $"{parameter.DomainUser.UserDirectory}\\{parameter.DomainUser.UserId}",
                     Connection = task.Connection,
