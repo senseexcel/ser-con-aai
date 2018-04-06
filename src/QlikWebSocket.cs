@@ -22,26 +22,25 @@
 
         public QlikWebSocket(Uri uri, Cookie cookie)
         {
-            var newShema = "";
+            var newUri = new UriBuilder(uri);
+            
             switch (uri?.Scheme?.ToLowerInvariant())
             {
                 case "https":
-                    newShema = "wss";
+                    newUri.Scheme = "wss";
                     break;
                 case "http":
-                    newShema = "ws";
+                    newUri.Scheme = "ws";
                     break;
                 case "wss":
-                case "ws":
-                    newShema = uri.Scheme;
+                case "ws":                    
                     break;
                 default:
                     throw new Exception($"Unknown Scheme to connect to Websocket {uri?.Scheme ?? "NULL"}");
             }
-
-            uri = new Uri($"{newShema}://{uri.Host}{uri.AbsoluteUri}");
+            
             var cookies = new List<KeyValuePair<string, string>>() { new KeyValuePair<string, string>(cookie.Name, cookie.Value), };
-            websocket = new WebSocket(uri.AbsoluteUri, cookies: cookies, version: WebSocketVersion.Rfc6455);            
+            websocket = new WebSocket(newUri.Uri.AbsoluteUri, cookies: cookies, version: WebSocketVersion.Rfc6455);            
             websocket.Opened += Websocket_Opened;
             websocket.Error += Websocket_Error;
             websocket.Closed += Websocket_Closed;

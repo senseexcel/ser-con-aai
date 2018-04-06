@@ -107,15 +107,14 @@ namespace SerConAai
             return result;
         }
 
-        public SessionInfo GetSession(Uri connectUri, DomainUser domainUser, SerConnection connection)
+        public SessionInfo GetSession(SerConnection connection, DomainUser domainUser)
         {
             try
             {
-                var cert = new X509Certificate2();
-                var fullUri = new Uri($"{connectUri.OriginalString}/{connection.VirtualProxyPath}");
+                var cert = new X509Certificate2();               
                 lock (this)
                 {
-                    var oldSession = GetExistsSession(connectUri, domainUser);
+                    var oldSession = GetExistsSession(connection.ServerUri, domainUser);
                     if (oldSession != null)
                         return oldSession;
                 }
@@ -153,7 +152,7 @@ namespace SerConAai
                 }.ToList();
                 var token = cert.GenerateQlikJWToken(claims, TimeSpan.FromMinutes(20));
                 logger.Debug($"Generate token {token}");
-                var cookie = GetJWTSession(fullUri, token, connection.Credentials.Key);
+                var cookie = GetJWTSession(connection.ServerUri, token, connection.Credentials.Key);
                 logger.Debug($"Generate cookie {cookie?.Name} - {cookie?.Value}");
                 if (cookie != null)
                 {
@@ -161,7 +160,7 @@ namespace SerConAai
                     {
                         Cookie = cookie,
                         User = domainUser,
-                        ConnectUri = connectUri
+                        ConnectUri = connection.ServerUri
                     };
                     sessionList.Add(sessionInfo);
                     return sessionInfo;
