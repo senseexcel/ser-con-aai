@@ -8,6 +8,7 @@
     <Copyright>Copyright (c) 2018</Copyright>
     <Company>senseexcel</Company>
     <Configuration>Release</Configuration>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
