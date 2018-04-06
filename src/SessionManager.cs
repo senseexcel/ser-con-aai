@@ -66,10 +66,20 @@ namespace SerConAai
                 var connectionHandler = new HttpClientHandler
                 {
                     UseDefaultCredentials = true,
-                    CookieContainer = cookieContainer
+                    CookieContainer = cookieContainer,
+                    
+                };
+                                
+                connectionHandler.ServerCertificateCustomValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
+                {
+                    var callback = ServicePointManager.ServerCertificateValidationCallback;
+                    if (callback != null)
+                        return callback(sender, certificate, chain, sslPolicyErrors);
+                    return false;
                 };
 
                 var connection = new HttpClient(connectionHandler);
+                
                 logger.Debug($"Bearer token: {token}");
                 connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
                 var message = connection.GetAsync(connectUri).Result;
@@ -85,22 +95,7 @@ namespace SerConAai
                 logger.Error(ex, "Can´t create session cookie with JWT.");
                 return null;
             }
-        }
-
-        private bool ValidateSession(Uri connectUri)
-        {
-            try
-            {
-                var hubUri = new Uri($"{connectUri.OriginalString}/hub");
-                var connection = new HttpClient();
-                connection.GetAsync(hubUri).Wait();
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        }    
         #endregion
 
         #region Public Methods

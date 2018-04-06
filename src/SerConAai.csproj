@@ -7,6 +7,8 @@
     <Authors>Konrad Mattheis und Martin Berthold</Authors>
     <Copyright>Copyright (c) 2018</Copyright>
     <Company>senseexcel</Company>
+    <Configuration>Release</Configuration>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,15 +18,24 @@
     <PackageReference Include="NLog" Version="5.0.0-beta11" />
     <PackageReference Include="Q2gHelperPem" Version="1.0.2" />
     <PackageReference Include="Q2gHelperQrs" Version="1.0.8" />
-    <PackageReference Include="qlik-sseapi" Version="1.0.0" />
-    <PackageReference Include="SerApi" Version="1.0.5" />
+    <PackageReference Include="qlik-sseapi" Version="1.0.0" />    
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.2.1" />
     <PackageReference Include="WebSocket4Net" Version="0.15.2" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(Configuration)'=='Release'">
+    <PackageReference Include="SerApi" Version="1.0.8" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)'!='Release'">
+    <Reference Include="SerDistribute">
+      <HintPath>..\..\ser-api-nuget\src\bin\Debug\netcoreapp2.0\serapi.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
   <ItemGroup>
     <Reference Include="SerDistribute">
-      <HintPath>..\..\ser-distribute-nuget\src\bin\Debug\netcoreapp2.0\SerDistribute.dll</HintPath>
+      <HintPath>..\..\ser-distribute-nuget\src\bin\Release\netcoreapp2.0\SerDistribute.dll</HintPath>
     </Reference>
   </ItemGroup>
 

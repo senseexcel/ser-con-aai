@@ -18,7 +18,7 @@
   connection:
   {
 	 # connection to qlik
-	 connectUri: https://nb-fc-208000
+	 connectUri: https://localhost/ser
 
 	 # virtual proxy path
 	 virtualProxyPath: ser
