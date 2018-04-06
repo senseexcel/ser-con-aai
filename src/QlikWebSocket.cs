@@ -20,11 +20,28 @@
         private bool isOpen;
         private bool isClose;
 
-        public QlikWebSocket(string host, Cookie cookie)
+        public QlikWebSocket(Uri uri, Cookie cookie)
         {
-            var url = $"ws://{host}/app/engineData";
+            var newShema = "";
+            switch (uri?.Scheme?.ToLowerInvariant())
+            {
+                case "https":
+                    newShema = "wss";
+                    break;
+                case "http":
+                    newShema = "ws";
+                    break;
+                case "wss":
+                case "ws":
+                    newShema = uri.Scheme;
+                    break;
+                default:
+                    throw new Exception($"Unknown Scheme to connect to Websocket {uri?.Scheme ?? "NULL"}");
+            }
+
+            uri = new Uri($"{newShema}://{uri.Host}{uri.AbsoluteUri}");
             var cookies = new List<KeyValuePair<string, string>>() { new KeyValuePair<string, string>(cookie.Name, cookie.Value), };
-            websocket = new WebSocket(url, cookies: cookies, version: WebSocketVersion.Rfc6455);
+            websocket = new WebSocket(uri.AbsoluteUri, cookies: cookies, version: WebSocketVersion.Rfc6455);            
             websocket.Opened += Websocket_Opened;
             websocket.Error += Websocket_Error;
             websocket.Closed += Websocket_Closed;

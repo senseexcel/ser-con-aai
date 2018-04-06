@@ -60,7 +60,7 @@ namespace SerConAai
         public SerEvaluator(SerOnDemandConfig config)
         {
             OnDemandConfig = config;
-            sessionManager = new SessionManager();
+            sessionManager = new SessionManager();            
             ServicePointManager.ServerCertificateValidationCallback += ValidateRemoteCertificate;
         }
 
@@ -163,14 +163,15 @@ namespace SerConAai
                 };
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
-   
+
                 logger.Debug($"Function id: {functionRequestHeader.FunctionId}");
-                var row = GetParameter(requestStream);
                 var result = new OnDemandResult() { Status = -1 };
+                var row = GetParameter(requestStream);
+                var json = GetParameterValue(0, row);
+
                 if (functionRequestHeader.FunctionId == (int)SerFunction.CREATE)
                 {
                     userParameter.OnDemand = true;
-                    var json = GetParameterValue(0, row);
                     var extParam = JObject.Parse(json);
                     userParameter.TemplateFileName = extParam["template"].ToString();
                     logger.Debug($"Template path: {userParameter.TemplateFileName}");
@@ -182,12 +183,11 @@ namespace SerConAai
                     else
                         userParameter.UseUserSelesction = SelectionMode.OnDemandOff;
                     logger.Debug($"UseSelection: {userParameter.UseUserSelesction}");
+
                     result = CreateReport(userParameter, true);
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.START)
                 {
-                    //Path und Script?
-                    var json = GetParameterValue(0, row);
                     json = HjsonValue.Parse(json).ToString();
                     var jsonSerConfig = JsonConvert.DeserializeObject<SerConfig>(json.ToString());
                     if (jsonSerConfig != null)
@@ -203,8 +203,7 @@ namespace SerConAai
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.STATUS)
                 {
                     //Status -1=Fail 1=Running, 2=Success, 3=DeleverySuccess, 4=StopSuccess, 5=Download
-                    var json = GetParameterValue(0, row);
-                    var taskId = JObject.Parse(json)["TaskId"].ToString();
+                    var taskId = JObject.Parse(json)["TaskName"].ToString();
                     var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser);
                     if (session == null)
                     {
@@ -222,7 +221,6 @@ namespace SerConAai
                 }
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
                 {
-                    var json = GetParameterValue(0, row);
                     var taskId = JObject.Parse(json)["TaskId"].ToString();
                     var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser);
                     if (session == null)
@@ -262,29 +260,41 @@ namespace SerConAai
         #endregion
 
         #region Private Functions
-        private static bool ValidateRemoteCertificate(object sender, X509Certificate cert, X509Chain chain, 
+        private static bool ValidateRemoteCertificate(object sender, X509Certificate cert, X509Chain chain,
                                                       SslPolicyErrors error)
         {
             if (error == SslPolicyErrors.None)
-            {
                 return true;
-            }
-            else
+
+            if (!OnDemandConfig.Connection.SslVerify)
+                return true;
+
+            Uri requestUri = null;
+            if (sender is HttpRequestMessage hrm)
+                requestUri = hrm.RequestUri;
+            if (sender is HttpClient hc)
+                requestUri = hc.BaseAddress;
+            if (sender is HttpWebRequest hwr)
+                requestUri = hwr.Address;
+
+            if (requestUri != null)
             {
-                if (OnDemandConfig.Connection.SslVerify)
+                var thumbprints = OnDemandConfig.Connection.SslValidThumbprints;
+                foreach (var item in thumbprints)
                 {
-                    var client = sender as HttpClient;
-                    var thumbprints = OnDemandConfig.Connection.SslValidThumbprints;
-                    foreach (var thumbprint in thumbprints)
+                    try
                     {
-                        if (thumbprint.Thumbprint == cert.GetCertHashString() &&
-                           thumbprint.Url == client.BaseAddress.OriginalString)
+                        var uri = new Uri(item.Url);
+                        var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "");
+                        if (thumbprint == cert.GetCertHashString() &&
+                           uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())
                             return true;
                     }
+                    catch { }
                 }
-
-                return false;
             }
+
+            return false;
         }
 
         private OnDemandResult CreateReport(UserParameter parameter, bool onDemandMode, string json = null)
@@ -298,16 +308,19 @@ namespace SerConAai
                 logger.Debug($"TempFolder: {currentWorkingDir}");
                 Directory.CreateDirectory(currentWorkingDir);
 
+                var serverUri = new Uri(OnDemandConfig.Connection.ConnectUri);
+
                 //Caution: Personal//Me => Desktop Mode
                 if (parameter.DomainUser.UserId == "sa_scheduler" &&
                     parameter.DomainUser.UserDirectory == "INTERNAL")
                 {
                     //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
-                    var tmpsession = sessionManager.GetSession(new Uri(OnDemandConfig.Connection.ConnectUri),
+                    var tmpsession = sessionManager.GetSession(serverUri,
                                                                new DomainUser("INTERNAL\\ser_scheduler"),
                                                                OnDemandConfig.Connection);
-                    var qrshub = new QlikQrsHub(new Uri(GetHost()), tmpsession.Cookie);
-                    var result = qrshub.SendRequestAsync(new Uri($"https://nb-fc-208000/ser/qrs/app/{parameter.AppId}"), HttpMethod.Get).Result;
+                    var host = GetHost();
+                    var qrshub = new QlikQrsHub(new Uri(host), tmpsession.Cookie);
+                    var result = qrshub.SendRequestAsync(new Uri($"{host}/qrs/app/{parameter.AppId}"), HttpMethod.Get).Result;
                     var hubInfo = JsonConvert.DeserializeObject<HubInfo>(result);
                     if (hubInfo == null)
                         throw new Exception($"No app owner for app id {parameter.AppId} found.");
@@ -315,8 +328,10 @@ namespace SerConAai
                 }
 
                 //Get a session
-                var session = sessionManager.GetSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser,
+                var session = sessionManager.GetSession(serverUri, parameter.DomainUser,
                                                         OnDemandConfig.Connection);
+                if (session == null)
+                    logger.Error("No session generated.");
                 session.User = parameter.DomainUser;
                 parameter.ConnectCookie = session?.Cookie;
                 session.DownloadLink = null;
@@ -335,7 +350,7 @@ namespace SerConAai
                     //Template holen
                     var host = GetHost(false);
                     var templateUri = new Uri(parameter.TemplateFileName);
-                    var contentFiles = GetLibraryContent(host, parameter.AppId, session.Cookie, true, templateUri.Host);
+                    var contentFiles = GetLibraryContent(serverUri, parameter.AppId, session.Cookie, templateUri.Host);
                     var relUrl = contentFiles.FirstOrDefault(f => f.EndsWith(templateUri.AbsolutePath));
                     var downloadPath = DownloadFile(relUrl, currentWorkingDir, session.Cookie);
 
@@ -379,8 +394,8 @@ namespace SerConAai
                 //dynamic gb = task;
                 //var appID2 = gb.connection.app.ToString();
 
-                var host = GetHost();
-                logger.Debug($"Websocket host: {host}");
+                var serverUri = GetHost();
+                logger.Debug($"Websocket host: {serverUri}");
                 var serConfig = JObject.Parse(HjsonValue.Parse(json).ToString());
                 var tasks = serConfig["tasks"].ToList();
                 foreach (var task in tasks)
@@ -398,7 +413,7 @@ namespace SerConAai
                     currentConnection["credentials"] = currentConnection["credentials"].RemoveFields(new string[] { "cert", "privateKey" });
                     task["connection"] = currentConnection;
 
-                    var children = task["evaluate"].Children().Children();
+                    var children = task["distribute"].Children().Children();
                     foreach (var child in children)
                     {
                         var connection = child["connection"] ?? null;
@@ -414,13 +429,7 @@ namespace SerConAai
                     {
                         var contentFiles = new List<string>();
                         var contentUri = new Uri(fileName);
-                        if (String.IsNullOrEmpty(contentUri.Host))
-                        {
-                            contentUri = new Uri($"content://{appId}{contentUri.AbsolutePath}");
-                            contentFiles = GetLibraryContent(GetNativeHost(host), appId, cookie, true);
-                        }
-                        else
-                            contentFiles = GetLibraryContent(GetNativeHost(host), appId, cookie, false, contentUri.Host);
+                        contentFiles = GetLibraryContent(serverUri, appId, cookie, contentUri.Host);
 
                         logger.Debug($"File count in content library: {contentFiles?.Count}");
                         var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(contentUri.AbsolutePath));
@@ -438,8 +447,8 @@ namespace SerConAai
                         var libUri = new Uri(fileName);
                         if (String.IsNullOrEmpty(libUri.Host))
                             throw new Exception("Unknown Name of the lib connection.");
-
-                        var connections = GetConnections(host, appId, cookie);
+                        
+                        var connections = GetConnections(new Uri(serverUri), appId, cookie);
                         var libResult = connections.FirstOrDefault(n => n["qName"].ToString().ToLowerInvariant() == libUri.Host);
                         var libPath = libResult["qConnectionString"].ToString();
                         var relPath = libUri.LocalPath.TrimStart(new char[] { '\\', '/' }).Replace("/", "\\");
@@ -458,12 +467,7 @@ namespace SerConAai
                 return null;
             }
         }
-
-        private string GetNativeHost(string host)
-        {
-            return host.Replace("https://", "").Replace("http://", "");
-        }
-
+     
         private string GetHost(bool withSheme = true, bool withProxy = true)
         {
             var url = $"{OnDemandConfig.Connection.ConnectUri}";
@@ -491,7 +495,7 @@ namespace SerConAai
             return savePath;
         }
 
-        private List<JToken> GetConnections(string host, string appId, Cookie cookie)
+        private List<JToken> GetConnections(Uri host, string appId, Cookie cookie)
         {
             var results = new List<string>();
             var qlikWebSocket = new QlikWebSocket(host, cookie);
@@ -510,32 +514,28 @@ namespace SerConAai
             return qUrls;
         }
 
-        private List<string> GetLibraryContent(string host, string appId, Cookie cookie, bool qAppSpecific = true, string qName = null)
-        {
+        private List<string> GetLibraryContent(Uri serverUri, string appId, Cookie cookie, string contentName = "")
+        {            
             try
             {
                 var results = new List<string>();
-                var qlikWebSocket = new QlikWebSocket(host, cookie);
+                var qlikWebSocket = new QlikWebSocket(serverUri, cookie);
                 var isOpen = qlikWebSocket.OpenSocket();
                 var response = qlikWebSocket.OpenDoc(appId);
                 var handle = response["result"]["qReturn"]["qHandle"].ToString();
-                response = qlikWebSocket.GetContentLibraries(handle);
-                var qItems = response["result"]["qList"]["qItems"].ToList();
-                if (qAppSpecific == true)
-                    qItems = qItems.Where(s => s["qAppSpecific"]?.Value<bool>() == true).ToList();
 
-                if (String.IsNullOrEmpty(qName))
+                var readItems = new List<string>() { contentName };
+                if (String.IsNullOrEmpty(contentName))
                 {
-                    foreach (var item in qItems)
-                    {
-                        var name = item["qName"].ToString();
-                        var qUrls = GetLibraryContentInternal(qlikWebSocket, handle, name);
-                        results.AddRange(qUrls);
-                    }
+                    // search for all App Specific ContentLibraries                    
+                    response = qlikWebSocket.GetContentLibraries(handle);
+                    var qItems = response["result"]["qList"]["qItems"].ToList();
+                    readItems = qItems.Where(s => s["qAppSpecific"]?.Value<bool>() == true).Select(s => s["qName"].ToString()).ToList();
                 }
-                else
-                {
-                    var qUrls = GetLibraryContentInternal(qlikWebSocket, handle, qName);
+                    
+                foreach (var item in readItems)
+                {                    
+                    var qUrls = GetLibraryContentInternal(qlikWebSocket, handle, item);
                     results.AddRange(qUrls);
                 }
 
@@ -616,24 +616,20 @@ namespace SerConAai
                 {
                     Mode = DistributeMode.OVERRIDE,
                     Type = SettingsType.HUB,
-                    HubUser = $"{parameter.DomainUser.UserDirectory}\\{parameter.DomainUser.UserId}",
+                    Owner = $"{parameter.DomainUser.UserDirectory}\\{parameter.DomainUser.UserId}",
                     Connection = task.Connection,
                 };
 
-                var hubContent = JObject.Parse(JsonConvert.SerializeObject(hubSettings, 
-                                               new JsonSerializerSettings()
-                                               {
-                                                   NullValueHandling = NullValueHandling.Ignore
-                                               }).ToString());
-
-                task.Evaluate = new JObject(new JProperty("hub", hubContent)); 
-                var appConfig = new SerConfig() { Tasks = new List<SerTask> { task } }; 
-                var jConfig = JsonConvert.SerializeObject(appConfig, new JsonSerializerSettings()
+                var settings = new JsonSerializerSettings()
                 {
                     ContractResolver = new CamelCasePropertyNamesContractResolver(),
                     NullValueHandling = NullValueHandling.Ignore,
-                });
+                };
 
+                var hubContent = JObject.Parse(JsonConvert.SerializeObject(hubSettings, settings).ToString());
+                task.Distribute = new JObject(new JProperty("hub", hubContent)); 
+                var appConfig = new SerConfig() { Tasks = new List<SerTask> { task } }; 
+                var jConfig = JsonConvert.SerializeObject(appConfig, settings);
                 var resultConfig = JObject.Parse(jConfig);
                 resultConfig.RemoveFields(new string[] { "taskCount" });
                 return resultConfig.ToString();
