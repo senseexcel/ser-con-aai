@@ -59,8 +59,10 @@ namespace SerConAai
         {
             try
             {
+                var newUri = new UriBuilder(connectUri);
+                newUri.Path +="/sense/app";
                 logger.Debug($"ConnectUri: {connectUri}");
-                connectUri = new Uri($"{connectUri.OriginalString}/sense/app");
+                connectUri = newUri.Uri;
                 logger.Debug($"Full ConnectUri: {connectUri}");
                 var cookieContainer = new CookieContainer();
                 var connectionHandler = new HttpClientHandler

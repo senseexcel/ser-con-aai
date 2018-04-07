@@ -23,7 +23,7 @@
         public QlikWebSocket(Uri uri, Cookie cookie)
         {
             var newUri = new UriBuilder(uri);
-            
+            newUri.Path += "/app/engineData";
             switch (uri?.Scheme?.ToLowerInvariant())
             {
                 case "https":
@@ -47,8 +47,10 @@
             websocket.MessageReceived += Websocket_MessageReceived;
             websocket.AutoSendPingInterval = 100;
             websocket.EnableAutoSendPing = true;
-            //websocket.Security.AllowCertificateChainErrors = true;
-            //websocket.Security.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls11 | System.Security.Authentication.SslProtocols.Tls;
+            // ToDo: remove SSL BigShit in WebSocket4Net
+            websocket.Security.AllowCertificateChainErrors = true;
+            websocket.Security.AllowNameMismatchCertificate = true;
+            websocket.Security.AllowUnstrustedCertificate = true;
         }
 
         private void Websocket_MessageReceived(object sender, MessageReceivedEventArgs e)
