@@ -7,7 +7,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
  */
 #endregion
 
-namespace SerConAai
+namespace Ser.ConAai
 {
     #region Usings
     using Microsoft.Extensions.PlatformAbstractions;

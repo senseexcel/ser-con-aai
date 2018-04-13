@@ -7,7 +7,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
  */
 #endregion
 
-namespace SerConAai
+namespace Ser.ConAai
 {
     #region Usings
     using System;
@@ -29,12 +29,14 @@ namespace SerConAai
 
     public class SessionInfo
     {
+        #region Properties
         public Cookie Cookie { get; set; }
         public DomainUser User { get; set; }
         public Uri ConnectUri { get; set; }
         public int ProcessId { get; set; }
         public string DownloadLink { get; set; }
         public int Status { get; set; }
+        #endregion
     }
 
     public class SessionManager

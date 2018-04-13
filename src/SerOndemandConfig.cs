@@ -7,11 +7,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
  */
 #endregion
 
-namespace SerConAai
+namespace Ser.ConAai
 {
     #region Usings
     using Microsoft.Extensions.PlatformAbstractions;
     using Newtonsoft.Json;
+    using NLog;
     using Ser.Api;
     using System;
     using System.Collections.Generic;
@@ -22,9 +23,13 @@ namespace SerConAai
 
     public class SerOnDemandConfig
     {
+        #region Logger
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+        #endregion
+
+        #region Properties
         public string WorkingDir { get; set; }
         public string SerEnginePath { get; set; }
-        public string DeliveryToolPath { get; set; }
         public int BindingPort { get; set; } = 50059;
         public string BindingHost { get; set; } = "localhost";
         public SerConnection Connection { get; set; }
@@ -34,6 +39,7 @@ namespace SerConAai
         public string Architecture { get; private set; } = RuntimeInformation.OSArchitecture.ToString();
         public string AppVersion { get; private set; } = PlatformServices.Default.Application.ApplicationVersion;
         public string AppName { get; private set; } = PlatformServices.Default.Application.ApplicationName;
+        #endregion
 
         [JsonIgnore]
         public string Fullname
@@ -43,13 +49,21 @@ namespace SerConAai
 
         public string GetCertPath()
         {
-            if (String.IsNullOrEmpty(Connection?.Credentials?.Cert))
+            try
+            {
+                if (String.IsNullOrEmpty(Connection?.Credentials?.Cert))
+                    return null;
+
+                if (File.Exists(Connection?.Credentials?.Cert))
+                    return Connection.Credentials.Cert;
+
+                return Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, Connection?.Credentials?.Cert);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
                 return null;
-
-            if (File.Exists(Connection?.Credentials?.Cert))
-                return Connection.Credentials.Cert;
-
-            return Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, Connection?.Credentials?.Cert);
+            }
         }
     }
 }

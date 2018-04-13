@@ -7,7 +7,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
  */
 #endregion
 
-namespace SerConAai
+namespace Ser.ConAai
 {
     #region Usings
     using Grpc.Core;
@@ -21,6 +21,8 @@ namespace SerConAai
     using System.Security.Cryptography.X509Certificates;
     using Q2gHelperPem;
     using Hjson;
+    using Ser.Api;
+    using System.Collections.Generic;
     #endregion
 
     public class SSEtoSER
