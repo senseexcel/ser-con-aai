@@ -22,7 +22,7 @@ namespace SerConAai
     using System.Net.Http;
     using NLog;
     using System.Reflection;
-    using SerApi;
+    using Ser.Api;
     using System.Security.Claims;
     using Newtonsoft.Json;
     #endregion
@@ -104,8 +104,7 @@ namespace SerConAai
         public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser)
         {
             var result = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
-                                                                 && u.User.UserId == domainUser.UserId 
-                                                                 && u.User.UserDirectory == domainUser.UserDirectory) ?? null;
+                                                          && u.User.ToString() == domainUser.ToString()) ?? null;
             return result;
         }
 

@@ -25,8 +25,8 @@ namespace SerConAai
     using System.IO;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
-    using Q2gHelperQrs;
-    using SerApi;
+    using Q2g.HelperQrs;
+    using Ser.Api;
     using Hjson;
     using System.Net.Http;
     using Newtonsoft.Json.Serialization;
@@ -154,7 +154,7 @@ namespace SerConAai
                 var commonHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<CommonRequestHeader>();
                 logger.Info($"request from user: {commonHeader.UserId} for AppId: {commonHeader.AppId}");
                 var domainUser = new DomainUser(commonHeader.UserId);
-                logger.Debug($"DomainUser: {domainUser.UserId.ToString()}\\{domainUser.UserDirectory.ToString()}");
+                logger.Debug($"DomainUser: {domainUser.ToString()}");
 
                 var userParameter = new UserParameter()
                 {
@@ -204,7 +204,7 @@ namespace SerConAai
                 {
                     //Status -1=Fail 1=Running, 2=Success, 3=DeleverySuccess, 4=StopSuccess, 5=Download
                     var taskId = JObject.Parse(json)["TaskName"].ToString();
-                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser);
+                    var session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
                     if (session == null)
                     {
                         logger.Error($"No existing session with id {taskId} found.");
@@ -222,7 +222,7 @@ namespace SerConAai
                 else if (functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
                 {
                     var taskId = JObject.Parse(json)["TaskId"].ToString();
-                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser);
+                    var session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
                     if (session == null)
                         throw new Exception("No existing session found.");
                     var process = Process.GetProcessById(session.ProcessId);
@@ -393,12 +393,7 @@ namespace SerConAai
                 {
                     var scriptCon = JObject.Parse(task["connection"].ToString());
                     OnDemandConfig.Connection.Credentials.Value = cookie.Value;
-                    var configCon = JObject.Parse(JsonConvert.SerializeObject(OnDemandConfig.Connection, Formatting.None,
-                                                  new JsonSerializerSettings
-                                                  {
-                                                      NullValueHandling = NullValueHandling.Ignore,
-                                                      ContractResolver = new CamelCasePropertyNamesContractResolver(),
-                                                  }));
+                    var configCon = JObject.Parse(JsonConvert.SerializeObject(OnDemandConfig.Connection));
                     configCon.Merge(scriptCon);
                     var currentConnection = configCon.Value<JObject>();
                     currentConnection["credentials"] = currentConnection["credentials"].RemoveFields(new string[] { "cert", "privateKey" });
@@ -573,8 +568,7 @@ namespace SerConAai
                     Connection = new SerConnection()
                     {
                         App = parameter.AppId,
-                        ConnectUri = OnDemandConfig.Connection.ConnectUri,
-                        VirtualProxyPath = OnDemandConfig.Connection.VirtualProxyPath,
+                        ServerUri = OnDemandConfig.Connection.ServerUri,
                         SslValidThumbprints = OnDemandConfig.Connection.SslValidThumbprints,
                         SslVerify = OnDemandConfig.Connection.SslVerify,
                         Credentials = new SerCredentials()
@@ -590,20 +584,14 @@ namespace SerConAai
                 {
                     Mode = DistributeMode.OVERRIDE,
                     Type = SettingsType.HUB,
-                    Owner = $"{parameter.DomainUser.UserDirectory}\\{parameter.DomainUser.UserId}",
+                    Owner = parameter.DomainUser.ToString(),
                     Connection = task.Connection,
                 };
 
-                var settings = new JsonSerializerSettings()
-                {
-                    ContractResolver = new CamelCasePropertyNamesContractResolver(),
-                    NullValueHandling = NullValueHandling.Ignore,
-                };
-
-                var hubContent = JObject.Parse(JsonConvert.SerializeObject(hubSettings, settings).ToString());
+                var hubContent = JObject.Parse(JsonConvert.SerializeObject(hubSettings).ToString());
                 task.Distribute = new JObject(new JProperty("hub", hubContent)); 
                 var appConfig = new SerConfig() { Tasks = new List<SerTask> { task } }; 
-                var jConfig = JsonConvert.SerializeObject(appConfig, settings);
+                var jConfig = JsonConvert.SerializeObject(appConfig);
                 var resultConfig = JObject.Parse(jConfig);
                 resultConfig.RemoveFields(new string[] { "taskCount" });
                 return resultConfig.ToString();
@@ -618,7 +606,7 @@ namespace SerConAai
         private void CheckStatus(string taskId, string currentWorkingDir, UserParameter parameter)
         {
             var status = 0;
-            var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser);
+            var session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, parameter.DomainUser);
             session.Status = 1;
             while (status != 2)
             {

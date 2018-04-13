@@ -1,7 +1,7 @@
 ﻿namespace SerConAai
 {
     #region Usings
-    using SerApi;
+    using Ser.Api;
     using System;
     using System.Collections.Generic;
     using System.Net;

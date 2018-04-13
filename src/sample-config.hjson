@@ -5,9 +5,6 @@
   # Path to the Sense Excel Reporting engine
   serEnginePath: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Engine\\SenseExcelReporting.exe
 
-  # Path to the Delivery tool
-  deliveryToolPath: C:\\Users\\MBerthold\\Documents\\TestArea\\Connectors\\SerConnector\\Delivery\\test.exe
-  
   # Host binding on gRPC Server
   bindingHost: localhost
   
@@ -19,9 +16,6 @@
   {
 	 # connection to qlik
 	 connectUri: https://localhost/ser
-
-	 # virtual proxy path
-	 virtualProxyPath: ser
 
 	 # Qlik jwt connection infos
 	 credentials: 

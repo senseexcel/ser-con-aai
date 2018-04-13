@@ -12,7 +12,7 @@ namespace SerConAai
     #region Usings
     using Microsoft.Extensions.PlatformAbstractions;
     using Newtonsoft.Json;
-    using SerApi;
+    using Ser.Api;
     using System;
     using System.Collections.Generic;
     using System.IO;
