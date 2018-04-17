@@ -19,13 +19,16 @@ namespace Ser.ConAai
     using System.IO;
     using System.Linq;
     using System.Security.Cryptography.X509Certificates;
-    using Q2gHelperPem;
     using Hjson;
     using Ser.Api;
     using System.Collections.Generic;
+    using Newtonsoft.Json.Linq;
+    using PeterKottas.DotNetCore.WindowsService.Interfaces;
+    using PeterKottas.DotNetCore.WindowsService.Base;
+    using Q2g.HelperPem;
     #endregion
 
-    public class SSEtoSER
+    public class SSEtoSER : MicroService, IMicroService
     {
         #region Logger
         private static Logger logger = LogManager.GetCurrentClassLogger();
@@ -37,27 +40,26 @@ namespace Ser.ConAai
         #endregion
 
         #region Private Methods
-        private static X509Certificate2 CreateCertificate(string savePath)
+        private static void CreateCertificate(string certFile, string privateKeyFile)
         {
             try
             {
                 var cert = new X509Certificate2();
-                cert = cert.GenerateQlikJWTConformCert($"CN={Environment.MachineName}",
-                                                       $"CN={Environment.MachineName}-CA");
-                cert.SavePem(savePath, true);
-                logger.Debug($"Certificate {savePath} created.");
-                return cert;
+                cert = cert.GenerateQlikJWTConformCert($"CN=SER-{Environment.MachineName}",
+                                                       $"CN=SER-{Environment.MachineName}-CA");
+                cert.SavePem(certFile, privateKeyFile);
+                logger.Debug($"Certificate created under {certFile}.");
+                logger.Debug($"Private key file created under {privateKeyFile}.");
             }
             catch (Exception ex)
             {
-                logger.Error(ex, $"The Method {nameof(CreateCertificate)} failed.");
-                return null;
+                logger.Error(ex, $"The Method {nameof(CreateCertificate)} was failed.");
             }
         }
         #endregion
 
         #region Public Methods
-        public void Start(string[] args)
+        public void Start()
         {
             try
             {
@@ -65,27 +67,39 @@ namespace Ser.ConAai
                 if (!File.Exists(configPath))
                     throw new Exception($"config file {configPath} not found.");
                 var json = HjsonValue.Load(configPath).ToString();
-                var config = JsonConvert.DeserializeObject<SerOnDemandConfig>(json);
+                var configObject = JObject.Parse(json);
+
+                //Gernerate virtual config for default values
+                var vconnection = new SerOnDemandConfig()
+                {
+                    Connection = new SerConnection()
+                    {
+                        ServerUri = new Uri($"https://{Environment.MachineName}")
+                    }
+                };
+                var virtConnection = JObject.Parse(JsonConvert.SerializeObject(vconnection, Formatting.Indented));
+                virtConnection.Merge(configObject);
+                var config = JsonConvert.DeserializeObject<SerOnDemandConfig>(virtConnection.ToString());
+
+                //check to generate certifiate and private key if not exists
+                var certFile = config?.Connection?.Credentials?.Cert ?? null;
+                certFile = PathUtils.GetFullPathFromApp(certFile);
+                if (!File.Exists(certFile))
+                {
+                    var privateKeyFile = config?.Connection?.Credentials?.PrivateKey ?? null;
+                    privateKeyFile = PathUtils.GetFullPathFromApp(privateKeyFile);
+                    if (File.Exists(privateKeyFile))
+                        privateKeyFile = null;
+
+                    CreateCertificate(certFile, privateKeyFile);
+                }
 
                 logger.Info(config.Fullname);
                 logger.Info($"Plattfom: {config.OS}");
                 logger.Info($"Architecture: {config.Architecture}");
                 logger.Info($"Framework: {config.Framework}");
-
-                var mode = args?.FirstOrDefault() ?? null;
-                if (mode != null)
-                {
-                    if (mode == "-cert")
-                    {
-                        Console.WriteLine($"Certificate generate into file {config.GetCertPath()}");
-                        var cert = CreateCertificate(config.GetCertPath());
-                        Console.WriteLine("Please press any key to terminate.");
-                        return;
-                    }
-                }
-
-                Console.WriteLine("Service running...");
-                Console.WriteLine($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}\"...");
+                logger.Info("Service running...");
+                logger.Info($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}\"...");
                 logger.Info($"Server start...");
 
                 using (serEvaluator = new SerEvaluator(config))

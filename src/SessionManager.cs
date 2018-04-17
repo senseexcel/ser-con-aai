@@ -17,7 +17,7 @@ namespace Ser.ConAai
     using System.Text;
     using Microsoft.Extensions.PlatformAbstractions;
     using System.Linq;
-    using Q2gHelperPem;
+    using Q2g.HelperPem;
     using System.Net;
     using System.Net.Http;
     using NLog;
@@ -36,6 +36,7 @@ namespace Ser.ConAai
         public int ProcessId { get; set; }
         public string DownloadLink { get; set; }
         public int Status { get; set; }
+        public string AppId { get; set; }
         #endregion
     }
 
@@ -110,10 +111,11 @@ namespace Ser.ConAai
             return result;
         }
 
-        public SessionInfo GetSession(SerConnection connection, DomainUser domainUser)
+        public SessionInfo GetSession(SerConnection connection, UserParameter parameter)
         {
             try
             {
+                var domainUser = parameter.DomainUser;
                 var cert = new X509Certificate2();               
                 lock (this)
                 {
@@ -163,7 +165,8 @@ namespace Ser.ConAai
                     {
                         Cookie = cookie,
                         User = domainUser,
-                        ConnectUri = connection.ServerUri
+                        ConnectUri = connection.ServerUri,
+                        AppId = parameter.AppId
                     };
                     sessionList.Add(sessionInfo);
                     return sessionInfo;

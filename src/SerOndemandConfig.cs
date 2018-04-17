@@ -12,6 +12,7 @@ namespace Ser.ConAai
     #region Usings
     using Microsoft.Extensions.PlatformAbstractions;
     using Newtonsoft.Json;
+    using Newtonsoft.Json.Serialization;
     using NLog;
     using Ser.Api;
     using System;
@@ -21,6 +22,8 @@ namespace Ser.ConAai
     using System.Text;
     #endregion
 
+    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
+                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
     public class SerOnDemandConfig
     {
         #region Logger
