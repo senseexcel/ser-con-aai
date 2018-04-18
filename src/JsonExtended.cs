@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace SerConAai
+namespace Ser.ConAai
 {
     public static class JsonExtended
     {

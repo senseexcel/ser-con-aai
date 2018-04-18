@@ -7,7 +7,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
  */
 #endregion
 
-namespace SerConAai
+namespace Ser.ConAai
 {
     #region Usings
     using Grpc.Core;
@@ -25,12 +25,12 @@ namespace SerConAai
     using System.IO;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
-    using Q2gHelperQrs;
-    using SerApi;
+    using Q2g.HelperQrs;
+    using Ser.Api;
     using Hjson;
     using System.Net.Http;
     using Newtonsoft.Json.Serialization;
-    using SerDistribute;
+    using Ser.Distribute;
     using System.Security.Cryptography.X509Certificates;
     using System.Net.Security;
     #endregion
@@ -44,10 +44,9 @@ namespace SerConAai
         #region Enumerator
         public enum SerFunction
         {
-            CREATE = 1,
+            START = 1,
             STATUS = 2,
-            ABORT = 3,
-            START = 4
+            STOP = 3,
         }
         #endregion
 
@@ -81,47 +80,36 @@ namespace SerConAai
                     AllowScript = false,
                     Functions =
                     {
-                        new FunctionDefinition()
+                        new FunctionDefinition
                         {
-                             FunctionId = 1,
-                             FunctionType = FunctionType.Scalar,
-                             Name = SerFunction.CREATE.ToString(),
-                             Params =
-                             {
-                                new Parameter() { Name = "Request", DataType = DataType.String },
-                             },
-                             ReturnType = DataType.String,
-                        },
-                        new FunctionDefinition()
-                        {
-                             FunctionId = 2,
-                             FunctionType = FunctionType.Scalar,
-                             Name = SerFunction.STATUS.ToString(),
-                             Params =
-                             {
-                                new Parameter() { Name = "Request", DataType = DataType.String },
-                             },
-                             ReturnType = DataType.String
-                        },
-                        new FunctionDefinition()
-                        {
-                            FunctionId = 3,
+                            FunctionId = 1,
                             FunctionType = FunctionType.Scalar,
-                            Name = SerFunction.ABORT.ToString(),
+                            Name = nameof(SerFunction.START),
                             Params =
                             {
-                               new Parameter() { Name = "Request", DataType = DataType.String },
+                                new Parameter { Name = "Script", DataType = DataType.String }
                             },
                             ReturnType = DataType.String
                         },
-                        new FunctionDefinition()
+                        new FunctionDefinition
                         {
-                            FunctionId = 4,
+                             FunctionId = 2,
+                             FunctionType = FunctionType.Scalar,
+                             Name = nameof(SerFunction.STATUS),
+                             Params =
+                             {
+                                new Parameter { Name = "Request", DataType = DataType.String },
+                             },
+                             ReturnType = DataType.String
+                        },
+                        new FunctionDefinition
+                        {
+                            FunctionId = 3,
                             FunctionType = FunctionType.Scalar,
-                            Name = SerFunction.START.ToString(),
+                            Name = nameof(SerFunction.STOP),
                             Params =
                             {
-                                new Parameter() { Name = "Script", DataType = DataType.String }
+                               new Parameter { Name = "Request", DataType = DataType.String },
                             },
                             ReturnType = DataType.String
                         }
@@ -140,7 +128,6 @@ namespace SerConAai
             try
             {
                 logger.Debug("ExecuteFunction was called");
-
                 Thread.Sleep(200);
                 var functionRequestHeaderStream = context.RequestHeaders.SingleOrDefault(header => header.Key == "qlik-functionrequestheader-bin");
                 if (functionRequestHeaderStream == null)
@@ -154,7 +141,7 @@ namespace SerConAai
                 var commonHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<CommonRequestHeader>();
                 logger.Info($"request from user: {commonHeader.UserId} for AppId: {commonHeader.AppId}");
                 var domainUser = new DomainUser(commonHeader.UserId);
-                logger.Debug($"DomainUser: {domainUser.UserId.ToString()}\\{domainUser.UserDirectory.ToString()}");
+                logger.Debug($"DomainUser: {domainUser.ToString()}");
 
                 var userParameter = new UserParameter()
                 {
@@ -165,79 +152,67 @@ namespace SerConAai
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
 
                 logger.Debug($"Function id: {functionRequestHeader.FunctionId}");
-                var result = new OnDemandResult() { Status = -1 };
+                var result = new OnDemandResult() { Status = 0 };
                 var row = GetParameter(requestStream);
                 var json = GetParameterValue(0, row);
 
-                if (functionRequestHeader.FunctionId == (int)SerFunction.CREATE)
+                var functionCall = (SerFunction)functionRequestHeader.FunctionId;
+                SessionInfo session;
+                string taskId;
+                dynamic jsonObject;
+                switch (functionCall)
                 {
-                    userParameter.OnDemand = true;
-                    var extParam = JObject.Parse(json);
-                    userParameter.TemplateFileName = extParam["template"].ToString();
-                    logger.Debug($"Template path: {userParameter.TemplateFileName}");
-                    userParameter.SaveFormats = extParam["output"].ToString();
-                    logger.Debug($"SaveFormat: {userParameter.SaveFormats}");
-                    var mode = GetBoolean(extParam["selectionMode"].ToString());
-                    if (mode)
-                        userParameter.UseUserSelesction = SelectionMode.OnDemandOn;
-                    else
-                        userParameter.UseUserSelesction = SelectionMode.OnDemandOff;
-                    logger.Debug($"UseSelection: {userParameter.UseUserSelesction}");
+                    case SerFunction.START:
+                        result = CreateReport(userParameter, json);
+                        break;
+                    case SerFunction.STATUS:
+                        var version = GitVersionInformation.InformationalVersion;
+                        #region Status
+                        //Status -1=Fail 0=Nothing 1=Running, 2=Success, 3=DeleverySuccess, 4=Download
+                        jsonObject = JObject.Parse(json);
+                        taskId = jsonObject?.TaskId ?? null;
+                        if (taskId == null)
+                            result = new OnDemandResult() { Status = -1, Version = version };
+                        else
+                        {
+                            session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
+                            if (session == null)
+                            {
+                                logger.Error($"No existing session with id {taskId} found.");
+                                result = new OnDemandResult() { Status = -1 };
+                            }
 
-                    result = CreateReport(userParameter, true);
-                }
-                else if (functionRequestHeader.FunctionId == (int)SerFunction.START)
-                {
-                    json = HjsonValue.Parse(json).ToString();
-                    var jsonSerConfig = JsonConvert.DeserializeObject<SerConfig>(json.ToString());
-                    if (jsonSerConfig != null)
-                    {
-                        logger.Debug("Json config is valid.");
-                        result = CreateReport(userParameter, false, json);
-                    }
-                    else
-                    {
-                        throw new Exception("Json config is invalid.");
-                    }
-                }
-                else if (functionRequestHeader.FunctionId == (int)SerFunction.STATUS)
-                {
-                    //Status -1=Fail 1=Running, 2=Success, 3=DeleverySuccess, 4=StopSuccess, 5=Download
-                    var taskId = JObject.Parse(json)["TaskName"].ToString();
-                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser);
-                    if (session == null)
-                    {
-                        logger.Error($"No existing session with id {taskId} found.");
-                        result = new OnDemandResult() { Status = -1 };
-                    }
-
-                    if (session.DownloadLink != null)
-                    {
-                        session.Status = 5;
-                        result = new OnDemandResult() { Status = 5, Link = session.DownloadLink };
-                    } 
-                    else
-                        result = new OnDemandResult() { Status = session.Status };
-                }
-                else if (functionRequestHeader.FunctionId == (int)SerFunction.ABORT)
-                {
-                    var taskId = JObject.Parse(json)["TaskId"].ToString();
-                    var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), domainUser);
-                    if (session == null)
-                        throw new Exception("No existing session found.");
-                    var process = Process.GetProcessById(session.ProcessId);
-                    if (!process.HasExited)
-                    {
-                        process?.Kill();
-                        Thread.Sleep(1000);
-                    }
-                    SoftDelete($"{OnDemandConfig.WorkingDir}\\{taskId}");
-                    session.Status = 4;
-                    result = new OnDemandResult() { Status = 4 };
-                }
-                else
-                {
-                    throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
+                            if (session.DownloadLink != null)
+                            {
+                                session.Status = 4;
+                                result = new OnDemandResult() { Status = 4, Link = session.DownloadLink };
+                            }
+                            else
+                                result = new OnDemandResult() { Status = session.Status };
+                        }
+                        break; 
+                    #endregion
+                    case SerFunction.STOP:
+                        #region Stop
+                        jsonObject = JObject.Parse(json);
+                        taskId = jsonObject?.TaskId ?? null;
+                        session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
+                        if (session == null)
+                            throw new Exception("No existing session found.");
+                        var process = Process.GetProcessById(session.ProcessId);
+                        if (!process.HasExited)
+                        {
+                            process?.Kill();
+                            Thread.Sleep(1000);
+                        }
+                        var workDir = PathUtils.GetFullPathFromApp(OnDemandConfig.WorkingDir);
+                        SoftDelete($"{workDir}\\{taskId}");
+                        session.Status = 0;
+                        result = new OnDemandResult() { Status = 0 };
+                        break; 
+                    #endregion
+                    default:
+                        throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
                 }
 
                 logger.Debug($"Result: {result}");
@@ -284,10 +259,13 @@ namespace SerConAai
                 {
                     try
                     {
-                        var uri = new Uri(item.Url);
+                        Uri uri = null;
+                        if (!String.IsNullOrEmpty(item.Url))
+                            uri = new Uri(item.Url);
                         var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "");
-                        if (thumbprint == cert.GetCertHashString() &&
-                           uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())
+                        if (thumbprint == cert.GetCertHashString() && uri == null || 
+                            thumbprint == cert.GetCertHashString() &&
+                            uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())
                             return true;
                     }
                     catch { }
@@ -297,24 +275,24 @@ namespace SerConAai
             return false;
         }
 
-        private OnDemandResult CreateReport(UserParameter parameter, bool onDemandMode, string json = null)
+        private OnDemandResult CreateReport(UserParameter parameter, string json)
         {
             try
             {
                 var taskId = Guid.NewGuid().ToString();
-                logger.Debug($"New Task-ID: {taskId}");                
-                var workDir = OnDemandConfig.WorkingDir;
+                logger.Debug($"New Task-ID: {taskId}");
+                var workDir = PathUtils.GetFullPathFromApp(OnDemandConfig.WorkingDir);
                 var currentWorkingDir = Path.Combine(workDir, taskId);
                 logger.Debug($"TempFolder: {currentWorkingDir}");
-                Directory.CreateDirectory(currentWorkingDir);                
+                Directory.CreateDirectory(currentWorkingDir);
 
                 //Caution: Personal//Me => Desktop Mode
                 if (parameter.DomainUser.UserId == "sa_scheduler" &&
                     parameter.DomainUser.UserDirectory == "INTERNAL")
                 {
                     //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
-                    var tmpsession = sessionManager.GetSession(OnDemandConfig.Connection, new DomainUser("INTERNAL\\ser_scheduler"));
-                    
+                    parameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
+                    var tmpsession = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
                     var qrshub = new QlikQrsHub(OnDemandConfig.Connection.ServerUri, tmpsession.Cookie);
                     var result = qrshub.SendRequestAsync($"app/{parameter.AppId}", HttpMethod.Get).Result;
                     var hubInfo = JsonConvert.DeserializeObject<HubInfo>(result);
@@ -324,57 +302,42 @@ namespace SerConAai
                 }
 
                 //Get a session
-                var session = sessionManager.GetSession(OnDemandConfig.Connection, parameter.DomainUser);
+                var session = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
                 if (session == null)
                     logger.Error("No session generated.");
                 session.User = parameter.DomainUser;
                 parameter.ConnectCookie = session?.Cookie;
                 session.DownloadLink = null;
 
-                if (onDemandMode == false)
-                {
-                    //ser standard config
-                    json = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
-                }
-                else
-                {
-                    //Prüfen auf hier running task!!!
-                    if (session.Status == 1)
-                        throw new Exception("A Process is already running.");
+                //get engine config
+                var newEngineConfig = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
 
-                    //Template holen
-                    
-                    var templateUri = new Uri(parameter.TemplateFileName);
-                    var contentFiles = GetLibraryContent(OnDemandConfig.Connection.ServerUri, parameter.AppId, session.Cookie, templateUri.Host);
-                    var relUrl = contentFiles.FirstOrDefault(f => f.EndsWith(templateUri.AbsolutePath));
-                    var downloadPath = DownloadFile(relUrl, currentWorkingDir, session.Cookie);
-
-                    //generate ser config for ondemand
-                    json = GetNewSerConfig(downloadPath, parameter);
-                }
-
+                //save template from content libary
+                FindTemplatePaths(parameter, newEngineConfig, currentWorkingDir, session.Cookie);
+               
                 //Save config for SER engine
                 Directory.CreateDirectory(currentWorkingDir);
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
-                File.WriteAllText(savePath, json);
+                var serConfig = JsonConvert.SerializeObject(newEngineConfig, Formatting.Indented);
+                File.WriteAllText(savePath, serConfig);
 
                 //Start SER Engine as Process
                 logger.Debug($"Start Engine \"{currentWorkingDir}\"");
                 var serProcess = new Process();
-                serProcess.StartInfo.FileName = OnDemandConfig.SerEnginePath;
+                serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(OnDemandConfig.SerEnginePath);
                 serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\"";
                 serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 serProcess.Start();
                 session.ProcessId = serProcess.Id;
 
-                var statusThread = new Thread(() => CheckStatus(taskId, currentWorkingDir, parameter))
+                var statusThread = new Thread(() => CheckStatus(currentWorkingDir, parameter))
                 {
                     IsBackground = true
                 };
                 statusThread.Start();
 
-                return new OnDemandResult() { TaskName = taskId };
+                return new OnDemandResult() { TaskId = taskId };
             }
             catch (Exception ex)
             {
@@ -382,108 +345,110 @@ namespace SerConAai
             }
         }
 
-        private string GetNewJson(UserParameter parameter, string json, string workdir, Cookie cookie)
+        private void FindTemplatePaths(UserParameter parameter, SerConfig config, string workDir, Cookie cookie)
         {
-            try
+            foreach (var task in config.Tasks)
             {
-                logger.Debug($"Websocket host: {OnDemandConfig.Connection.ServerUri.ToString()}");
-                var serConfig = JObject.Parse(HjsonValue.Parse(json).ToString());
-                var tasks = serConfig["tasks"].ToList();
-                foreach (var task in tasks)
+                var templateUri = new Uri(task.Template.Input);
+                if (templateUri.Scheme.ToLowerInvariant() == "content")
                 {
-                    var scriptCon = JObject.Parse(task["connection"].ToString());
-                    OnDemandConfig.Connection.Credentials.Value = cookie.Value;
-                    var configCon = JObject.Parse(JsonConvert.SerializeObject(OnDemandConfig.Connection, Formatting.None,
-                                                  new JsonSerializerSettings
-                                                  {
-                                                      NullValueHandling = NullValueHandling.Ignore,
-                                                      ContractResolver = new CamelCasePropertyNamesContractResolver(),
-                                                  }));
-                    configCon.Merge(scriptCon);
-                    var currentConnection = configCon.Value<JObject>();
-                    currentConnection["credentials"] = currentConnection["credentials"].RemoveFields(new string[] { "cert", "privateKey" });
-                    task["connection"] = currentConnection;
-
-                    var children = task["distribute"].Children().Children();
-                    foreach (var child in children)
+                    var contentFiles = GetLibraryContent(OnDemandConfig.Connection.ServerUri, parameter.AppId, cookie, templateUri.Host);
+                    logger.Debug($"File count in content library: {contentFiles?.Count}");
+                    var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(templateUri.AbsolutePath));
+                    if (filterFile != null)
                     {
-                        var connection = child["connection"] ?? null;
-                        if (connection?.ToString() == "@CONFIGCONNECTION@")
-                        {
-                            child["connection"] = currentConnection;
-                        }
-                    }
-
-                    var appId = task["connection"]["app"].ToString();
-                    var fileName = task["template"]["input"].ToString();
-                    if (fileName.ToLowerInvariant().StartsWith("content://"))
-                    {
-                        var contentFiles = new List<string>();
-                        var contentUri = new Uri(fileName);
-                        // ToDo: FIX issue
-                        contentFiles = GetLibraryContent(OnDemandConfig.Connection.ServerUri, appId, cookie, contentUri.Host);
-
-                        logger.Debug($"File count in content library: {contentFiles?.Count}");
-                        var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(contentUri.AbsolutePath));
-                        if (filterFile != null)
-                        {
-                            var savePath = DownloadFile(filterFile, workdir, cookie);
-                            task["template"]["input"] = Path.GetFileName(savePath);
-                            logger.Debug($"Filename {fileName} in content library found.");
-                        }
-                        else
-                            logger.Warn($"No file in content library found.");
-                    }
-                    else if (fileName.ToLowerInvariant().StartsWith("lib://"))
-                    {
-                        var libUri = new Uri(fileName);
-                        if (String.IsNullOrEmpty(libUri.Host))
-                            throw new Exception("Unknown Name of the lib connection.");
-                        
-                        var connections = GetConnections(OnDemandConfig.Connection.ServerUri, appId, cookie);
-                        var libResult = connections.FirstOrDefault(n => n["qName"].ToString().ToLowerInvariant() == libUri.Host);
-                        var libPath = libResult["qConnectionString"].ToString();
-                        var relPath = libUri.LocalPath.TrimStart(new char[] { '\\', '/' }).Replace("/", "\\");
-                        task["template"]["input"] = $"{libPath}{relPath}";
+                        var savePath = DownloadFile(filterFile, workDir, cookie);
+                        task.Template.Input = Path.GetFileName(savePath);
                     }
                     else
-                    {
-                        throw new Exception($"Unknown Sheme in Filename Uri {fileName}.");
-                    }
+                        logger.Warn($"No file in content library found.");
                 }
-                return serConfig.ToString();
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, $"The propertys for ser config could not be set. Json: {json}");
-                return null;
+                else if (templateUri.Scheme.ToLowerInvariant() == "lib")
+                {
+                    var connections = GetConnections(OnDemandConfig.Connection.ServerUri, parameter.AppId, cookie);
+                    dynamic libResult = connections?.FirstOrDefault(n => n["qName"]?.ToString()?.ToLowerInvariant() == templateUri.Host) ?? null;
+                    if (libResult != null)
+                    {
+                        var libPath = libResult.qConnectionString.ToString();
+                        var relPath = templateUri.LocalPath.TrimStart(new char[] { '\\', '/' }).Replace("/", "\\");
+                        task.Template.Input = $"{libPath}{relPath}";
+                    }
+                    else
+                        logger.Warn($"No path in connection library found.");
+                }
+                else
+                {
+                    throw new Exception($"Unknown Scheme in Filename Uri {task.Template.Input}.");
+                }
             }
         }
-     
+
         private string DownloadFile(string relUrl, string workdir, Cookie cookie)
         {
             var savePath = Path.Combine(workdir, Path.GetFileName(relUrl));
             var webClient = new WebClient();
             webClient.Headers.Add(HttpRequestHeader.Cookie, $"{cookie.Name}={cookie.Value}");
-            webClient.DownloadFile(OnDemandConfig.Connection.ServerUri.AbsoluteUri+relUrl, savePath);
+            webClient.DownloadFile($"{OnDemandConfig.Connection.ServerUri.AbsoluteUri}{relUrl}", savePath);
             return savePath;
+        }
+
+        private SerConfig GetNewJson(UserParameter parameter, string userJson, string workdir, Cookie cookie)
+        {
+            logger.Debug("serialize config connection.");
+            var mainConnection = OnDemandConfig.Connection;
+            if (mainConnection.Credentials != null)
+            {
+                var cred = mainConnection.Credentials;
+                if (cred.PrivateKey != null)
+                    cred.PrivateKey = null;
+                if (cred.Cert != null)
+                    cred.Cert = null;
+
+                cred.Value = cookie.Value;
+            }
+
+            var configCon = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
+            logger.Debug("parse user json.");
+            var jsonConfig = HjsonValue.Parse(userJson).ToString();
+            var serConfig = JObject.Parse(jsonConfig);
+            logger.Debug("search for connections.");
+            var tasks = serConfig["tasks"].ToList() ?? new List<JToken>();
+            foreach (var task in tasks)
+            {
+                //merge connections / config <> script
+                var currentConnection = task["connection"];
+                configCon.Merge(currentConnection);
+                task["connection"] = configCon;
+                var distribute = task["distribute"];
+                var children = distribute.Children().Children();
+                foreach (var child in children)
+                {
+                    var connection = child["connection"] ?? null;
+                    if (connection?.ToString() == "@CONFIGCONNECTION@")
+                        child["connection"] = configCon;
+                }
+            }
+
+            return JsonConvert.DeserializeObject<SerConfig>(serConfig.ToString());
         }
 
         private List<JToken> GetConnections(Uri host, string appId, Cookie cookie)
         {
-            var results = new List<string>();
             var qlikWebSocket = new QlikWebSocket(host, cookie);
             var isOpen = qlikWebSocket.OpenSocket();
-            var response = qlikWebSocket.OpenDoc(appId);
-            var handle = response["result"]["qReturn"]["qHandle"].ToString();
+            dynamic response = qlikWebSocket.OpenDoc(appId);
+            if (response.ToString().Contains("App already open"))
+                response = qlikWebSocket.GetActiveDoc();
+            var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
             response = qlikWebSocket.GetConnections(handle);
-            return response["result"]["qConnections"].ToList();
+            var results = (List<JToken>)response.result.qConnections.ToList();
+            return results;
         }
 
         private List<string> GetLibraryContentInternal(QlikWebSocket qlikWebSocket, string handle, string qName)
         {
-            var response = qlikWebSocket.GetLibraryContent(handle, qName);
-            var qItems = response["result"]["qList"]["qItems"].ToList();
+            dynamic response = qlikWebSocket.GetLibraryContent(handle, qName);
+            var qItems = (List<JToken>)response?.result?.qList?.qItems.ToObject<List<JToken>>();
             var qUrls = qItems.Select(j => j["qUrl"].ToString()).ToList();
             return qUrls;
         }
@@ -495,15 +460,17 @@ namespace SerConAai
                 var results = new List<string>();
                 var qlikWebSocket = new QlikWebSocket(serverUri, cookie);
                 var isOpen = qlikWebSocket.OpenSocket();
-                var response = qlikWebSocket.OpenDoc(appId);
-                var handle = response["result"]["qReturn"]["qHandle"].ToString();
+                dynamic response = qlikWebSocket.OpenDoc(appId);
+                if (response.ToString().Contains("App already open"))
+                    response = qlikWebSocket.GetActiveDoc();
+                var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
 
                 var readItems = new List<string>() { contentName };
                 if (String.IsNullOrEmpty(contentName))
                 {
                     // search for all App Specific ContentLibraries                    
                     response = qlikWebSocket.GetContentLibraries(handle);
-                    var qItems = response["result"]["qList"]["qItems"].ToList();
+                    List<JToken> qItems = response?.result?.qList?.qItems?.ToList();
                     readItems = qItems.Where(s => s["qAppSpecific"]?.Value<bool>() == true).Select(s => s["qName"].ToString()).ToList();
                 }
                     
@@ -555,75 +522,15 @@ namespace SerConAai
             return resultBundle;
         }
 
-        private string GetNewSerConfig(string templatePath, UserParameter parameter)
-        {
-            try
-            {
-                var task = new SerTask()
-                {
-                    General = new SerGeneral()
-                    {
-                        UseUserSelections = parameter.UseUserSelesction,
-                    },
-                    Template = new SerTemplate()
-                    {
-                        Input = Path.GetFileName(templatePath),
-                        Output = $"OnDemandReport.{parameter.SaveFormats}",
-                    },
-                    Connection = new SerConnection()
-                    {
-                        App = parameter.AppId,
-                        ConnectUri = OnDemandConfig.Connection.ConnectUri,
-                        VirtualProxyPath = OnDemandConfig.Connection.VirtualProxyPath,
-                        SslValidThumbprints = OnDemandConfig.Connection.SslValidThumbprints,
-                        SslVerify = OnDemandConfig.Connection.SslVerify,
-                        Credentials = new SerCredentials()
-                        {
-                            Type = QlikCredentialType.SESSION,
-                            Key = parameter.ConnectCookie.Name,
-                            Value = parameter.ConnectCookie.Value,
-                        }
-                    }
-                };
-
-                var hubSettings = new HubSettings()
-                {
-                    Mode = DistributeMode.OVERRIDE,
-                    Type = SettingsType.HUB,
-                    Owner = $"{parameter.DomainUser.UserDirectory}\\{parameter.DomainUser.UserId}",
-                    Connection = task.Connection,
-                };
-
-                var settings = new JsonSerializerSettings()
-                {
-                    ContractResolver = new CamelCasePropertyNamesContractResolver(),
-                    NullValueHandling = NullValueHandling.Ignore,
-                };
-
-                var hubContent = JObject.Parse(JsonConvert.SerializeObject(hubSettings, settings).ToString());
-                task.Distribute = new JObject(new JProperty("hub", hubContent)); 
-                var appConfig = new SerConfig() { Tasks = new List<SerTask> { task } }; 
-                var jConfig = JsonConvert.SerializeObject(appConfig, settings);
-                var resultConfig = JObject.Parse(jConfig);
-                resultConfig.RemoveFields(new string[] { "taskCount" });
-                return resultConfig.ToString();
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "Config for SER-Engine not saved.");
-                return null;
-            }
-        }
-
-        private void CheckStatus(string taskId, string currentWorkingDir, UserParameter parameter)
+        private void CheckStatus(string currentWorkingDir, UserParameter parameter)
         {
             var status = 0;
-            var session = sessionManager.GetExistsSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser);
+            var session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, parameter.DomainUser);
             session.Status = 1;
             while (status != 2)
             {
                 Thread.Sleep(250);
-                var result = Status(taskId);
+                var result = Status(currentWorkingDir);
                 status = result.Status;
                 if (status == -1)
                     break;
@@ -716,9 +623,9 @@ namespace SerConAai
             }
         }
 
-        private OnDemandResult Status(string taskId)
+        private OnDemandResult Status(string workDir)
         {
-            var status = GetStatus(taskId);
+            var status = GetStatus(workDir);
             logger.Debug($"Report status {status}");
             if (status == "SUCCESS")
                 return new OnDemandResult() { Status = 2 };
@@ -733,9 +640,9 @@ namespace SerConAai
                 return new OnDemandResult() { Status = 0 };
         }
 
-        private string GetResultFile(string taskId)
+        private string GetResultFile(string workDir)
         {
-            var resultFolder = Path.Combine(OnDemandConfig.WorkingDir, taskId, "JobResults");
+            var resultFolder = Path.Combine(workDir, "JobResults");
             if (Directory.Exists(resultFolder))
             {
                 var resultFiles = new DirectoryInfo(resultFolder).GetFiles("*.json", SearchOption.TopDirectoryOnly).ToList();
@@ -746,9 +653,9 @@ namespace SerConAai
             return null;
         }
 
-        private JObject GetJsonObject(string taskId = null)
+        private JObject GetJsonObject(string workDir)
         {
-            var resultFile = GetResultFile(taskId);
+            var resultFile = GetResultFile(workDir);
             if (File.Exists(resultFile))
             {
                 logger.Debug($"json file {resultFile} found.");
@@ -760,11 +667,11 @@ namespace SerConAai
             return null;
         }
 
-        private string GetReportFile(string taskId)
+        private string GetReportFile(string workDir, string taskId)
         {
             try
             {
-                var jobject = GetJsonObject(taskId);
+                var jobject = GetJsonObject(workDir);
                 var path = jobject["reports"].FirstOrDefault()["paths"].FirstOrDefault().Value<string>() ?? null;
                 return path;
             }
@@ -775,11 +682,11 @@ namespace SerConAai
             }
         }
 
-        private string GetStatus(string taskId)
+        private string GetStatus(string workDir)
         {
             try
             {
-                var jobject = GetJsonObject(taskId);
+                var jobject = GetJsonObject(workDir);
                 return jobject?.Property("status")?.Value?.Value<string>() ?? null;
             }
             catch(Exception ex)
@@ -787,12 +694,6 @@ namespace SerConAai
                 logger.Error(ex);
                 return null;
             }
-        }
-
-        private string GetTaskId(string tempDir)
-        {
-            var jobject = GetJsonObject(tempDir);
-            return jobject?.Property("taskId")?.Value.Value<string>() ?? null;
         }
         #endregion
     }

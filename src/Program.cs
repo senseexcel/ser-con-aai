@@ -7,15 +7,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
  */
 #endregion
 
-namespace SerConAai
+namespace Ser.ConAai
 {
     #region Usings
     using Microsoft.Extensions.PlatformAbstractions;
     using NLog;
     using NLog.Config;
+    using PeterKottas.DotNetCore.WindowsService;
+    using Q2g.HelperPem;
     using System;
     using System.IO;
     using System.Linq;
+    using System.Security.Cryptography.X509Certificates;
     #endregion
 
     class Program
@@ -29,21 +32,44 @@ namespace SerConAai
             try
             {
                 SetLoggerSettings("App.config");
-                var service = new SSEtoSER();
-                service.Start(args);
-                Console.ReadKey();
-                service.Stop();
-                Console.WriteLine("Shutdown Service...");
+                ServiceRunner<SSEtoSER>.Run(config =>
+                {
+                    config.SetDisplayName("Qlik Connector for SER");
+                    config.SetDescription("Sense Excel Reporting Connector Service");
+                    var name = config.GetDefaultName();
+                    config.Service(serviceConfig =>
+                    {
+                        serviceConfig.ServiceFactory((extraArguments, controller) =>
+                        {
+                            return new SSEtoSER();
+                        });
+                        serviceConfig.OnStart((service, extraParams) =>
+                        {
+                            logger.Debug($"Service {name} started");
+                            service.Start();
+                        });
+                        serviceConfig.OnStop(service =>
+                        {
+                            logger.Debug($"Service {name} stopped");
+                            service.Stop();
+                        });
+                        serviceConfig.OnError(ex =>
+                        {
+                            logger.Error($"Service Exception: {ex}");
+                        });
+                    });
+                });
+
                 Environment.Exit(0);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error:\n{ex.Message}");
                 logger.Error(ex);
                 Environment.Exit(1);
             }
         }
 
+        #region Private Methods
         private static void SetLoggerSettings(string configName)
         {
             var path = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, configName);
@@ -56,5 +82,6 @@ namespace SerConAai
 
             logger.Factory.Configuration = new XmlLoggingConfiguration(path, false);
         }
+        #endregion
     }
 }

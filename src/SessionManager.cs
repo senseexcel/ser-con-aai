@@ -7,7 +7,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
  */
 #endregion
 
-namespace SerConAai
+namespace Ser.ConAai
 {
     #region Usings
     using System;
@@ -17,24 +17,27 @@ namespace SerConAai
     using System.Text;
     using Microsoft.Extensions.PlatformAbstractions;
     using System.Linq;
-    using Q2gHelperPem;
+    using Q2g.HelperPem;
     using System.Net;
     using System.Net.Http;
     using NLog;
     using System.Reflection;
-    using SerApi;
+    using Ser.Api;
     using System.Security.Claims;
     using Newtonsoft.Json;
     #endregion
 
     public class SessionInfo
     {
+        #region Properties
         public Cookie Cookie { get; set; }
         public DomainUser User { get; set; }
         public Uri ConnectUri { get; set; }
         public int ProcessId { get; set; }
         public string DownloadLink { get; set; }
         public int Status { get; set; }
+        public string AppId { get; set; }
+        #endregion
     }
 
     public class SessionManager
@@ -81,7 +84,6 @@ namespace SerConAai
                 };
 
                 var connection = new HttpClient(connectionHandler);
-                
                 logger.Debug($"Bearer token: {token}");
                 connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
                 var message = connection.GetAsync(connectUri).Result;
@@ -104,15 +106,15 @@ namespace SerConAai
         public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser)
         {
             var result = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
-                                                                 && u.User.UserId == domainUser.UserId 
-                                                                 && u.User.UserDirectory == domainUser.UserDirectory) ?? null;
+                                                          && u.User.ToString() == domainUser.ToString()) ?? null;
             return result;
         }
 
-        public SessionInfo GetSession(SerConnection connection, DomainUser domainUser)
+        public SessionInfo GetSession(SerConnection connection, UserParameter parameter)
         {
             try
             {
+                var domainUser = parameter.DomainUser;
                 var cert = new X509Certificate2();               
                 lock (this)
                 {
@@ -121,29 +123,9 @@ namespace SerConAai
                         return oldSession;
                 }
 
-                var certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, connection.Credentials.Cert);
-                if (!File.Exists(certPath))
-                {
-                    certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, certPath);
-                    if (!File.Exists(certPath))
-                    {
-                        var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
-                        logger.Warn($"No Certificate {certPath} exists. Please generate a Certificate with \"{exeName} -cert\"");
-                    }
-                }
-
+                var certPath = PathUtils.GetFullPathFromApp(connection.Credentials.Cert);
                 logger.Debug($"CERTPATH: {certPath}");
-                var privateKey = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, connection.Credentials.PrivateKey);
-                if (!File.Exists(privateKey))
-                {
-                    privateKey = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, privateKey);
-                    if (!File.Exists(privateKey))
-                    {
-                        var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
-                        logger.Warn($"No private key {privateKey} exists. Please generate a private Key with \"{exeName} -cert\"");
-                    }
-                }
-
+                var privateKey = PathUtils.GetFullPathFromApp(connection.Credentials.PrivateKey);
                 logger.Debug($"PRIVATEKEY: {privateKey}");
                 cert = cert.LoadPem(certPath, privateKey);
                 var claims = new[]
@@ -162,7 +144,8 @@ namespace SerConAai
                     {
                         Cookie = cookie,
                         User = domainUser,
-                        ConnectUri = connection.ServerUri
+                        ConnectUri = connection.ServerUri,
+                        AppId = parameter.AppId
                     };
                     sessionList.Add(sessionInfo);
                     return sessionInfo;

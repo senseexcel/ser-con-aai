@@ -1,0 +1,44 @@
+{
+  # the whole config file follows the hjson style please
+  # see https://hjson.org/
+  # This allows to have a more human readable and understandable
+  # json config with commenst,...
+
+  # Creating a temporary directory for the report process
+  workingDir: %temp%\senseexelreporting
+  
+  # Path to the Sense Excel Reporting engine
+  serEnginePath: ..\Engine\SenseExcelReporting.exe
+
+  # Host binding on gRPC Server
+  bindingHost: localhost
+  
+  # Port binding on gRPC Server
+  bindingPort: 50059
+  
+  # Connection settings to Qlik
+  connection:
+  {
+	 # connection to qlik
+	 # default the connectors takes https://PCNAME/ser as serverUri
+	 # serverUri: https://localhost/ser
+
+	 # Qlik jwt connection infos
+	 credentials: 
+	 {
+		 # the defined HTTP header for the virtual proxy
+		 key: X-Qlik-Session-ser
+		 
+		 # the authentification mode of the proxy
+		 # in the standard use JWT, if you want to use other
+		 # authentification methods please look into the documentation
+		 type: JWT
+		 
+		 # filename of the JWT certificate, you can define
+		 # relative paths or absolute paths
+		 cert: %appdata%\senseexcel\reporting\serconnector.pem
+
+		 privateKey: %appdata%\senseexcel\reporting\serconnector_private.key
+	 }
+  }
+}
