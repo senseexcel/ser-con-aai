@@ -34,7 +34,7 @@ namespace Ser.ConAai
                 SetLoggerSettings("App.config");
                 ServiceRunner<SSEtoSER>.Run(config =>
                 {
-                    config.SetDisplayName("QLIK Connector For SER");
+                    config.SetDisplayName("Qlik Connector for SER");
                     config.SetDescription("Sense Excel Reporting Connector Service");
                     var name = config.GetDefaultName();
                     config.Service(serviceConfig =>
