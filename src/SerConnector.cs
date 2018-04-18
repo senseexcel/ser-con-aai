@@ -94,13 +94,13 @@ namespace Ser.ConAai
                     CreateCertificate(certFile, privateKeyFile);
                 }
 
-                logger.Info(config.Fullname);
-                logger.Info($"Plattfom: {config.OS}");
-                logger.Info($"Architecture: {config.Architecture}");
-                logger.Info($"Framework: {config.Framework}");
-                logger.Info("Service running...");
-                logger.Info($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}\"...");
-                logger.Info($"Server start...");
+                logger.Info($"Version: {GitVersionInformation.InformationalVersion}");
+                logger.Debug($"Plattfom: {config.OS}");
+                logger.Debug($"Architecture: {config.Architecture}");
+                logger.Debug($"Framework: {config.Framework}");
+                logger.Debug("Service running...");
+                logger.Debug($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}");
+                logger.Debug($"Server start...");
 
                 using (serEvaluator = new SerEvaluator(config))
                 {

@@ -84,7 +84,6 @@ namespace Ser.ConAai
                 };
 
                 var connection = new HttpClient(connectionHandler);
-                
                 logger.Debug($"Bearer token: {token}");
                 connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
                 var message = connection.GetAsync(connectUri).Result;
@@ -124,29 +123,9 @@ namespace Ser.ConAai
                         return oldSession;
                 }
 
-                var certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, connection.Credentials.Cert);
-                if (!File.Exists(certPath))
-                {
-                    certPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, certPath);
-                    if (!File.Exists(certPath))
-                    {
-                        var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
-                        logger.Warn($"No Certificate {certPath} exists. Please generate a Certificate with \"{exeName} -cert\"");
-                    }
-                }
-
+                var certPath = PathUtils.GetFullPathFromApp(connection.Credentials.Cert);
                 logger.Debug($"CERTPATH: {certPath}");
-                var privateKey = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, connection.Credentials.PrivateKey);
-                if (!File.Exists(privateKey))
-                {
-                    privateKey = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, privateKey);
-                    if (!File.Exists(privateKey))
-                    {
-                        var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().FullName);
-                        logger.Warn($"No private key {privateKey} exists. Please generate a private Key with \"{exeName} -cert\"");
-                    }
-                }
-
+                var privateKey = PathUtils.GetFullPathFromApp(connection.Credentials.PrivateKey);
                 logger.Debug($"PRIVATEKEY: {privateKey}");
                 cert = cert.LoadPem(certPath, privateKey);
                 var claims = new[]

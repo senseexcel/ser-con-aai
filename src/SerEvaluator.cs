@@ -168,24 +168,28 @@ namespace Ser.ConAai
                     case SerFunction.STATUS:
                         var version = GitVersionInformation.InformationalVersion;
                         #region Status
-                        //Status -1=Fail 0=Nothing 1=Running, 2=Success, 3=DeleverySuccess, 5=Download
+                        //Status -1=Fail 0=Nothing 1=Running, 2=Success, 3=DeleverySuccess, 4=Download
                         jsonObject = JObject.Parse(json);
                         taskId = jsonObject?.TaskId ?? null;
-                        session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
-                        if (session == null)
-                        {
-                            logger.Error($"No existing session with id {taskId} found.");
-                            result = new OnDemandResult() { Status = -1 };
-                        }
-
-                        if (session.DownloadLink != null)
-                        {
-                            session.Status = 5;
-                            result = new OnDemandResult() { Status = 5, Link = session.DownloadLink };
-                        }
+                        if (taskId == null)
+                            result = new OnDemandResult() { Status = -1, Version = version };
                         else
-                            result = new OnDemandResult() { Status = session.Status };
+                        {
+                            session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
+                            if (session == null)
+                            {
+                                logger.Error($"No existing session with id {taskId} found.");
+                                result = new OnDemandResult() { Status = -1 };
+                            }
 
+                            if (session.DownloadLink != null)
+                            {
+                                session.Status = 4;
+                                result = new OnDemandResult() { Status = 4, Link = session.DownloadLink };
+                            }
+                            else
+                                result = new OnDemandResult() { Status = session.Status };
+                        }
                         break; 
                     #endregion
                     case SerFunction.STOP:
@@ -205,7 +209,6 @@ namespace Ser.ConAai
                         SoftDelete($"{workDir}\\{taskId}");
                         session.Status = 0;
                         result = new OnDemandResult() { Status = 0 };
-
                         break; 
                     #endregion
                     default:
@@ -256,10 +259,13 @@ namespace Ser.ConAai
                 {
                     try
                     {
-                        var uri = new Uri(item.Url);
+                        Uri uri = null;
+                        if (!String.IsNullOrEmpty(item.Url))
+                            uri = new Uri(item.Url);
                         var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "");
-                        if (thumbprint == cert.GetCertHashString() &&
-                           uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())
+                        if (thumbprint == cert.GetCertHashString() && uri == null || 
+                            thumbprint == cert.GetCertHashString() &&
+                            uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())
                             return true;
                     }
                     catch { }
@@ -325,13 +331,13 @@ namespace Ser.ConAai
                 serProcess.Start();
                 session.ProcessId = serProcess.Id;
 
-                var statusThread = new Thread(() => CheckStatus(taskId, currentWorkingDir, parameter))
+                var statusThread = new Thread(() => CheckStatus(currentWorkingDir, parameter))
                 {
                     IsBackground = true
                 };
                 statusThread.Start();
 
-                return new OnDemandResult() { TaskName = taskId };
+                return new OnDemandResult() { TaskId = taskId };
             }
             catch (Exception ex)
             {
@@ -404,22 +410,22 @@ namespace Ser.ConAai
             var configCon = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
             logger.Debug("parse user json.");
             var jsonConfig = HjsonValue.Parse(userJson).ToString();
-            dynamic serConfig = JObject.Parse(jsonConfig);
+            var serConfig = JObject.Parse(jsonConfig);
             logger.Debug("search for connections.");
-            var tasks = serConfig?.tasks?.ToList() ?? new List<JToken>();
+            var tasks = serConfig["tasks"].ToList() ?? new List<JToken>();
             foreach (var task in tasks)
             {
                 //merge connections / config <> script
-                var currentConnection = task.connection.ToObject<JObject>();
+                var currentConnection = task["connection"];
                 configCon.Merge(currentConnection);
-                task.connection = configCon;
-
-                var children = task.distribute.Children().Children();
+                task["connection"] = configCon;
+                var distribute = task["distribute"];
+                var children = distribute.Children().Children();
                 foreach (var child in children)
                 {
-                    var connection = child?.connection ?? null;
+                    var connection = child["connection"] ?? null;
                     if (connection?.ToString() == "@CONFIGCONNECTION@")
-                        child.connection = configCon;
+                        child["connection"] = configCon;
                 }
             }
 
@@ -428,19 +434,21 @@ namespace Ser.ConAai
 
         private List<JToken> GetConnections(Uri host, string appId, Cookie cookie)
         {
-            var results = new List<string>();
             var qlikWebSocket = new QlikWebSocket(host, cookie);
             var isOpen = qlikWebSocket.OpenSocket();
             dynamic response = qlikWebSocket.OpenDoc(appId);
+            if (response.ToString().Contains("App already open"))
+                response = qlikWebSocket.GetActiveDoc();
             var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
             response = qlikWebSocket.GetConnections(handle);
-            return response.result.qConnections.ToList();
+            var results = (List<JToken>)response.result.qConnections.ToList();
+            return results;
         }
 
         private List<string> GetLibraryContentInternal(QlikWebSocket qlikWebSocket, string handle, string qName)
         {
             dynamic response = qlikWebSocket.GetLibraryContent(handle, qName);
-            List<JToken> qItems = response?.result?.qList?.qItems?.ToList() ?? null;
+            var qItems = (List<JToken>)response?.result?.qList?.qItems.ToObject<List<JToken>>();
             var qUrls = qItems.Select(j => j["qUrl"].ToString()).ToList();
             return qUrls;
         }
@@ -453,6 +461,8 @@ namespace Ser.ConAai
                 var qlikWebSocket = new QlikWebSocket(serverUri, cookie);
                 var isOpen = qlikWebSocket.OpenSocket();
                 dynamic response = qlikWebSocket.OpenDoc(appId);
+                if (response.ToString().Contains("App already open"))
+                    response = qlikWebSocket.GetActiveDoc();
                 var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
 
                 var readItems = new List<string>() { contentName };
@@ -512,7 +522,7 @@ namespace Ser.ConAai
             return resultBundle;
         }
 
-        private void CheckStatus(string taskId, string currentWorkingDir, UserParameter parameter)
+        private void CheckStatus(string currentWorkingDir, UserParameter parameter)
         {
             var status = 0;
             var session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, parameter.DomainUser);
@@ -520,7 +530,7 @@ namespace Ser.ConAai
             while (status != 2)
             {
                 Thread.Sleep(250);
-                var result = Status(currentWorkingDir, taskId);
+                var result = Status(currentWorkingDir);
                 status = result.Status;
                 if (status == -1)
                     break;
@@ -613,9 +623,9 @@ namespace Ser.ConAai
             }
         }
 
-        private OnDemandResult Status(string workDir, string taskId)
+        private OnDemandResult Status(string workDir)
         {
-            var status = GetStatus(workDir, taskId);
+            var status = GetStatus(workDir);
             logger.Debug($"Report status {status}");
             if (status == "SUCCESS")
                 return new OnDemandResult() { Status = 2 };
@@ -630,9 +640,9 @@ namespace Ser.ConAai
                 return new OnDemandResult() { Status = 0 };
         }
 
-        private string GetResultFile(string taskId, string workDir)
+        private string GetResultFile(string workDir)
         {
-            var resultFolder = Path.Combine(workDir, taskId, "JobResults");
+            var resultFolder = Path.Combine(workDir, "JobResults");
             if (Directory.Exists(resultFolder))
             {
                 var resultFiles = new DirectoryInfo(resultFolder).GetFiles("*.json", SearchOption.TopDirectoryOnly).ToList();
@@ -643,9 +653,9 @@ namespace Ser.ConAai
             return null;
         }
 
-        private JObject GetJsonObject(string workDir, string taskId)
+        private JObject GetJsonObject(string workDir)
         {
-            var resultFile = GetResultFile(taskId, workDir);
+            var resultFile = GetResultFile(workDir);
             if (File.Exists(resultFile))
             {
                 logger.Debug($"json file {resultFile} found.");
@@ -661,7 +671,7 @@ namespace Ser.ConAai
         {
             try
             {
-                var jobject = GetJsonObject(workDir, taskId);
+                var jobject = GetJsonObject(workDir);
                 var path = jobject["reports"].FirstOrDefault()["paths"].FirstOrDefault().Value<string>() ?? null;
                 return path;
             }
@@ -672,11 +682,11 @@ namespace Ser.ConAai
             }
         }
 
-        private string GetStatus(string workDir, string taskId)
+        private string GetStatus(string workDir)
         {
             try
             {
-                var jobject = GetJsonObject(workDir, taskId);
+                var jobject = GetJsonObject(workDir);
                 return jobject?.Property("status")?.Value?.Value<string>() ?? null;
             }
             catch(Exception ex)

@@ -44,12 +44,6 @@ namespace Ser.ConAai
         public string AppName { get; private set; } = PlatformServices.Default.Application.ApplicationName;
         #endregion
 
-        [JsonIgnore]
-        public string Fullname
-        {
-            get => $"{AppName} {AppVersion.ToString()}";
-        }
-
         public string GetCertPath()
         {
             try
