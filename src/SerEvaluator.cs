@@ -441,14 +441,14 @@ namespace Ser.ConAai
                 response = qlikWebSocket.GetActiveDoc();
             var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
             response = qlikWebSocket.GetConnections(handle);
-            var results = (List<JToken>)response.result.qConnections.ToList();
-            return results;
+            JArray results = response.result.qConnections;
+            return results.ToList();
         }
 
         private List<string> GetLibraryContentInternal(QlikWebSocket qlikWebSocket, string handle, string qName)
         {
             dynamic response = qlikWebSocket.GetLibraryContent(handle, qName);
-            var qItems = (List<JToken>)response?.result?.qList?.qItems.ToObject<List<JToken>>();
+            JArray qItems = response?.result?.qList?.qItems;
             var qUrls = qItems.Select(j => j["qUrl"].ToString()).ToList();
             return qUrls;
         }
