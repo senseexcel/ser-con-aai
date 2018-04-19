@@ -20,7 +20,7 @@
     <PackageReference Include="NLog" Version="5.0.0-beta11" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.6" />   
     <PackageReference Include="qlik-sseapi" Version="1.0.0" />   
-    <PackageReference Include="SerApi" Version="2.0.7" />    
+    <PackageReference Include="SerApi" Version="2.0.8" />    
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.2.1" />
     <PackageReference Include="WebSocket4Net" Version="0.15.2" />
   </ItemGroup>  

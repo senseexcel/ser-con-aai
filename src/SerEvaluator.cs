@@ -171,24 +171,17 @@ namespace Ser.ConAai
                         //Status -1=Fail 0=Nothing 1=Running, 2=Success, 3=DeleverySuccess, 4=Download
                         jsonObject = JObject.Parse(json);
                         taskId = jsonObject?.TaskId ?? null;
-                        if (taskId == null)
-                            result = new OnDemandResult() { Status = -1, Version = version };
+                        if (String.IsNullOrEmpty(taskId))
+                            result = new OnDemandResult() { Status = 0, Version = version };
                         else
                         {
                             session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
                             if (session == null)
                             {
                                 logger.Error($"No existing session with id {taskId} found.");
-                                result = new OnDemandResult() { Status = -1 };
+                                session.Status = -1;
                             }
-
-                            if (session.DownloadLink != null)
-                            {
-                                session.Status = 4;
-                                result = new OnDemandResult() { Status = 4, Link = session.DownloadLink };
-                            }
-                            else
-                                result = new OnDemandResult() { Status = session.Status };
+                            result = new OnDemandResult() { Status = session.Status, Link = session.DownloadLink };
                         }
                         break; 
                     #endregion
@@ -199,8 +192,9 @@ namespace Ser.ConAai
                         session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
                         if (session == null)
                             throw new Exception("No existing session found.");
-                        var process = Process.GetProcessById(session.ProcessId);
-                        if (!process.HasExited)
+
+                        var process = GetProcess(session.ProcessId);
+                        if (process != null)
                         {
                             process?.Kill();
                             Thread.Sleep(1000);
@@ -208,7 +202,8 @@ namespace Ser.ConAai
                         var workDir = PathUtils.GetFullPathFromApp(OnDemandConfig.WorkingDir);
                         SoftDelete($"{workDir}\\{taskId}");
                         session.Status = 0;
-                        result = new OnDemandResult() { Status = 0 };
+                        session.DownloadLink = null;
+                        result = new OnDemandResult() { Status = session.Status };
                         break; 
                     #endregion
                     default:
@@ -308,9 +303,15 @@ namespace Ser.ConAai
                 session.User = parameter.DomainUser;
                 parameter.ConnectCookie = session?.Cookie;
                 session.DownloadLink = null;
+                session.Status = 1;
 
                 //get engine config
                 var newEngineConfig = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
+
+                //ondemand for download link ???
+                var firstTask = newEngineConfig?.Tasks?.FirstOrDefault() ?? null;
+                if (firstTask != null)
+                    parameter.OnDemand = firstTask.Template.Output == "OnDemand";
 
                 //save template from content libary
                 FindTemplatePaths(parameter, newEngineConfig, currentWorkingDir, session.Cookie);
@@ -342,6 +343,18 @@ namespace Ser.ConAai
             catch (Exception ex)
             {
                 throw new Exception("The report could not be created.", ex);
+            }
+        }
+
+        private Process GetProcess(int id)
+        {
+            try
+            {
+                return Process.GetProcessById(id);
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -526,19 +539,17 @@ namespace Ser.ConAai
         {
             var status = 0;
             var session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, parameter.DomainUser);
-            session.Status = 1;
             while (status != 2)
             {
                 Thread.Sleep(250);
-                var result = Status(currentWorkingDir);
-                status = result.Status;
-                if (status == -1)
+                status = Status(currentWorkingDir);
+                if (status == -1 || status == 0)
                     break;
             }
 
             //Engine finish
             session.Status = status;
-            if (status != 2)
+            if (session.Status != 2)
                 return;
 
             //Delivery finish
@@ -623,21 +634,22 @@ namespace Ser.ConAai
             }
         }
 
-        private OnDemandResult Status(string workDir)
+        private int Status(string workDir)
         {
             var status = GetStatus(workDir);
             logger.Debug($"Report status {status}");
-            if (status == "SUCCESS")
-                return new OnDemandResult() { Status = 2 };
-            else if (status == "ABORT")
-                return new OnDemandResult() { Status = 1 };
-            else if (status == "ERROR")
+            switch (status)
             {
-                logger.Error("No Report created.");
-                return new OnDemandResult() { Status = -1 };
+                case "SUCCESS":
+                    return 2;
+                case "ABORT":
+                    return 1;
+                case "ERROR":
+                    logger.Error("No Report created.");
+                    return -1;
+                default:
+                    return 1;
             }
-            else
-                return new OnDemandResult() { Status = 0 };
         }
 
         private string GetResultFile(string workDir)
