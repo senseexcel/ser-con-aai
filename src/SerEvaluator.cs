@@ -470,7 +470,7 @@ namespace Ser.ConAai
                 {
                     // search for all App Specific ContentLibraries                    
                     response = qlikWebSocket.GetContentLibraries(handle);
-                    List<JToken> qItems = response?.result?.qList?.qItems?.ToList();
+                    JArray qItems = response?.result?.qList?.qItems.ToObject<JArray>();
                     readItems = qItems.Where(s => s["qAppSpecific"]?.Value<bool>() == true).Select(s => s["qName"].ToString()).ToList();
                 }
                     
