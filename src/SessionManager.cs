@@ -37,6 +37,7 @@ namespace Ser.ConAai
         public string DownloadLink { get; set; }
         public int Status { get; set; }
         public string AppId { get; set; }
+        public string TaskId { get; set; }
         #endregion
     }
 

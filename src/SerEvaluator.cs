@@ -171,17 +171,21 @@ namespace Ser.ConAai
                         //Status -1=Fail 0=Nothing 1=Running, 2=Success, 3=DeleverySuccess, 4=Download
                         jsonObject = JObject.Parse(json);
                         taskId = jsonObject?.TaskId ?? null;
-                        if (String.IsNullOrEmpty(taskId))
+
+                        session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
+                        if (session == null)
+                        {
+                            logger.Debug($"No existing session with id {taskId} found.");
                             result = new OnDemandResult() { Status = 0, Version = version };
+                        }
                         else
                         {
-                            session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
-                            if (session == null)
+                            if (String.IsNullOrEmpty(taskId))
+                                result = new OnDemandResult() { Status = 0, TaskId = session.TaskId, Version = version };
+                            else
                             {
-                                logger.Error($"No existing session with id {taskId} found.");
-                                session.Status = -1;
+                                result = new OnDemandResult() { Status = session.Status, Link = session.DownloadLink };
                             }
-                            result = new OnDemandResult() { Status = session.Status, Link = session.DownloadLink };
                         }
                         break; 
                     #endregion
@@ -304,6 +308,7 @@ namespace Ser.ConAai
                 parameter.ConnectCookie = session?.Cookie;
                 session.DownloadLink = null;
                 session.Status = 1;
+                session.TaskId = taskId;
 
                 //get engine config
                 var newEngineConfig = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
