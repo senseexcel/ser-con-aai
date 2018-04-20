@@ -48,6 +48,16 @@ namespace Ser.ConAai
             STATUS = 2,
             STOP = 3,
         }
+
+        public enum ConnectorState
+        {
+            ERROR = -1,
+            NOTHING = 0,
+            RUNNING = 1,
+            REPORTING_SUCCESS = 2,
+            DELIVERYSUCCESS = 3,
+            DOWNLOADLINKAVAILABLE = 4
+        }
         #endregion
 
         #region Properties & Variables
@@ -168,7 +178,7 @@ namespace Ser.ConAai
                     case SerFunction.STATUS:
                         var version = GitVersionInformation.InformationalVersion;
                         #region Status
-                        //Status -1=Fail 0=Nothing 1=Running, 2=Success, 3=DeleverySuccess, 4=Download
+                
                         jsonObject = JObject.Parse(json);
                         taskId = jsonObject?.TaskId ?? null;
 

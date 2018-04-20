@@ -25,6 +25,7 @@ namespace Ser.ConAai
     using Ser.Api;
     using System.Security.Claims;
     using Newtonsoft.Json;
+    using Q2g.HelperQrs;
     #endregion
 
     public class SessionInfo
@@ -101,6 +102,22 @@ namespace Ser.ConAai
                 return null;
             }
         }    
+
+        private bool ValidateSession(Uri serverUri, Cookie cookie)
+        {
+            try
+            {
+                var qrsHub = new QlikQrsHub(serverUri, cookie);
+                var result = qrsHub.SendRequestAsync("about", HttpMethod.Get).Result;
+                if (String.IsNullOrEmpty(result))
+                    return false;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
         #endregion
 
         #region Public Methods
@@ -116,12 +133,17 @@ namespace Ser.ConAai
             try
             {
                 var domainUser = parameter.DomainUser;
-                var cert = new X509Certificate2();               
+                var cert = new X509Certificate2();
                 lock (this)
                 {
                     var oldSession = GetExistsSession(connection.ServerUri, domainUser);
                     if (oldSession != null)
-                        return oldSession;
+                    {
+                        var result = ValidateSession(oldSession.ConnectUri, oldSession.Cookie);
+                        if (result)
+                            return oldSession;
+                        sessionList.Remove(oldSession);
+                    }
                 }
 
                 var certPath = PathUtils.GetFullPathFromApp(connection.Credentials.Cert);
