@@ -182,7 +182,7 @@ namespace Ser.ConAai
                         jsonObject = JObject.Parse(json);
                         taskId = jsonObject?.TaskId ?? null;
 
-                        session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
+                        session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, userParameter);
                         if (session == null)
                         {
                             logger.Debug($"No existing session with id {taskId} found.");
@@ -203,7 +203,7 @@ namespace Ser.ConAai
                         #region Stop
                         jsonObject = JObject.Parse(json);
                         taskId = jsonObject?.TaskId ?? null;
-                        session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, domainUser);
+                        session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, userParameter);
                         if (session == null)
                             throw new Exception("No existing session found.");
 
@@ -427,11 +427,6 @@ namespace Ser.ConAai
             if (mainConnection.Credentials != null)
             {
                 var cred = mainConnection.Credentials;
-                if (cred.PrivateKey != null)
-                    cred.PrivateKey = null;
-                if (cred.Cert != null)
-                    cred.Cert = null;
-
                 cred.Value = cookie.Value;
             }
 
@@ -446,6 +441,8 @@ namespace Ser.ConAai
                 //merge connections / config <> script
                 var currentConnection = task["connection"];
                 configCon.Merge(currentConnection);
+                configCon["credentials"]["privateKey"] = null;
+                configCon["credentials"]["cert"] = null;
                 task["connection"] = configCon;
                 var distribute = task["distribute"];
                 var children = distribute.Children().Children();
@@ -553,7 +550,7 @@ namespace Ser.ConAai
         private void CheckStatus(string currentWorkingDir, UserParameter parameter)
         {
             var status = 0;
-            var session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, parameter.DomainUser);
+            var session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, parameter);
             while (status != 2)
             {
                 Thread.Sleep(250);

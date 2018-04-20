@@ -121,10 +121,11 @@ namespace Ser.ConAai
         #endregion
 
         #region Public Methods
-        public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser)
+        public SessionInfo GetExistsSession(Uri connectUri, UserParameter parameter)
         {
             var result = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
-                                                          && u.User.ToString() == domainUser.ToString()) ?? null;
+                                                          && u.User.ToString() == parameter.DomainUser.ToString() 
+                                                          && u.AppId == parameter.AppId) ?? null;
             return result;
         }
 
@@ -136,7 +137,7 @@ namespace Ser.ConAai
                 var cert = new X509Certificate2();
                 lock (this)
                 {
-                    var oldSession = GetExistsSession(connection.ServerUri, domainUser);
+                    var oldSession = GetExistsSession(connection.ServerUri, parameter);
                     if (oldSession != null)
                     {
                         var result = ValidateSession(oldSession.ConnectUri, oldSession.Cookie);
@@ -180,20 +181,6 @@ namespace Ser.ConAai
             {
                 logger.Error(ex, "The session could not be created.");
                 return null;
-            }
-        }
-
-        public void DeleteSession(Uri connectUri, DomainUser domainUser, string taskId)
-        {
-            try
-            {
-                var session = GetExistsSession(connectUri, domainUser);
-                if (session != null)
-                    sessionList.Remove(session);
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, $"Session {taskId} could not deleted.");
             }
         }
         #endregion
