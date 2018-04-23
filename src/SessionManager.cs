@@ -25,6 +25,7 @@ namespace Ser.ConAai
     using Ser.Api;
     using System.Security.Claims;
     using Newtonsoft.Json;
+    using Q2g.HelperQrs;
     #endregion
 
     public class SessionInfo
@@ -37,6 +38,7 @@ namespace Ser.ConAai
         public string DownloadLink { get; set; }
         public int Status { get; set; }
         public string AppId { get; set; }
+        public string TaskId { get; set; }
         #endregion
     }
 
@@ -100,13 +102,30 @@ namespace Ser.ConAai
                 return null;
             }
         }    
+
+        private bool ValidateSession(Uri serverUri, Cookie cookie)
+        {
+            try
+            {
+                var qrsHub = new QlikQrsHub(serverUri, cookie);
+                var result = qrsHub.SendRequestAsync("about", HttpMethod.Get).Result;
+                if (String.IsNullOrEmpty(result))
+                    return false;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
         #endregion
 
         #region Public Methods
-        public SessionInfo GetExistsSession(Uri connectUri, DomainUser domainUser)
+        public SessionInfo GetExistsSession(Uri connectUri, UserParameter parameter)
         {
             var result = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
-                                                          && u.User.ToString() == domainUser.ToString()) ?? null;
+                                                          && u.User.ToString() == parameter.DomainUser.ToString() 
+                                                          && u.AppId == parameter.AppId) ?? null;
             return result;
         }
 
@@ -115,12 +134,17 @@ namespace Ser.ConAai
             try
             {
                 var domainUser = parameter.DomainUser;
-                var cert = new X509Certificate2();               
+                var cert = new X509Certificate2();
                 lock (this)
                 {
-                    var oldSession = GetExistsSession(connection.ServerUri, domainUser);
+                    var oldSession = GetExistsSession(connection.ServerUri, parameter);
                     if (oldSession != null)
-                        return oldSession;
+                    {
+                        var result = ValidateSession(oldSession.ConnectUri, oldSession.Cookie);
+                        if (result)
+                            return oldSession;
+                        sessionList.Remove(oldSession);
+                    }
                 }
 
                 var certPath = PathUtils.GetFullPathFromApp(connection.Credentials.Cert);
@@ -157,20 +181,6 @@ namespace Ser.ConAai
             {
                 logger.Error(ex, "The session could not be created.");
                 return null;
-            }
-        }
-
-        public void DeleteSession(Uri connectUri, DomainUser domainUser, string taskId)
-        {
-            try
-            {
-                var session = GetExistsSession(connectUri, domainUser);
-                if (session != null)
-                    sessionList.Remove(session);
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, $"Session {taskId} could not deleted.");
             }
         }
         #endregion

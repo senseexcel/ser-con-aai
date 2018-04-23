@@ -65,7 +65,13 @@ namespace Ser.ConAai
             {
                 var configPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, "config.hjson");
                 if (!File.Exists(configPath))
-                    throw new Exception($"config file {configPath} not found.");
+                {
+                    var exampleConfigPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, "config.hjson.example");
+                    if (File.Exists(exampleConfigPath))
+                        File.Copy(exampleConfigPath, configPath);
+                    else
+                        throw new Exception($"config file {configPath} not found.");
+                }
                 var json = HjsonValue.Load(configPath).ToString();
                 var configObject = JObject.Parse(json);
 
@@ -74,7 +80,7 @@ namespace Ser.ConAai
                 {
                     Connection = new SerConnection()
                     {
-                        ServerUri = new Uri($"https://{Environment.MachineName}")
+                        ServerUri = new Uri($"https://{Environment.MachineName}/ser")
                     }
                 };
                 var virtConnection = JObject.Parse(JsonConvert.SerializeObject(vconnection, Formatting.Indented));
