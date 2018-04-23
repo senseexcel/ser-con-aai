@@ -167,8 +167,8 @@ namespace Ser.ConAai
                 var json = GetParameterValue(0, row);
 
                 var functionCall = (SerFunction)functionRequestHeader.FunctionId;
-                SessionInfo session;
-                string taskId;
+                SessionInfo session = null;
+                string taskId = String.Empty;
                 dynamic jsonObject;
                 switch (functionCall)
                 {
@@ -176,12 +176,13 @@ namespace Ser.ConAai
                         result = CreateReport(userParameter, json);
                         break;
                     case SerFunction.STATUS:
-                        var version = GitVersionInformation.InformationalVersion;
                         #region Status
-                
-                        jsonObject = JObject.Parse(json);
-                        taskId = jsonObject?.TaskId ?? null;
-
+                        var version = GitVersionInformation.InformationalVersion;
+                        if (!String.IsNullOrEmpty(json))
+                        {
+                            jsonObject = JObject.Parse(json);
+                            taskId = jsonObject?.TaskId ?? null;
+                        }
                         session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, userParameter);
                         if (session == null)
                         {
@@ -314,6 +315,11 @@ namespace Ser.ConAai
                 var session = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
                 if (session == null)
                     logger.Error("No session generated.");
+
+                //check session is working
+                if (session.Status == 1 || session.Status == 2)
+                    return new OnDemandResult() { TaskId = session.TaskId };
+
                 session.User = parameter.DomainUser;
                 parameter.ConnectCookie = session?.Cookie;
                 session.DownloadLink = null;
