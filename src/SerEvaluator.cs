@@ -316,7 +316,7 @@ namespace Ser.ConAai
                 if (session == null)
                     logger.Error("No session generated.");
 
-                //check session is working
+                //check session is running
                 if (session.Status == 1 || session.Status == 2)
                     return new OnDemandResult() { TaskId = session.TaskId };
 
