@@ -563,8 +563,8 @@ namespace Ser.ConAai
             while (status != 2)
             {
                 Thread.Sleep(250);
-                status = Status(currentWorkingDir);
-                if (status == -1 || status == 0 || session.Status == 0)
+                status = Status(currentWorkingDir, session.Status);
+                if (status == -1 || status == 0)
                     break;
             }
 
@@ -655,7 +655,7 @@ namespace Ser.ConAai
             }
         }
 
-        private int Status(string workDir)
+        private int Status(string workDir, int sessionStatus)
         {
             var status = GetStatus(workDir);
             logger.Debug($"Report status {status}");
@@ -669,7 +669,7 @@ namespace Ser.ConAai
                     logger.Error("No Report created.");
                     return -1;
                 default:
-                    return 1;
+                    return sessionStatus;
             }
         }
 
