@@ -568,7 +568,7 @@ namespace Ser.ConAai
                     break;
             }
 
-            //Engine finish
+            //Reports Generated
             session.Status = status;
             if (session.Status != 2)
                 return;
