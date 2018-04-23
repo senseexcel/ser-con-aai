@@ -311,7 +311,7 @@ namespace Ser.ConAai
                     parameter.DomainUser = new DomainUser($"{hubInfo.Owner.UserDirectory}\\{hubInfo.Owner.UserId}");
                 }
 
-                //Get a session
+                //get a session
                 var session = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
                 if (session == null)
                     logger.Error("No session generated.");
