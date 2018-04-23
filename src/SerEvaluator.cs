@@ -318,7 +318,10 @@ namespace Ser.ConAai
 
                 //check session is running
                 if (session.Status == 1 || session.Status == 2)
+                {
+                    logger.Debug("Session ist already running.");
                     return new OnDemandResult() { TaskId = session.TaskId };
+                }
 
                 session.User = parameter.DomainUser;
                 parameter.ConnectCookie = session?.Cookie;
@@ -561,7 +564,7 @@ namespace Ser.ConAai
             {
                 Thread.Sleep(250);
                 status = Status(currentWorkingDir);
-                if (status == -1 || status == 0)
+                if (status == -1 || status == 0 || session.Status == 0)
                     break;
             }
 
