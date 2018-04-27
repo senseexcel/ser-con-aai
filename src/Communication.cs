@@ -29,6 +29,7 @@ namespace Ser.ConAai
         public bool SharedMode { get; set; }
         public string BookmarkId { get; set; }
         public bool OnDemand { get; set; }
+        public string PrivateKeyPath { get; set; }
         #endregion
     }
 

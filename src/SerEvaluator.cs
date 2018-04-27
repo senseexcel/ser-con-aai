@@ -437,6 +437,7 @@ namespace Ser.ConAai
             {
                 var cred = mainConnection.Credentials;
                 cred.Value = cookie.Value;
+                parameter.PrivateKeyPath = cred.PrivateKey;
             }
 
             var configCon = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
@@ -574,9 +575,8 @@ namespace Ser.ConAai
                 return;
 
             //Delivery finish
-            status = StartDeliveryTool(currentWorkingDir, session, parameter.OnDemand);
+            status = StartDeliveryTool(currentWorkingDir, session, parameter.OnDemand, parameter.PrivateKeyPath);
 
-            //sessionManager.DeleteSession(new Uri(OnDemandConfig.Connection.ConnectUri), parameter.DomainUser, taskId);
             SoftDelete(currentWorkingDir);
             session.Status = status;
         }
@@ -633,13 +633,14 @@ namespace Ser.ConAai
             }
         }
 
-        private int StartDeliveryTool(string workdir, SessionInfo session, bool ondemand = false)
+        private int StartDeliveryTool(string workdir, SessionInfo session, bool ondemand = false, string privateKeyPath = null)
         {
             try
             {
                 var jobResultPath = Path.Combine(workdir, "JobResults");
                 var distribute = new Distribute();
-                var result = distribute.Run(jobResultPath, ondemand);
+                var privateKeyFullname = PathUtils.GetFullPathFromApp(privateKeyPath);
+                var result = distribute.Run(jobResultPath, ondemand, privateKeyFullname);
                 if (result != null)
                 {
                     session.DownloadLink = result;

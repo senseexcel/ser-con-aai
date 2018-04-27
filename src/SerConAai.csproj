@@ -18,10 +18,11 @@
     <PackageReference Include="Hjson" Version="3.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
     <PackageReference Include="NLog" Version="5.0.0-beta11" />
-    <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.6" />   
+    <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.6" />
+    <PackageReference Include="Q2gHelperPem" Version="1.0.3" />   
     <PackageReference Include="qlik-sseapi" Version="1.0.0" />   
     <PackageReference Include="SerApi" Version="2.0.8" />    
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.2.1" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.2.2" />
     <PackageReference Include="WebSocket4Net" Version="0.15.2" />
   </ItemGroup>  
 
@@ -29,7 +30,6 @@
     <When Condition="'$(Configuration)' == 'Release'">
       <ItemGroup>
         <PackageReference Include="SerApi" Version="2.0.8" />
-        <PackageReference Include="Q2gHelperPem" Version="1.0.3" />
         <PackageReference Include="Q2gHelperQrs" Version="1.0.10" />
       </ItemGroup>
     </When>
@@ -48,6 +48,9 @@
   </Choose>  
 
   <ItemGroup>
+    <Reference Include="Q2gHelperQrs">
+      <HintPath>..\..\q2g-helper-qrs-nuget\src\bin\Debug\netcoreapp2.0\Q2gHelperQrs.dll</HintPath>
+    </Reference>
     <Reference Include="SerApi">
       <HintPath>..\..\ser-api-nuget\src\bin\Debug\netcoreapp2.0\SerApi.dll</HintPath>
     </Reference>
