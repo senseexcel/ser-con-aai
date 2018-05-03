@@ -99,8 +99,8 @@ namespace Ser.ConAai
 
                     CreateCertificate(certFile, privateKeyFile);
                 }
-
-                logger.Info($"Version: {GitVersionInformation.InformationalVersion}");
+                
+                logger.Info($"Version: {Ser.ConAai.GitVersionInformation.InformationalVersion}");
                 logger.Debug($"Plattfom: {config.OS}");
                 logger.Debug($"Architecture: {config.Architecture}");
                 logger.Debug($"Framework: {config.Framework}");
