@@ -58,10 +58,19 @@ namespace Ser.ConAai
             DELIVERYSUCCESS = 3,
             DOWNLOADLINKAVAILABLE = 4
         }
+
+        public enum EngineResult
+        {
+            SUCCESS,
+            ERROR,
+            ABORT,
+            UNKOWN
+        }
         #endregion
 
         #region Properties & Variables
         private static SerOnDemandConfig OnDemandConfig;
+        private static bool HasConnection = false;
         private SessionManager sessionManager;
         #endregion
 
@@ -71,6 +80,7 @@ namespace Ser.ConAai
             OnDemandConfig = config;
             sessionManager = new SessionManager();            
             ServicePointManager.ServerCertificateValidationCallback += ValidateRemoteCertificate;
+            //RestoreTasks();
         }
 
         public void Dispose() { }
@@ -82,7 +92,7 @@ namespace Ser.ConAai
             try
             {
                 logger.Info($"GetCapabilities was called");
-
+      
                 return Task.FromResult(new Capabilities
                 {
                     PluginVersion = OnDemandConfig.AppVersion,
@@ -169,11 +179,12 @@ namespace Ser.ConAai
                 var functionCall = (SerFunction)functionRequestHeader.FunctionId;
                 SessionInfo session = null;
                 string taskId = String.Empty;
+                var workDir = PathUtils.GetFullPathFromApp(OnDemandConfig.WorkingDir);
                 dynamic jsonObject;
                 switch (functionCall)
                 {
                     case SerFunction.START:
-                        result = CreateReport(userParameter, json);
+                        result = CreateReport(userParameter, json, workDir);
                         break;
                     case SerFunction.STATUS:
                         #region Status
@@ -183,6 +194,7 @@ namespace Ser.ConAai
                             jsonObject = JObject.Parse(json);
                             taskId = jsonObject?.TaskId ?? null;
                         }
+
                         session = sessionManager.GetExistsSession(OnDemandConfig.Connection.ServerUri, userParameter);
                         if (session == null)
                         {
@@ -192,7 +204,7 @@ namespace Ser.ConAai
                         else
                         {
                             if (String.IsNullOrEmpty(taskId))
-                                result = new OnDemandResult() { Status = 0, TaskId = session.TaskId, Version = version };
+                                result = new OnDemandResult() { Status = 0, TaskId = session.TaskId, Version = version, Tasks = null };
                             else
                             {
                                 result = new OnDemandResult() { Status = session.Status, Link = session.DownloadLink };
@@ -214,7 +226,6 @@ namespace Ser.ConAai
                             process?.Kill();
                             Thread.Sleep(1000);
                         }
-                        var workDir = PathUtils.GetFullPathFromApp(OnDemandConfig.WorkingDir);
                         SoftDelete($"{workDir}\\{taskId}");
                         session.Status = 0;
                         session.DownloadLink = null;
@@ -285,16 +296,27 @@ namespace Ser.ConAai
             return false;
         }
 
-        private OnDemandResult CreateReport(UserParameter parameter, string json)
+        private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir)
         {
             try
             {
-                var taskId = Guid.NewGuid().ToString();
+                var id = new DirectoryInfo(workDir).Name;
+                var currentWorkingDir = String.Empty;
+                var taskId = String.Empty;
+                if (!Guid.TryParse(id, out var result))
+                {
+                    taskId = Guid.NewGuid().ToString();
+                    currentWorkingDir = Path.Combine(workDir, taskId);
+                    Directory.CreateDirectory(currentWorkingDir);
+                }
+                else
+                {
+                    taskId = id;
+                    currentWorkingDir = workDir;
+                }
+
                 logger.Debug($"New Task-ID: {taskId}");
-                var workDir = PathUtils.GetFullPathFromApp(OnDemandConfig.WorkingDir);
-                var currentWorkingDir = Path.Combine(workDir, taskId);
                 logger.Debug($"TempFolder: {currentWorkingDir}");
-                Directory.CreateDirectory(currentWorkingDir);
 
                 //Caution: Personal//Me => Desktop Mode
                 if (parameter.DomainUser.UserId == "sa_scheduler" &&
@@ -304,8 +326,8 @@ namespace Ser.ConAai
                     parameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
                     var tmpsession = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
                     var qrshub = new QlikQrsHub(OnDemandConfig.Connection.ServerUri, tmpsession.Cookie);
-                    var result = qrshub.SendRequestAsync($"app/{parameter.AppId}", HttpMethod.Get).Result;
-                    var hubInfo = JsonConvert.DeserializeObject<HubInfo>(result);
+                    var qrsResult = qrshub.SendRequestAsync($"app/{parameter.AppId}", HttpMethod.Get).Result;
+                    var hubInfo = JsonConvert.DeserializeObject<HubInfo>(qrsResult);
                     if (hubInfo == null)
                         throw new Exception($"No app owner for app id {parameter.AppId} found.");
                     parameter.DomainUser = new DomainUser($"{hubInfo.Owner.UserDirectory}\\{hubInfo.Owner.UserId}");
@@ -314,7 +336,10 @@ namespace Ser.ConAai
                 //get a session
                 var session = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
                 if (session == null)
-                    logger.Error("No session generated.");
+                {
+                    logger.Error("No session cookie generated.");
+                    SoftDelete(currentWorkingDir);
+                }
 
                 //check session is running
                 if (session.Status == 1 || session.Status == 2)
@@ -332,22 +357,18 @@ namespace Ser.ConAai
                 //get engine config
                 var newEngineConfig = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
 
-                //ondemand for download link ???
-                var firstTask = newEngineConfig?.Tasks?.FirstOrDefault() ?? null;
-                if (firstTask != null)
-                    parameter.OnDemand = firstTask.Template.Output == "OnDemand";
-
                 //save template from content libary
                 FindTemplatePaths(parameter, newEngineConfig, currentWorkingDir, session.Cookie);
-               
+
                 //Save config for SER engine
-                Directory.CreateDirectory(currentWorkingDir);
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
                 var serConfig = JsonConvert.SerializeObject(newEngineConfig, Formatting.Indented);
                 File.WriteAllText(savePath, serConfig);
 
+
                 //Start SER Engine as Process
+
                 logger.Debug($"Start Engine \"{currentWorkingDir}\"");
                 var serProcess = new Process();
                 serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(OnDemandConfig.SerEnginePath);
@@ -355,6 +376,11 @@ namespace Ser.ConAai
                 serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 serProcess.Start();
                 session.ProcessId = serProcess.Id;
+
+                //Write process file
+                var procFileName = $"{Path.GetFileNameWithoutExtension(serProcess.StartInfo.FileName)}.pid";
+                File.WriteAllText(Path.Combine(currentWorkingDir, procFileName),
+                                  $"{serProcess.Id.ToString()}|{parameter.AppId.ToString()}|{parameter.DomainUser.ToString()}");
 
                 var statusThread = new Thread(() => CheckStatus(currentWorkingDir, parameter))
                 {
@@ -370,6 +396,21 @@ namespace Ser.ConAai
             }
         }
 
+        private void QlikConnectionStatus(SessionInfo session)
+        {
+            //check connection to qlik
+            while (sessionManager.ValidateSession(OnDemandConfig.Connection.ServerUri, session.Cookie))
+            {
+                //License
+                //Certificte
+                //Version
+                session.Status = -2;
+                Thread.Sleep(5000);
+            }
+
+            session.Status = 0;
+        }
+
         private Process GetProcess(int id)
         {
             try
@@ -382,11 +423,64 @@ namespace Ser.ConAai
             }
         }
 
+        private void RestoreTasks()
+        {
+            logger.Debug("Check for reload tasks");
+            var tempFolder = PathUtils.GetFullPathFromApp(OnDemandConfig.WorkingDir);
+            var tempFolders = Directory.GetDirectories(tempFolder);
+            foreach (var folder in tempFolders)
+            {
+                var files = Directory.GetFiles(folder, "*.*", SearchOption.AllDirectories);
+                if (files.Length > 0)
+                {
+                    //find pid
+                    var pidFile = files.Where(f => f.EndsWith(".pid")).FirstOrDefault();
+                    if (pidFile != null)
+                    {
+                        var contentArray = File.ReadAllText(pidFile).Trim().Split('|');
+                        if (contentArray.Length == 3)
+                        {
+                            logger.Debug($"Reload Task from folder {folder}");
+                            var pId = Convert.ToInt32(contentArray[0]);
+                            var parameter = new UserParameter()
+                            {
+                                AppId = contentArray[1],
+                                DomainUser = new DomainUser(contentArray[2]),
+                            };
+
+                            var jobJsonFile = files.Where(f => f.EndsWith("userJson.hjson")).FirstOrDefault();
+                            var json = File.ReadAllText(jobJsonFile);
+
+                            //Remove Result file for distribute
+                            var resultFile = files.Where(f => f.Contains("\\result_") && f.EndsWith(".json")).FirstOrDefault() ?? null;
+                            if (resultFile != null)
+                                SoftDelete(Path.GetDirectoryName(resultFile));
+
+                            CreateReport(parameter, json, folder);
+                        }
+                        else
+                        {
+                            logger.Debug($"The content of the process file {pidFile} is invalid.");
+                        }
+                    }
+                    else
+                    {
+                        logger.Debug($"No process file in folder {folder} found.");
+                    }
+                }
+                else
+                {
+                    Directory.Delete(folder);
+                }
+            }
+        }
+
         private void FindTemplatePaths(UserParameter parameter, SerConfig config, string workDir, Cookie cookie)
         {
             foreach (var task in config.Tasks)
             {
-                var templateUri = new Uri(task.Template.Input);
+                var report = task.Reports.FirstOrDefault() ?? null;
+                var templateUri = new Uri(report.Template.Input);
                 if (templateUri.Scheme.ToLowerInvariant() == "content")
                 {
                     var contentFiles = GetLibraryContent(OnDemandConfig.Connection.ServerUri, parameter.AppId, cookie, templateUri.Host);
@@ -395,7 +489,7 @@ namespace Ser.ConAai
                     if (filterFile != null)
                     {
                         var savePath = DownloadFile(filterFile, workDir, cookie);
-                        task.Template.Input = Path.GetFileName(savePath);
+                        report.Template.Input = Path.GetFileName(savePath);
                     }
                     else
                         logger.Warn($"No file in content library found.");
@@ -408,14 +502,14 @@ namespace Ser.ConAai
                     {
                         var libPath = libResult.qConnectionString.ToString();
                         var relPath = templateUri.LocalPath.TrimStart(new char[] { '\\', '/' }).Replace("/", "\\");
-                        task.Template.Input = $"{libPath}{relPath}";
+                        report.Template.Input = $"{libPath}{relPath}";
                     }
                     else
                         logger.Warn($"No path in connection library found.");
                 }
                 else
                 {
-                    throw new Exception($"Unknown Scheme in Filename Uri {task.Template.Input}.");
+                    throw new Exception($"Unknown Scheme in Filename Uri {report.Template.Input}.");
                 }
             }
         }
@@ -442,25 +536,50 @@ namespace Ser.ConAai
 
             var configCon = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
             logger.Debug("parse user json.");
+
+            if (!userJson.ToLowerInvariant().Contains("reports:"))
+                userJson = $"reports:[{{{userJson}}}]";
+
+            if (!userJson.ToLowerInvariant().Contains("tasks:"))
+                userJson = $"tasks:[{{{userJson}}}]";
+
+            if (!userJson.Trim().StartsWith("{"))
+                userJson = $"{{{userJson}";
+            if (!userJson.Trim().EndsWith("}"))
+                userJson = $"{userJson}}}";
+
             var jsonConfig = HjsonValue.Parse(userJson).ToString();
             var serConfig = JObject.Parse(jsonConfig);
+
+            //check for ondemand mode
+            var ondemandObject = serConfig["ondemand"] ?? null;
+            if (ondemandObject != null)
+            {
+                parameter.OnDemand = serConfig["ondemand"]?.ToObject<bool>() ?? false;
+                serConfig["ondemand"].Remove();
+            }
+
             logger.Debug("search for connections.");
-            var tasks = serConfig["tasks"].ToList() ?? new List<JToken>();
+            var tasks = serConfig["tasks"]?.ToList() ?? null;
             foreach (var task in tasks)
             {
-                //merge connections / config <> script
-                var currentConnection = task["connection"];
-                configCon.Merge(currentConnection);
-                configCon["credentials"]["privateKey"] = null;
-                configCon["credentials"]["cert"] = null;
-                task["connection"] = configCon;
-                var distribute = task["distribute"];
-                var children = distribute.Children().Children();
-                foreach (var child in children)
+                var reports = task["reports"]?.ToList() ?? null;
+                foreach (var report in reports)
                 {
-                    var connection = child["connection"] ?? null;
-                    if (connection?.ToString() == "@CONFIGCONNECTION@")
-                        child["connection"] = configCon;
+                    //merge connections / config <> script
+                    var currentConnection = report["connections"];
+                    configCon.Merge(currentConnection);
+                    configCon["credentials"]["privateKey"] = null;
+                    configCon["credentials"]["cert"] = null;
+                    report["connections"] = configCon;
+                    var distribute = report["distribute"];
+                    var children = distribute.Children().Children();
+                    foreach (var child in children)
+                    {
+                        var connection = child["connections"] ?? null;
+                        if (connection?.ToString() == "@CONFIGCONNECTION@")
+                            child["connections"] = configCon;
+                    }
                 }
             }
 
@@ -576,9 +695,9 @@ namespace Ser.ConAai
 
             //Delivery finish
             status = StartDeliveryTool(currentWorkingDir, session, parameter.OnDemand, parameter.PrivateKeyPath);
-
-            SoftDelete(currentWorkingDir);
             session.Status = status;
+            if (session.Status != 3)
+                SoftDelete(currentWorkingDir);
         }
 
         private Row GetParameter(IAsyncStreamReader<BundledRows> requestStream)
@@ -659,14 +778,14 @@ namespace Ser.ConAai
         private int Status(string workDir, int sessionStatus)
         {
             var status = GetStatus(workDir);
-            logger.Debug($"Report status {status}");
+            logger.Trace($"Report status {status}");
             switch (status)
             {
-                case "SUCCESS":
+                case EngineResult.SUCCESS:
                     return 2;
-                case "ABORT":
+                case EngineResult.ABORT:
                     return 1;
-                case "ERROR":
+                case EngineResult.ERROR:
                     logger.Error("No Report created.");
                     return -1;
                 default:
@@ -716,17 +835,18 @@ namespace Ser.ConAai
             }
         }
 
-        private string GetStatus(string workDir)
+        private EngineResult GetStatus(string workDir)
         {
             try
             {
                 var jobject = GetJsonObject(workDir);
-                return jobject?.Property("status")?.Value?.Value<string>() ?? null;
+                var result = jobject?.Property("status")?.Value?.Value<string>() ?? null;
+                return (EngineResult)Enum.Parse(typeof(EngineResult), result, true);
             }
             catch(Exception ex)
             {
-                logger.Error(ex);
-                return null;
+                logger.Info(ex);
+                return EngineResult.UNKOWN;
             }
         }
         #endregion

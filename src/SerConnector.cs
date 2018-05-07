@@ -26,6 +26,7 @@ namespace Ser.ConAai
     using PeterKottas.DotNetCore.WindowsService.Interfaces;
     using PeterKottas.DotNetCore.WindowsService.Base;
     using Q2g.HelperPem;
+    using System.Net;
     #endregion
 
     public class SSEtoSER : MicroService, IMicroService
@@ -76,17 +77,20 @@ namespace Ser.ConAai
                 var configObject = JObject.Parse(json);
 
                 //Gernerate virtual config for default values
+                var serverName = Environment.MachineName;
+                var fullQualifiedHostname = Dns.GetHostEntry(serverName).HostName;
                 var vconnection = new SerOnDemandConfig()
                 {
                     Connection = new SerConnection()
                     {
-                        ServerUri = new Uri($"https://{Environment.MachineName}/ser")
+                        ServerUri = new Uri($"https://{fullQualifiedHostname}/ser")
                     }
                 };
                 var virtConnection = JObject.Parse(JsonConvert.SerializeObject(vconnection, Formatting.Indented));
                 virtConnection.Merge(configObject);
                 var config = JsonConvert.DeserializeObject<SerOnDemandConfig>(virtConnection.ToString());
-
+                logger.Debug($"ServerUri: {config.Connection.ServerUri}");
+                
                 //check to generate certifiate and private key if not exists
                 var certFile = config?.Connection?.Credentials?.Cert ?? null;
                 certFile = PathUtils.GetFullPathFromApp(certFile);

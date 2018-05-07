@@ -103,7 +103,7 @@ namespace Ser.ConAai
             }
         }    
 
-        private bool ValidateSession(Uri serverUri, Cookie cookie)
+        public bool ValidateSession(Uri serverUri, Cookie cookie)
         {
             try
             {

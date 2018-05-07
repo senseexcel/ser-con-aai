@@ -15,6 +15,7 @@ namespace Ser.ConAai
     using System.Collections.Generic;
     using System.Net;
     using System.Text;
+    using Newtonsoft.Json;
     #endregion
 
     public class UserParameter
@@ -33,11 +34,31 @@ namespace Ser.ConAai
         #endregion
     }
 
+    public class ActiveTasks
+    {
+        public string TaskId { get; set; }
+        /// <summary>
+        ///  AppId is the ID of the App that called the SER.START command
+        ///  Context.AppId
+        /// </summary>
+        public string AppId { get; set; }
+        /// <summary>
+        /// Context.UserId
+        /// </summary>
+        public string UserId { get; set; }
+        /// <summary>
+        /// Start time from START
+        /// </summary>
+        public DateTime StartTime { get; set; }
+    }
+    
+    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
     public class OnDemandResult
     {
         #region Properties
         public int Status { get; set; }
         public string TaskId { get; set; }
+        public List<ActiveTasks> Tasks { get; set; }
         public string Link { get; set; }
         public string Log { get; set; }
         public string Version { get; set; }
