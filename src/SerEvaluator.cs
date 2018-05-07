@@ -696,7 +696,7 @@ namespace Ser.ConAai
             //Delivery finish
             status = StartDeliveryTool(currentWorkingDir, session, parameter.OnDemand, parameter.PrivateKeyPath);
             session.Status = status;
-            if (session.Status != 3)
+            if (session.Status == 3)
                 SoftDelete(currentWorkingDir);
         }
 

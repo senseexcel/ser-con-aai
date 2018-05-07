@@ -38,6 +38,7 @@ namespace Ser.ConAai
         #region Properties & Variables
         private Server server;
         private SerEvaluator serEvaluator;
+        private delegate IPHostEntry GetHostEntryHandler(string name);
         #endregion
 
         #region Private Methods
@@ -55,6 +56,26 @@ namespace Ser.ConAai
             catch (Exception ex)
             {
                 logger.Error(ex, $"The Method {nameof(CreateCertificate)} was failed.");
+            }
+        }
+
+
+
+        private string GetFullQualifiedHostname(int timeout)
+        {
+            try
+            {
+                var serverName = Environment.MachineName;
+                var result = Dns.BeginGetHostEntry(serverName, null, null);
+                if (result.AsyncWaitHandle.WaitOne(timeout, true))
+                   return Dns.EndGetHostEntry(result).HostName;
+                else
+                    return Environment.MachineName;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+                return Environment.MachineName;
             }
         }
         #endregion
@@ -77,8 +98,7 @@ namespace Ser.ConAai
                 var configObject = JObject.Parse(json);
 
                 //Gernerate virtual config for default values
-                var serverName = Environment.MachineName;
-                var fullQualifiedHostname = Dns.GetHostEntry(serverName).HostName;
+                var fullQualifiedHostname = GetFullQualifiedHostname(2000);
                 var vconnection = new SerOnDemandConfig()
                 {
                     Connection = new SerConnection()
