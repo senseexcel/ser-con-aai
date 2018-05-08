@@ -70,7 +70,6 @@ namespace Ser.ConAai
 
         #region Properties & Variables
         private static SerOnDemandConfig OnDemandConfig;
-        private static bool HasConnection = false;
         private SessionManager sessionManager;
         #endregion
 
@@ -298,6 +297,8 @@ namespace Ser.ConAai
 
         private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir)
         {
+            SessionInfo session = null;
+
             try
             {
                 var id = new DirectoryInfo(workDir).Name;
@@ -334,7 +335,7 @@ namespace Ser.ConAai
                 }
 
                 //get a session
-                var session = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
+                session = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
                 if (session == null)
                 {
                     logger.Error("No session cookie generated.");
@@ -366,9 +367,7 @@ namespace Ser.ConAai
                 var serConfig = JsonConvert.SerializeObject(newEngineConfig, Formatting.Indented);
                 File.WriteAllText(savePath, serConfig);
 
-
                 //Start SER Engine as Process
-
                 logger.Debug($"Start Engine \"{currentWorkingDir}\"");
                 var serProcess = new Process();
                 serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(OnDemandConfig.SerEnginePath);
@@ -392,6 +391,8 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
+                if (session != null)
+                    session.Status = -1;
                 throw new Exception("The report could not be created.", ex);
             }
         }
@@ -532,15 +533,19 @@ namespace Ser.ConAai
                 var cred = mainConnection.Credentials;
                 cred.Value = cookie.Value;
                 parameter.PrivateKeyPath = cred.PrivateKey;
+                cred.PrivateKey = null;
+                cred.Cert = null;
             }
 
-            var configCon = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
+            var configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
             logger.Debug("parse user json.");
 
-            if (!userJson.ToLowerInvariant().Contains("reports:"))
+            if (!userJson.ToLowerInvariant().Contains("reports:") && 
+                !userJson.ToLowerInvariant().Contains("\"reports\":"))
                 userJson = $"reports:[{{{userJson}}}]";
 
-            if (!userJson.ToLowerInvariant().Contains("tasks:"))
+            if (!userJson.ToLowerInvariant().Contains("tasks:") && 
+                !userJson.ToLowerInvariant().Contains("\"tasks\":"))
                 userJson = $"tasks:[{{{userJson}}}]";
 
             if (!userJson.Trim().StartsWith("{"))
@@ -552,12 +557,9 @@ namespace Ser.ConAai
             var serConfig = JObject.Parse(jsonConfig);
 
             //check for ondemand mode
-            var ondemandObject = serConfig["ondemand"] ?? null;
+            var ondemandObject = serConfig["onDemand"] ?? null;
             if (ondemandObject != null)
-            {
-                parameter.OnDemand = serConfig["ondemand"]?.ToObject<bool>() ?? false;
-                serConfig["ondemand"].Remove();
-            }
+                parameter.OnDemand = serConfig["onDemand"]?.ToObject<bool>() ?? false;
 
             logger.Debug("search for connections.");
             var tasks = serConfig["tasks"]?.ToList() ?? null;
@@ -566,19 +568,27 @@ namespace Ser.ConAai
                 var reports = task["reports"]?.ToList() ?? null;
                 foreach (var report in reports)
                 {
+                    var userConnections = report["connections"].ToList();
+                    var newuserConnections = new List<JToken>();
+                    foreach (var userConnection in userConnections)
+                    {
+                        var cvalue = userConnection.ToString();
+                        if (!cvalue.StartsWith("{"))
+                            cvalue = $"{{{cvalue}}}";
+                        var currentConnection = JObject.Parse(cvalue);
+                        currentConnection.Merge(configConnection);
+                        newuserConnections.Add(currentConnection);
+                    }
+
                     //merge connections / config <> script
-                    var currentConnection = report["connections"];
-                    configCon.Merge(currentConnection);
-                    configCon["credentials"]["privateKey"] = null;
-                    configCon["credentials"]["cert"] = null;
-                    report["connections"] = configCon;
+                    report["connections"] = new JArray(newuserConnections);
                     var distribute = report["distribute"];
                     var children = distribute.Children().Children();
                     foreach (var child in children)
                     {
                         var connection = child["connections"] ?? null;
                         if (connection?.ToString() == "@CONFIGCONNECTION@")
-                            child["connections"] = configCon;
+                            child["connections"] = configConnection;
                     }
                 }
             }
@@ -811,7 +821,7 @@ namespace Ser.ConAai
             var resultFile = GetResultFile(workDir);
             if (File.Exists(resultFile))
             {
-                logger.Debug($"json file {resultFile} found.");
+                logger.Trace($"json file {resultFile} found.");
                 var json = File.ReadAllText(resultFile);
                 return JsonConvert.DeserializeObject<JObject>(json);
             }
@@ -841,6 +851,7 @@ namespace Ser.ConAai
             {
                 var jobject = GetJsonObject(workDir);
                 var result = jobject?.Property("status")?.Value?.Value<string>() ?? null;
+                logger.Debug($"EngineResult: {result}");
                 return (EngineResult)Enum.Parse(typeof(EngineResult), result, true);
             }
             catch(Exception ex)
