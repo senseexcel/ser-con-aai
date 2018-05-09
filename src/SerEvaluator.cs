@@ -388,7 +388,6 @@ namespace Ser.ConAai
                     IsBackground = true
                 };
                 statusThread.Start();
-
                 return new OnDemandResult() { TaskId = taskId, Status = session?.Status ?? -1 };
             }
             catch (Exception ex)
