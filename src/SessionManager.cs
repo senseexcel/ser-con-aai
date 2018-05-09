@@ -151,7 +151,7 @@ namespace Ser.ConAai
             try
             {
                 var domainUser = parameter.DomainUser;
-                //var cert = new X509Certificate2();
+
                 lock (this)
                 {
                     var oldSession = GetExistsSession(connection.ServerUri, parameter);
