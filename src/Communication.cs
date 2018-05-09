@@ -63,5 +63,10 @@ namespace Ser.ConAai
         public string Log { get; set; }
         public string Version { get; set; }
         #endregion
+
+        public override string ToString()
+        {
+            return $"{Status}";
+        }
     }
 }

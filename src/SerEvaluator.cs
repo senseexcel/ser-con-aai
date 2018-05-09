@@ -180,6 +180,23 @@ namespace Ser.ConAai
                 string taskId = String.Empty;
                 var workDir = PathUtils.GetFullPathFromApp(OnDemandConfig.WorkingDir);
                 dynamic jsonObject;
+
+                //Caution: Personal//Me => Desktop Mode
+                if (userParameter.DomainUser.UserId == "sa_scheduler" &&
+                    userParameter.DomainUser.UserDirectory == "INTERNAL")
+                {
+                    //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
+                    userParameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
+                    logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
+                    var tmpsession = sessionManager.GetSession(OnDemandConfig.Connection, userParameter);
+                    var qrshub = new QlikQrsHub(OnDemandConfig.Connection.ServerUri, tmpsession.Cookie);
+                    var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
+                    var hubInfo = JsonConvert.DeserializeObject<HubInfo>(qrsResult);
+                    if (hubInfo == null)
+                        throw new Exception($"No app owner for app id {userParameter.AppId} found.");
+                    userParameter.DomainUser = new DomainUser($"{hubInfo.Owner.UserDirectory}\\{hubInfo.Owner.UserId}");
+                }
+
                 switch (functionCall)
                 {
                     case SerFunction.START:
@@ -319,21 +336,6 @@ namespace Ser.ConAai
                 logger.Debug($"New Task-ID: {taskId}");
                 logger.Debug($"TempFolder: {currentWorkingDir}");
 
-                //Caution: Personal//Me => Desktop Mode
-                if (parameter.DomainUser.UserId == "sa_scheduler" &&
-                    parameter.DomainUser.UserDirectory == "INTERNAL")
-                {
-                    //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
-                    parameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
-                    var tmpsession = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
-                    var qrshub = new QlikQrsHub(OnDemandConfig.Connection.ServerUri, tmpsession.Cookie);
-                    var qrsResult = qrshub.SendRequestAsync($"app/{parameter.AppId}", HttpMethod.Get).Result;
-                    var hubInfo = JsonConvert.DeserializeObject<HubInfo>(qrsResult);
-                    if (hubInfo == null)
-                        throw new Exception($"No app owner for app id {parameter.AppId} found.");
-                    parameter.DomainUser = new DomainUser($"{hubInfo.Owner.UserDirectory}\\{hubInfo.Owner.UserId}");
-                }
-
                 //get a session
                 session = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
                 if (session == null)
@@ -368,7 +370,7 @@ namespace Ser.ConAai
                 File.WriteAllText(savePath, serConfig);
 
                 //Start SER Engine as Process
-                logger.Debug($"Start Engine \"{currentWorkingDir}\"");
+                logger.Debug($"Start Engine \"{currentWorkingDir}\"...");
                 var serProcess = new Process();
                 serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(OnDemandConfig.SerEnginePath);
                 serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\"";
@@ -387,7 +389,7 @@ namespace Ser.ConAai
                 };
                 statusThread.Start();
 
-                return new OnDemandResult() { TaskId = taskId };
+                return new OnDemandResult() { TaskId = taskId, Status = session?.Status ?? -1 };
             }
             catch (Exception ex)
             {
@@ -526,18 +528,37 @@ namespace Ser.ConAai
 
         private SerConfig GetNewJson(UserParameter parameter, string userJson, string workdir, Cookie cookie)
         {
-            logger.Debug("serialize config connection.");
+            //Bearer Connection
             var mainConnection = OnDemandConfig.Connection;
+            logger.Debug("Create Bearer Connection");
+            var token = sessionManager.GetToken(parameter.DomainUser, mainConnection, TimeSpan.FromMinutes(30));
+            logger.Debug($"Token: {token}");
+            var bearerSerConnection = new SerConnection()
+            {
+                App = parameter.AppId,
+                ServerUri = OnDemandConfig.Connection.ServerUri,
+                Credentials = new SerCredentials()
+                {
+                    Type = QlikCredentialType.HEADER,
+                    Key = "Authorization",
+                    Value = $"Bearer { token }"
+                }
+            };
+
+            var bearerConnection = JToken.Parse(JsonConvert.SerializeObject(bearerSerConnection, Formatting.Indented));
+
+            logger.Debug("serialize config connection.");
             if (mainConnection.Credentials != null)
             {
                 var cred = mainConnection.Credentials;
                 cred.Value = cookie.Value;
                 parameter.PrivateKeyPath = cred.PrivateKey;
-                cred.PrivateKey = null;
-                cred.Cert = null;
             }
 
             var configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
+            configConnection["credentials"]["cert"] = null;
+            configConnection["credentials"]["privateKey"] = null;
+
             logger.Debug("parse user json.");
 
             if (!userJson.ToLowerInvariant().Contains("reports:") && 
@@ -569,19 +590,20 @@ namespace Ser.ConAai
                 foreach (var report in reports)
                 {
                     var userConnections = report["connections"].ToList();
-                    var newuserConnections = new List<JToken>();
+                    var newUserConnections = new List<JToken>();
                     foreach (var userConnection in userConnections)
                     {
                         var cvalue = userConnection.ToString();
                         if (!cvalue.StartsWith("{"))
                             cvalue = $"{{{cvalue}}}";
                         var currentConnection = JObject.Parse(cvalue);
+                        //merge connections / config <> script
                         currentConnection.Merge(configConnection);
-                        newuserConnections.Add(currentConnection);
+                        newUserConnections.Add(currentConnection);
+                        newUserConnections.Add(bearerConnection);
                     }
 
-                    //merge connections / config <> script
-                    report["connections"] = new JArray(newuserConnections);
+                    report["connections"] = new JArray(newUserConnections);
                     var distribute = report["distribute"];
                     var children = distribute.Children().Children();
                     foreach (var child in children)
@@ -593,7 +615,8 @@ namespace Ser.ConAai
                 }
             }
 
-            return JsonConvert.DeserializeObject<SerConfig>(serConfig.ToString());
+            var result = JsonConvert.DeserializeObject<SerConfig>(serConfig.ToString());
+            return result;
         }
 
         private List<JToken> GetConnections(Uri host, string appId, Cookie cookie)
@@ -851,12 +874,15 @@ namespace Ser.ConAai
             {
                 var jobject = GetJsonObject(workDir);
                 var result = jobject?.Property("status")?.Value?.Value<string>() ?? null;
-                logger.Debug($"EngineResult: {result}");
-                return (EngineResult)Enum.Parse(typeof(EngineResult), result, true);
+                logger.Trace($"EngineResult: {result}");
+                if (result != null)
+                    return (EngineResult)Enum.Parse(typeof(EngineResult), result, true);
+                else
+                    return EngineResult.UNKOWN;
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
-                logger.Info(ex);
+                logger.Error(ex);
                 return EngineResult.UNKOWN;
             }
         }
