@@ -170,7 +170,7 @@ namespace Ser.ConAai
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
 
-                logger.Debug($"Function id: {functionRequestHeader.FunctionId}");
+                logger.Debug($"Function id: {functionRequestHeader.FunctionId.ToString()}");
                 var result = new OnDemandResult() { Status = 0 };
                 var row = GetParameter(requestStream);
                 var json = GetParameterValue(0, row);
@@ -236,15 +236,20 @@ namespace Ser.ConAai
                         if (session == null)
                             throw new Exception("No existing session found.");
 
+                        SoftDelete($"{workDir}\\{taskId}");
+                        logger.Debug($"Reset Status");
+                        session.Status = 0;
+                        session.DownloadLink = null;
+
                         var process = GetProcess(session.ProcessId);
                         if (process != null)
                         {
+                            logger.Debug($"Stop Process with ID: {process?.Id} and Name: {process?.ProcessName}");
                             process?.Kill();
+                            session.ProcessId = 0;
                             Thread.Sleep(1000);
                         }
-                        SoftDelete($"{workDir}\\{taskId}");
-                        session.Status = 0;
-                        session.DownloadLink = null;
+                        
                         result = new OnDemandResult() { Status = session.Status };
                         break; 
                     #endregion
@@ -291,6 +296,7 @@ namespace Ser.ConAai
 
             if (requestUri != null)
             {
+                logger.Debug("Validate Thumbprints...");
                 var thumbprints = OnDemandConfig.Connection.SslValidThumbprints;
                 foreach (var item in thumbprints)
                 {
@@ -340,8 +346,8 @@ namespace Ser.ConAai
                 session = sessionManager.GetSession(OnDemandConfig.Connection, parameter);
                 if (session == null)
                 {
-                    logger.Error("No session cookie generated.");
                     SoftDelete(currentWorkingDir);
+                    throw new Exception("No session cookie generated.");
                 }
 
                 //check session is running
@@ -417,7 +423,7 @@ namespace Ser.ConAai
         {
             try
             {
-                return Process.GetProcessById(id);
+                return Process.GetProcesses()?.FirstOrDefault(p => p.Id == id) ?? null;
             }
             catch
             {
@@ -773,8 +779,11 @@ namespace Ser.ConAai
         {
             try
             {
-                Directory.Delete(folder, true);
-                logger.Debug($"work dir {folder} deleted.");
+                if (Directory.Exists(folder))
+                {
+                    Directory.Delete(folder, true);
+                    logger.Debug($"work dir {folder} deleted.");
+                }
                 return true;
             }
             catch (Exception ex)
@@ -844,11 +853,17 @@ namespace Ser.ConAai
             if (File.Exists(resultFile))
             {
                 logger.Trace($"json file {resultFile} found.");
-                var json = File.ReadAllText(resultFile);
-                return JsonConvert.DeserializeObject<JObject>(json);
+                using (var fs = new FileStream(resultFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    using (var sr = new StreamReader(fs, true))
+                    {
+                        var json = sr.ReadToEnd();
+                        return JsonConvert.DeserializeObject<JObject>(json);
+                    } 
+                }
             }
 
-            logger.Error($"json file {resultFile} not found.");
+            logger.Trace($"json file {resultFile} not found.");
             return null;
         }
 

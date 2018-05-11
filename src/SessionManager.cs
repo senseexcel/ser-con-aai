@@ -151,7 +151,6 @@ namespace Ser.ConAai
             try
             {
                 var domainUser = parameter.DomainUser;
-
                 lock (this)
                 {
                     var oldSession = GetExistsSession(connection.ServerUri, parameter);
