@@ -26,6 +26,7 @@ namespace Ser.ConAai
     using PeterKottas.DotNetCore.WindowsService.Interfaces;
     using PeterKottas.DotNetCore.WindowsService.Base;
     using Q2g.HelperPem;
+    using System.Net;
     #endregion
 
     public class SSEtoSER : MicroService, IMicroService
@@ -37,6 +38,7 @@ namespace Ser.ConAai
         #region Properties & Variables
         private Server server;
         private SerEvaluator serEvaluator;
+        private delegate IPHostEntry GetHostEntryHandler(string name);
         #endregion
 
         #region Private Methods
@@ -54,6 +56,26 @@ namespace Ser.ConAai
             catch (Exception ex)
             {
                 logger.Error(ex, $"The Method {nameof(CreateCertificate)} was failed.");
+            }
+        }
+
+
+
+        private string GetFullQualifiedHostname(int timeout)
+        {
+            try
+            {
+                var serverName = Environment.MachineName;
+                var result = Dns.BeginGetHostEntry(serverName, null, null);
+                if (result.AsyncWaitHandle.WaitOne(timeout, true))
+                   return Dns.EndGetHostEntry(result).HostName;
+                else
+                    return Environment.MachineName;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+                return Environment.MachineName;
             }
         }
         #endregion
@@ -76,17 +98,19 @@ namespace Ser.ConAai
                 var configObject = JObject.Parse(json);
 
                 //Gernerate virtual config for default values
+                var fullQualifiedHostname = GetFullQualifiedHostname(2000);
                 var vconnection = new SerOnDemandConfig()
                 {
                     Connection = new SerConnection()
                     {
-                        ServerUri = new Uri($"https://{Environment.MachineName}/ser")
+                        ServerUri = new Uri($"https://{fullQualifiedHostname}/ser")
                     }
                 };
                 var virtConnection = JObject.Parse(JsonConvert.SerializeObject(vconnection, Formatting.Indented));
                 virtConnection.Merge(configObject);
                 var config = JsonConvert.DeserializeObject<SerOnDemandConfig>(virtConnection.ToString());
-
+                logger.Debug($"ServerUri: {config.Connection.ServerUri}");
+                
                 //check to generate certifiate and private key if not exists
                 var certFile = config?.Connection?.Credentials?.Cert ?? null;
                 certFile = PathUtils.GetFullPathFromApp(certFile);

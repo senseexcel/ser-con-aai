@@ -103,7 +103,7 @@ namespace Ser.ConAai
             }
         }    
 
-        private bool ValidateSession(Uri serverUri, Cookie cookie)
+        public bool ValidateSession(Uri serverUri, Cookie cookie)
         {
             try
             {
@@ -129,12 +129,28 @@ namespace Ser.ConAai
             return result;
         }
 
+        public string GetToken(DomainUser domainUser, SerConnection connection, TimeSpan untilValid)
+        {
+            var cert = new X509Certificate2();
+            var certPath = PathUtils.GetFullPathFromApp(connection.Credentials.Cert);
+            logger.Debug($"CERTPATH: {certPath}");
+            var privateKey = PathUtils.GetFullPathFromApp(connection.Credentials.PrivateKey);
+            logger.Debug($"PRIVATEKEY: {privateKey}");
+            cert = cert.LoadPem(certPath, privateKey);
+            var claims = new[]
+            {
+                    new Claim("UserDirectory",  domainUser.UserDirectory),
+                    new Claim("UserId", domainUser.UserId),
+                    new Claim("Attributes", "[SerOnDemand]")
+                }.ToList();
+            return cert.GenerateQlikJWToken(claims, untilValid);
+        }
+
         public SessionInfo GetSession(SerConnection connection, UserParameter parameter)
         {
             try
             {
                 var domainUser = parameter.DomainUser;
-                var cert = new X509Certificate2();
                 lock (this)
                 {
                     var oldSession = GetExistsSession(connection.ServerUri, parameter);
@@ -147,18 +163,7 @@ namespace Ser.ConAai
                     }
                 }
 
-                var certPath = PathUtils.GetFullPathFromApp(connection.Credentials.Cert);
-                logger.Debug($"CERTPATH: {certPath}");
-                var privateKey = PathUtils.GetFullPathFromApp(connection.Credentials.PrivateKey);
-                logger.Debug($"PRIVATEKEY: {privateKey}");
-                cert = cert.LoadPem(certPath, privateKey);
-                var claims = new[]
-                {
-                    new Claim("UserDirectory",  domainUser.UserDirectory),
-                    new Claim("UserId", domainUser.UserId),
-                    new Claim("Attributes", "[SerOnDemand]")
-                }.ToList();
-                var token = cert.GenerateQlikJWToken(claims, TimeSpan.FromMinutes(20));
+                var token = GetToken(domainUser, connection, TimeSpan.FromMinutes(20));
                 logger.Debug($"Generate token {token}");
                 var cookie = GetJWTSession(connection.ServerUri, token, connection.Credentials.Key);
                 logger.Debug($"Generate cookie {cookie?.Name} - {cookie?.Value}");
