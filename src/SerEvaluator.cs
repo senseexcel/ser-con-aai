@@ -71,6 +71,7 @@ namespace Ser.ConAai
         #region Properties & Variables
         private static SerOnDemandConfig OnDemandConfig;
         private SessionManager sessionManager;
+        private PackageInfos packageVersions = new PackageInfos();
         #endregion
 
         #region Connstructor & Dispose
@@ -79,6 +80,8 @@ namespace Ser.ConAai
             OnDemandConfig = config;
             sessionManager = new SessionManager();            
             ServicePointManager.ServerCertificateValidationCallback += ValidateRemoteCertificate;
+            packageVersions.DistibuteVersion = Distribute.DistributeVersion;
+            packageVersions.ConnectorVersion = GitVersionInformation.InformationalVersion;
             //RestoreTasks();
         }
 
@@ -200,11 +203,11 @@ namespace Ser.ConAai
                 switch (functionCall)
                 {
                     case SerFunction.START:
-                        result = CreateReport(userParameter, json, workDir);
+                        result = CreateReport(userParameter, json, workDir, packageVersions);
                         break;
                     case SerFunction.STATUS:
                         #region Status
-                        var version = GitVersionInformation.InformationalVersion;
+                        var versions = packageVersions;
                         if (!String.IsNullOrEmpty(json))
                         {
                             jsonObject = JObject.Parse(json);
@@ -215,12 +218,12 @@ namespace Ser.ConAai
                         if (session == null)
                         {
                             logger.Debug($"No existing session with id {taskId} found.");
-                            result = new OnDemandResult() { Status = 0, Version = version };
+                            result = new OnDemandResult() { Status = 0, Versions = packageVersions };
                         }
                         else
                         {
                             if (String.IsNullOrEmpty(taskId))
-                                result = new OnDemandResult() { Status = 0, TaskId = session.TaskId, Version = version, Tasks = null };
+                                result = new OnDemandResult() { Status = 0, TaskId = session.TaskId, Versions = packageVersions, Tasks = null };
                             else
                             {
                                 result = new OnDemandResult() { Status = session.Status, Link = session.DownloadLink };
@@ -318,7 +321,7 @@ namespace Ser.ConAai
             return false;
         }
 
-        private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir)
+        private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir, PackageInfos packageVersions)
         {
             SessionInfo session = null;
 
@@ -362,7 +365,7 @@ namespace Ser.ConAai
                 session.DownloadLink = null;
                 session.Status = 1;
                 session.TaskId = taskId;
-
+                
                 //get engine config
                 var newEngineConfig = GetNewJson(parameter, json, currentWorkingDir);
 
@@ -375,10 +378,15 @@ namespace Ser.ConAai
                 var serConfig = JsonConvert.SerializeObject(newEngineConfig, Formatting.Indented);
                 File.WriteAllText(savePath, serConfig);
 
+                //Set Package Versions
+                var enginePath = PathUtils.GetFullPathFromApp(OnDemandConfig.SerEnginePath);
+                var fileInfo = FileVersionInfo.GetVersionInfo(enginePath);
+                packageVersions.EngineVersion = fileInfo.ProductVersion;
+
                 //Start SER Engine as Process
                 logger.Debug($"Start Engine \"{currentWorkingDir}\"...");
                 var serProcess = new Process();
-                serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(OnDemandConfig.SerEnginePath);
+                serProcess.StartInfo.FileName = enginePath;
                 serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\"";
                 serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 serProcess.Start();
@@ -431,7 +439,7 @@ namespace Ser.ConAai
             }
         }
 
-        private void RestoreTasks()
+        private void RestoreTasks(PackageInfos packageVersions)
         {
             logger.Debug("Check for reload tasks");
             var tempFolder = PathUtils.GetFullPathFromApp(OnDemandConfig.WorkingDir);
@@ -464,7 +472,7 @@ namespace Ser.ConAai
                             if (resultFile != null)
                                 SoftDelete(Path.GetDirectoryName(resultFile));
 
-                            CreateReport(parameter, json, folder);
+                            CreateReport(parameter, json, folder, packageVersions);
                         }
                         else
                         {

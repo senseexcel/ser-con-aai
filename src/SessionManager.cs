@@ -28,6 +28,15 @@ namespace Ser.ConAai
     using Q2g.HelperQrs;
     #endregion
 
+    public class PackageInfos
+    {
+        #region Properties
+        public string EngineVersion { get; set; }
+        public string ConnectorVersion { get; set; }
+        public string DistibuteVersion { get; set; }
+        #endregion
+    }
+
     public class SessionInfo
     {
         #region Properties

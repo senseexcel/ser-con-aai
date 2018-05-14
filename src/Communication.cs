@@ -61,7 +61,7 @@ namespace Ser.ConAai
         public List<ActiveTasks> Tasks { get; set; }
         public string Link { get; set; }
         public string Log { get; set; }
-        public string Version { get; set; }
+        public PackageInfos Versions { get; set; }
         #endregion
 
         public override string ToString()

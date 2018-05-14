@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -17,11 +17,11 @@
   <Choose>
     <When Condition="'$(Configuration)' == 'Release'">
       <PropertyGroup>
-        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
       </PropertyGroup>
       <ItemGroup>
         <PackageReference Include="SerApi" Version="3.0.0" />
-        <PackageReference Include="SerDistribute" Version="2.0.1" />
+        <PackageReference Include="SerDistribute" Version="2.0.2" />
         <PackageReference Include="Q2gHelperPem" Version="1.0.6" />
         <PackageReference Include="Q2gHelperQrs" Version="1.0.12" />
       </ItemGroup>
