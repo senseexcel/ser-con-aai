@@ -170,12 +170,12 @@ namespace Ser.ConAai
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
 
-                logger.Debug($"Function id: {functionRequestHeader.FunctionId.ToString()}");
                 var result = new OnDemandResult() { Status = 0 };
                 var row = GetParameter(requestStream);
                 var json = GetParameterValue(0, row);
 
                 var functionCall = (SerFunction)functionRequestHeader.FunctionId;
+                logger.Debug($"Function id: {functionCall}");
                 SessionInfo session = null;
                 string taskId = String.Empty;
                 var workDir = PathUtils.GetFullPathFromApp(OnDemandConfig.WorkingDir);
@@ -364,10 +364,10 @@ namespace Ser.ConAai
                 session.TaskId = taskId;
 
                 //get engine config
-                var newEngineConfig = GetNewJson(parameter, json, currentWorkingDir, session.Cookie);
+                var newEngineConfig = GetNewJson(parameter, json, currentWorkingDir);
 
                 //save template from content libary
-                FindTemplatePaths(parameter, newEngineConfig, currentWorkingDir, session.Cookie);
+                FindTemplatePaths(parameter, newEngineConfig, currentWorkingDir);
 
                 //Save config for SER engine
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
@@ -483,8 +483,9 @@ namespace Ser.ConAai
             }
         }
 
-        private void FindTemplatePaths(UserParameter parameter, SerConfig config, string workDir, Cookie cookie)
+        private void FindTemplatePaths(UserParameter parameter, SerConfig config, string workDir)
         {
+            var cookie = parameter.ConnectCookie;
             foreach (var task in config.Tasks)
             {
                 var report = task.Reports.FirstOrDefault() ?? null;
@@ -531,7 +532,7 @@ namespace Ser.ConAai
             return savePath;
         }
 
-        private SerConfig GetNewJson(UserParameter parameter, string userJson, string workdir, Cookie cookie)
+        private SerConfig GetNewJson(UserParameter parameter, string userJson, string workdir)
         {
             //Bearer Connection
             var mainConnection = OnDemandConfig.Connection;
@@ -556,7 +557,7 @@ namespace Ser.ConAai
             if (mainConnection.Credentials != null)
             {
                 var cred = mainConnection.Credentials;
-                cred.Value = cookie.Value;
+                cred.Value = parameter.ConnectCookie.Value;
                 parameter.PrivateKeyPath = cred.PrivateKey;
             }
 
@@ -616,6 +617,14 @@ namespace Ser.ConAai
                         var connection = child["connections"] ?? null;
                         if (connection?.ToString() == "@CONFIGCONNECTION@")
                             child["connections"] = configConnection;
+
+                        var childProp = child.Parent as JProperty;
+                        if (childProp?.Name == "hub")
+                        {
+                            var hubOwner = child["owner"] ?? null;
+                            if (hubOwner == null)
+                                child["owner"] = parameter.DomainUser.ToString();
+                        }
                     }
                 }
             }
