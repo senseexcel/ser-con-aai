@@ -18,13 +18,14 @@ namespace Ser.ConAai
     using System;
     using System.IO;
     using System.Linq;
+    using System.Net;
     using System.Security.Cryptography.X509Certificates;
     #endregion
 
     class Program
     {
         #region Logger
-        private static Logger logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
         static void Main(string[] args)
@@ -81,6 +82,31 @@ namespace Ser.ConAai
             }
 
             logger.Factory.Configuration = new XmlLoggingConfiguration(path, false);
+        }
+
+        private static void InstallTest()
+        {
+            var manager = new SessionManager();
+            var certPath = @"C:\Users\MBerthold\AppData\Roaming\senseexcel\reporting\serconnector.pem";
+            var session = manager.GetSession(new Api.SerConnection()
+            {
+                ServerUri = new Uri("http://nb-fc-208000/ser"),
+                App = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd",
+                Credentials = new Api.SerCredentials()
+                {
+                    Cert = certPath,
+                    PrivateKey = @"C:\Users\MBerthold\AppData\Roaming\senseexcel\reporting\serconnector_private.key",
+                    Key = "X-Qlik-Session-ser",
+                }
+            }, new UserParameter() { AppId = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd", DomainUser = new Api.DomainUser("nb-fc-208000\\mberthold") });
+            var installer = new AutoInstaller(session.ConnectUri, session.Cookie);
+            installer.Run(new InstallParameter()
+            {
+                Prefix = "demo",
+                CookieHeaderName = "X-Qlik-Session-demo",
+                CertificatePath = certPath,
+                ExtentionPath = @"C:\Users\MBerthold\Downloads\ser-ext-ondemand.zip"
+            });
         }
         #endregion
     }

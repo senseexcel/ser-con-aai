@@ -16,6 +16,11 @@ namespace Ser.ConAai
     using System.Net;
     using System.Text;
     using Newtonsoft.Json;
+    using System.Reflection;
+    using Distribute;
+    using Q2g.HelperQrs;
+    using Q2g.HelperPem;
+    using Newtonsoft.Json.Serialization;
     #endregion
 
     public class UserParameter
@@ -51,8 +56,9 @@ namespace Ser.ConAai
         /// </summary>
         public DateTime StartTime { get; set; }
     }
-    
-    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
+
+    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
+                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
     public class OnDemandResult
     {
         #region Properties
@@ -61,7 +67,7 @@ namespace Ser.ConAai
         public List<ActiveTasks> Tasks { get; set; }
         public string Link { get; set; }
         public string Log { get; set; }
-        public PackageInfos Versions { get; set; }
+        public List<VersionInfo> Versions { get; set; }
         #endregion
 
         public override string ToString()

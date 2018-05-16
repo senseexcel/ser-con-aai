@@ -11,7 +11,7 @@
     public class PathUtils
     {
         #region Logger
-        private static Logger logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
         public static string GetFullPathFromApp(string path)

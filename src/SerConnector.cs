@@ -32,7 +32,7 @@ namespace Ser.ConAai
     public class SSEtoSER : MicroService, IMicroService
     {
         #region Logger
-        private static Logger logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
         #region Properties & Variables
@@ -58,26 +58,6 @@ namespace Ser.ConAai
                 logger.Error(ex, $"The Method {nameof(CreateCertificate)} was failed.");
             }
         }
-
-
-
-        private string GetFullQualifiedHostname(int timeout)
-        {
-            try
-            {
-                var serverName = Environment.MachineName;
-                var result = Dns.BeginGetHostEntry(serverName, null, null);
-                if (result.AsyncWaitHandle.WaitOne(timeout, true))
-                   return Dns.EndGetHostEntry(result).HostName;
-                else
-                    return Environment.MachineName;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex);
-                return Environment.MachineName;
-            }
-        }
         #endregion
 
         #region Public Methods
@@ -98,7 +78,7 @@ namespace Ser.ConAai
                 var configObject = JObject.Parse(json);
 
                 //Gernerate virtual config for default values
-                var fullQualifiedHostname = GetFullQualifiedHostname(2000);
+                var fullQualifiedHostname = ServerUtils.GetFullQualifiedHostname(2000);
                 var vconnection = new SerOnDemandConfig()
                 {
                     Connection = new SerConnection()
@@ -110,7 +90,11 @@ namespace Ser.ConAai
                 virtConnection.Merge(configObject);
                 var config = JsonConvert.DeserializeObject<SerOnDemandConfig>(virtConnection.ToString());
                 logger.Debug($"ServerUri: {config.Connection.ServerUri}");
-                
+
+                //Read Assembly versions
+                var enginePath = PathUtils.GetFullPathFromApp(config.SerEnginePath);
+                config.PackageVersions = VersionUtils.ReadAssemblyVersions(enginePath);
+
                 //check to generate certifiate and private key if not exists
                 var certFile = config?.Connection?.Credentials?.Cert ?? null;
                 certFile = PathUtils.GetFullPathFromApp(certFile);
@@ -123,7 +107,7 @@ namespace Ser.ConAai
 
                     CreateCertificate(certFile, privateKeyFile);
                 }
-                
+
                 logger.Info($"Version: {Ser.ConAai.GitVersionInformation.InformationalVersion}");
                 logger.Debug($"Plattfom: {config.OS}");
                 logger.Debug($"Architecture: {config.Architecture}");

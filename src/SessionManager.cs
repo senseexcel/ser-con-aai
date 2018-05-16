@@ -28,15 +28,6 @@ namespace Ser.ConAai
     using Q2g.HelperQrs;
     #endregion
 
-    public class PackageInfos
-    {
-        #region Properties
-        public string EngineVersion { get; set; }
-        public string ConnectorVersion { get; set; }
-        public string DistibuteVersion { get; set; }
-        #endregion
-    }
-
     public class SessionInfo
     {
         #region Properties
@@ -54,7 +45,7 @@ namespace Ser.ConAai
     public class SessionManager
     {
         #region Logger
-        private static Logger logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
         #region Variables & Properties
