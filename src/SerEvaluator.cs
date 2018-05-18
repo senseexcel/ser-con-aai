@@ -362,7 +362,7 @@ namespace Ser.ConAai
                 logger.Debug($"New Task-ID: {taskId}");
                 logger.Debug($"TempFolder: {currentWorkingDir}");
 
-                //check for running task
+                //check for task is already running
                 var task = taskManager.GetRunningTask(taskId);
                 if(task != null)
                 {
