@@ -84,11 +84,12 @@ namespace Ser.ConAai
             logger.Factory.Configuration = new XmlLoggingConfiguration(path, false);
         }
 
+        //NUR ZUM DEBUGGEN DES INSTALL-PROZESSES
         private static void InstallTest()
         {
-            var manager = new SessionManager();
+            var manager = new TaskManager();
             var certPath = @"C:\Users\MBerthold\AppData\Roaming\senseexcel\reporting\serconnector.pem";
-            var session = manager.GetSession(new Api.SerConnection()
+            var task = manager.GetSession(new Api.SerConnection()
             {
                 ServerUri = new Uri("http://nb-fc-208000/ser"),
                 App = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd",
@@ -98,8 +99,12 @@ namespace Ser.ConAai
                     PrivateKey = @"C:\Users\MBerthold\AppData\Roaming\senseexcel\reporting\serconnector_private.key",
                     Key = "X-Qlik-Session-ser",
                 }
-            }, new UserParameter() { AppId = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd", DomainUser = new Api.DomainUser("nb-fc-208000\\mberthold") });
-            var installer = new AutoInstaller(session.ConnectUri, session.Cookie);
+            }, new UserParameter() { AppId = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd",
+               DomainUser = new Api.DomainUser("nb-fc-208000\\mberthold") });
+
+            var test = manager.GetAllTaskForAppId("dfacdb29-6cee-4cc6-b8b1-7a89014394dd");
+
+            var installer = new AutoInstaller(task.ConnectUri, task.Cookie);
             installer.Run(new InstallParameter()
             {
                 Prefix = "demo",

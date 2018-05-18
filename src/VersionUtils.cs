@@ -15,13 +15,12 @@ namespace Ser.ConAai
     {
         public string Name { get; set; }
         public string Version { get; set; }
-        public string FileVersion { get; set; }
 
         public override string ToString()
         {
             return Name;
         }
-    }
+}
 
     public class VersionUtils
     {
@@ -33,14 +32,11 @@ namespace Ser.ConAai
                 var title = assembly.GetCustomAttribute(type) as AssemblyTitleAttribute;
                 type = typeof(AssemblyInformationalVersionAttribute);
                 var gitVersion = assembly.GetCustomAttribute(type) as AssemblyInformationalVersionAttribute;
-                type = typeof(AssemblyFileVersionAttribute);
-                var fileVersion = assembly.GetCustomAttribute(type) as AssemblyFileVersionAttribute;
 
                 return new VersionInfo()
                 {
                     Name = title?.Title,
                     Version = gitVersion?.InformationalVersion,
-                    FileVersion = fileVersion?.Version,
                 };
             }
             catch (Exception ex)

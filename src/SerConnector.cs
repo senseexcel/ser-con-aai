@@ -94,6 +94,8 @@ namespace Ser.ConAai
                 //Read Assembly versions
                 var enginePath = PathUtils.GetFullPathFromApp(config.SerEnginePath);
                 config.PackageVersions = VersionUtils.ReadAssemblyVersions(enginePath);
+                foreach (var package in config.PackageVersions)
+                    logger.Debug($"Assembly: {package.Name} / {package.Version}");
 
                 //check to generate certifiate and private key if not exists
                 var certFile = config?.Connection?.Credentials?.Cert ?? null;
@@ -108,7 +110,6 @@ namespace Ser.ConAai
                     CreateCertificate(certFile, privateKeyFile);
                 }
 
-                logger.Info($"Version: {Ser.ConAai.GitVersionInformation.InformationalVersion}");
                 logger.Debug($"Plattfom: {config.OS}");
                 logger.Debug($"Architecture: {config.Architecture}");
                 logger.Debug($"Framework: {config.Framework}");

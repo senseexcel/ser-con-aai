@@ -26,37 +26,28 @@ namespace Ser.ConAai
     using System.Security.Claims;
     using Newtonsoft.Json;
     using Q2g.HelperQrs;
+    using Newtonsoft.Json.Linq;
     #endregion
 
     public class SessionInfo
     {
         #region Properties
         public Cookie Cookie { get; set; }
-        public DomainUser User { get; set; }
         public Uri ConnectUri { get; set; }
-        public int ProcessId { get; set; }
-        public string DownloadLink { get; set; }
-        public int Status { get; set; }
         public string AppId { get; set; }
-        public string TaskId { get; set; }
+        public string UserId { get; set; }
+        public List<ActiveTask> ActiveTasks { get; set; } = new List<ActiveTask>();
         #endregion
     }
 
-    public class SessionManager
+    public class TaskManager
     {
         #region Logger
         private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
         #region Variables & Properties
-        private List<SessionInfo> sessionList;
-        #endregion
-
-        #region Constructor
-        public SessionManager()
-        {
-            sessionList = new List<SessionInfo>();
-        }
+        public List<SessionInfo> Sessions { get; private set; } = new List<SessionInfo>();
         #endregion
 
         #region Private Methods
@@ -101,9 +92,9 @@ namespace Ser.ConAai
                 logger.Error(ex, "Can´t create session cookie with JWT.");
                 return null;
             }
-        }    
+        }
 
-        public bool ValidateSession(Uri serverUri, Cookie cookie)
+        private bool ValidateSession(Uri serverUri, Cookie cookie)
         {
             try
             {
@@ -121,45 +112,119 @@ namespace Ser.ConAai
         #endregion
 
         #region Public Methods
-        public SessionInfo GetExistsSession(Uri connectUri, UserParameter parameter)
+        public List<SessionInfo> GetAllTaskForAppId(string appId)
         {
-            var result = sessionList?.FirstOrDefault(u => u.ConnectUri.OriginalString == connectUri.OriginalString
-                                                          && u.User.ToString() == parameter.DomainUser.ToString() 
-                                                          && u.AppId == parameter.AppId) ?? null;
-            return result;
+            return Sessions.Where(l => l.AppId == appId).ToList();
+        }
+
+        public List<SessionInfo> GetAllTasksForUser(Uri serverUri, Cookie cookie, DomainUser user)
+        {
+            var qrsHub = new QlikQrsHub(serverUri, cookie);
+            var results = qrsHub.SendRequestAsync("app/full", HttpMethod.Get).Result;
+            if (results == null)
+                return new List<SessionInfo>();
+
+            var apps = JArray.Parse(results).ToList();
+            var taskList = new List<SessionInfo>();
+            foreach (var task in Sessions)
+            {
+                foreach (var app in apps)
+                {
+                    var owner = JsonConvert.DeserializeObject<Owner>(app["owner"].ToString());
+                    if (owner.ToString() == user.ToString())
+                    {
+                        //task.AppName = app["name"].ToString() ?? null;
+                        taskList.Add(task);
+                    }
+                }
+            }
+
+            return taskList;
         }
 
         public string GetToken(DomainUser domainUser, SerConnection connection, TimeSpan untilValid)
         {
-            var cert = new X509Certificate2();
-            var certPath = PathUtils.GetFullPathFromApp(connection.Credentials.Cert);
-            logger.Debug($"CERTPATH: {certPath}");
-            var privateKey = PathUtils.GetFullPathFromApp(connection.Credentials.PrivateKey);
-            logger.Debug($"PRIVATEKEY: {privateKey}");
-            cert = cert.LoadPem(certPath, privateKey);
-            var claims = new[]
+            try
             {
+                var cert = new X509Certificate2();
+                var certPath = PathUtils.GetFullPathFromApp(connection.Credentials.Cert);
+                logger.Debug($"CERTPATH: {certPath}");
+                var privateKey = PathUtils.GetFullPathFromApp(connection.Credentials.PrivateKey);
+                logger.Debug($"PRIVATEKEY: {privateKey}");
+                cert = cert.LoadPem(certPath, privateKey);
+                var claims = new[]
+                {
                     new Claim("UserDirectory",  domainUser.UserDirectory),
                     new Claim("UserId", domainUser.UserId),
                     new Claim("Attributes", "[SerOnDemand]")
                 }.ToList();
-            return cert.GenerateQlikJWToken(claims, untilValid);
+                return cert.GenerateQlikJWToken(claims, untilValid);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+                return null;
+            }
         }
 
-        public SessionInfo GetSession(SerConnection connection, UserParameter parameter)
+        public ActiveTask GetRunningTask(string taskId)
+        {
+            try
+            {
+                foreach (var session in Sessions)
+                {
+                    var task = session?.ActiveTasks?.FirstOrDefault(t => t.TaskId == taskId) ?? null;
+                    if (task != null)
+                        return task;
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+                return null;
+            }
+        }
+
+        public void RemoveTask(string taskId)
+        {
+            try
+            {
+                foreach (var session in Sessions)
+                {
+                    var task = session?.ActiveTasks?.FirstOrDefault(t => t.TaskId == taskId) ?? null;
+                    if (task != null)
+                        session.ActiveTasks.Remove(task);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+            }
+        }
+
+        public SessionInfo GetSession(SerConnection connection, UserParameter parameter, ActiveTask newTask = null)
         {
             try
             {
                 var domainUser = parameter.DomainUser;
                 lock (this)
                 {
-                    var oldSession = GetExistsSession(connection.ServerUri, parameter);
+                    var uri = connection.ServerUri;
+                    var oldSession = Sessions?.FirstOrDefault(u => u.ConnectUri.OriginalString == uri.OriginalString
+                                                          && u.UserId == parameter.DomainUser.ToString()
+                                                          && u.AppId == parameter.AppId) ?? null;
                     if (oldSession != null)
                     {
                         var result = ValidateSession(oldSession.ConnectUri, oldSession.Cookie);
                         if (result)
+                        {
+                            if (newTask != null)
+                                oldSession.ActiveTasks.Add(newTask);
                             return oldSession;
-                        sessionList.Remove(oldSession);
+                        }
+                        Sessions.Remove(oldSession);
                     }
                 }
 
@@ -172,11 +237,13 @@ namespace Ser.ConAai
                     var sessionInfo = new SessionInfo()
                     {
                         Cookie = cookie,
-                        User = domainUser,
                         ConnectUri = connection.ServerUri,
-                        AppId = parameter.AppId
+                        AppId = parameter.AppId,
+                        UserId = parameter.DomainUser.ToString(),
                     };
-                    sessionList.Add(sessionInfo);
+                    if (newTask != null)
+                        sessionInfo.ActiveTasks.Add(newTask);
+                    Sessions.Add(sessionInfo);
                     return sessionInfo;
                 }
 

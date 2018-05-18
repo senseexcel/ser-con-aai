@@ -23,6 +23,8 @@ namespace Ser.ConAai
     using Newtonsoft.Json.Serialization;
     #endregion
 
+    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
+                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
     public class UserParameter
     {
         #region Properties
@@ -39,22 +41,17 @@ namespace Ser.ConAai
         #endregion
     }
 
-    public class ActiveTasks
+    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
+                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
+    public class ActiveTask
     {
+        public int ProcessId { get; set; }
+        public string DownloadLink { get; set; }
+        public int Status { get; set; }
         public string TaskId { get; set; }
-        /// <summary>
-        ///  AppId is the ID of the App that called the SER.START command
-        ///  Context.AppId
-        /// </summary>
-        public string AppId { get; set; }
-        /// <summary>
-        /// Context.UserId
-        /// </summary>
-        public string UserId { get; set; }
-        /// <summary>
-        /// Start time from START
-        /// </summary>
         public DateTime StartTime { get; set; }
+        public string AppName { get; set; }
+        public string AppId { get; set; }
     }
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
@@ -64,9 +61,9 @@ namespace Ser.ConAai
         #region Properties
         public int Status { get; set; }
         public string TaskId { get; set; }
-        public List<ActiveTasks> Tasks { get; set; }
         public string Link { get; set; }
         public string Log { get; set; }
+        public List<SessionInfo> Tasks { get; set; }
         public List<VersionInfo> Versions { get; set; }
         #endregion
 
