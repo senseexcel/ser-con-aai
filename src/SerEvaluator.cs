@@ -773,7 +773,7 @@ namespace Ser.ConAai
             if (task.Status != 2)
                 return;
 
-            //Delivery finish
+            //Delivery
             status = StartDeliveryTool(currentWorkingDir, task, parameter.OnDemand, parameter.PrivateKeyPath);
             task.Status = status;
         }
