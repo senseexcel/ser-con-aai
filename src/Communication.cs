@@ -52,6 +52,7 @@ namespace Ser.ConAai
         public DateTime StartTime { get; set; }
         public string AppName { get; set; }
         public string AppId { get; set; }
+        public string UserId { get; set; }
     }
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,

@@ -379,6 +379,7 @@ namespace Ser.ConAai
                     TaskId = taskId,
                     StartTime = DateTime.Now,
                     AppId = parameter.AppId,
+                    UserId = parameter.DomainUser.ToString(),
                 };
 
                 //get a session
