@@ -80,7 +80,7 @@
     </PackageReference>
     <PackageReference Include="Hjson" Version="3.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
-    <PackageReference Include="NLog" Version="5.0.0-beta11" />
+    <PackageReference Include="NLog" Version="4.5.4" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.6" />
     <PackageReference Include="qlik-sseapi" Version="1.1.1" />
     <PackageReference Include="Reinforced.Typings" Version="1.4.92" />
