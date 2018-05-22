@@ -974,8 +974,7 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
-                logger.Error(ex);
-                return null;
+                throw ex;
             }
         }
         #endregion
