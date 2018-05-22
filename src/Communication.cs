@@ -38,6 +38,7 @@ namespace Ser.ConAai
         public string BookmarkId { get; set; }
         public bool OnDemand { get; set; }
         public string PrivateKeyPath { get; set; }
+        public int CleanupTimeout { get; set; } = 20000;
         #endregion
     }
 

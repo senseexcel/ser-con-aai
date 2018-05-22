@@ -34,7 +34,6 @@ namespace Ser.ConAai
     using System.Security.Cryptography.X509Certificates;
     using System.Net.Security;
     using System.Reflection;
-    using GitInformation;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -233,7 +232,6 @@ namespace Ser.ConAai
                             {
                                 //if (tasks == "all")
                                 //    statusResult.Tasks = taskManager.GetAllTasksForUser(session.ConnectUri, session.Cookie, userParameter.DomainUser);
-
                                 statusResult.Status = activeTask.Status;
                                 statusResult.Link = activeTask.DownloadLink;
                             }
@@ -265,10 +263,7 @@ namespace Ser.ConAai
                         }
                         else
                         {
-                            logger.Debug($"Reset Status");
-                            KillProcess(activeTask.ProcessId);
-                            SoftDelete($"{workDir}\\{taskId}");
-                            taskManager.RemoveTask(activeTask.TaskId);
+                            FinishTask(workDir, userParameter.CleanupTimeout, activeTask);
                         }
 
                         result = new OnDemandResult() { Status = activeTask.Status };
@@ -364,7 +359,7 @@ namespace Ser.ConAai
 
                 //check for task is already running
                 var task = taskManager.GetRunningTask(taskId);
-                if(task != null)
+                if (task != null)
                 {
                     if (task.Status == 1 || task.Status == 2)
                     {
@@ -390,9 +385,11 @@ namespace Ser.ConAai
                     throw new Exception("No session cookie generated.");
                 }
                 parameter.ConnectCookie = session?.Cookie;
-         
+
                 //get engine config
                 var newEngineConfig = GetNewJson(parameter, json, currentWorkingDir);
+                parameter.CleanupTimeout = newEngineConfig.Tasks.FirstOrDefault()
+                                           .Reports.FirstOrDefault().General.CleanupTimeOut * 1000;
 
                 //save template from content libary
                 FindTemplatePaths(parameter, newEngineConfig, currentWorkingDir);
@@ -428,7 +425,7 @@ namespace Ser.ConAai
             {
                 var task = taskManager.GetRunningTask(taskId);
                 task.Status = -1;
-                return new OnDemandResult() { TaskId = taskId, Status = -1 };
+                return new OnDemandResult() { TaskId = taskId, Status = -1, Log = ex.Message };
                 throw new Exception("The report could not be created.", ex);
             }
         }
@@ -777,12 +774,37 @@ namespace Ser.ConAai
             //Delivery
             status = StartDeliveryTool(currentWorkingDir, task, parameter.OnDemand, parameter.PrivateKeyPath);
             task.Status = status;
+
+            //Cleanup
+            if (!parameter.OnDemand)
+                FinishTask(currentWorkingDir, parameter.CleanupTimeout, task);
+        }
+
+        private void FinishTask(string workDir, int cleanupTimeout, ActiveTask task)
+        {
+            try
+            {
+                var finTask = Task
+                .Delay(cleanupTimeout)
+                .ContinueWith((_) =>
+                {
+                    logger.Debug($"Cleanup Process, Folder and Task");
+                    KillProcess(task.ProcessId);
+                    SoftDelete($"{workDir}\\{task.TaskId}");
+                    taskManager.RemoveTask(task.TaskId);
+                    logger.Debug($"Cleanup complete");
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+            }
         }
 
         private Row GetParameter(IAsyncStreamReader<BundledRows> requestStream)
         {
             try
-            {                
+            {
                 if (requestStream.MoveNext().Result == false)
                     logger.Debug("The Request has no parameters.");
 
