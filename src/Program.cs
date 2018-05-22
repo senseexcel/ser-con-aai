@@ -85,10 +85,9 @@ namespace Ser.ConAai
         }
 
         //NUR ZUM DEBUGGEN DES INSTALL-PROZESSES
-        private static void InstallTest()
+        private static void InstallTest(string certPath, string privateKey)
         {
             var manager = new TaskManager();
-            var certPath = @"C:\Users\MBerthold\AppData\Roaming\senseexcel\reporting\serconnector.pem";
             var task = manager.GetSession(new Api.SerConnection()
             {
                 ServerUri = new Uri("http://nb-fc-208000/ser"),
@@ -96,7 +95,7 @@ namespace Ser.ConAai
                 Credentials = new Api.SerCredentials()
                 {
                     Cert = certPath,
-                    PrivateKey = @"C:\Users\MBerthold\AppData\Roaming\senseexcel\reporting\serconnector_private.key",
+                    PrivateKey = privateKey,
                     Key = "X-Qlik-Session-ser",
                 }
             }, new UserParameter() { AppId = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd",
