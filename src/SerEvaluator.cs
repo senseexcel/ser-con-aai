@@ -263,6 +263,7 @@ namespace Ser.ConAai
                         }
                         else
                         {
+                            activeTask.Status = 0;
                             FinishTask(workDir, userParameter.CleanupTimeout, activeTask);
                         }
 
