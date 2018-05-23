@@ -522,10 +522,11 @@ namespace Ser.ConAai
             foreach (var task in config.Tasks)
             {
                 var report = task.Reports.FirstOrDefault() ?? null;
-                var templateUri = new Uri(report.Template.Input);
+                var result = UriUtils.NormalizeUri(report.Template.Input);
+                var templateUri = result.Item1;
                 if (templateUri.Scheme.ToLowerInvariant() == "content")
                 {
-                    var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, parameter.AppId, cookie, templateUri.Host);
+                    var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, parameter.AppId, cookie, result.Item2);
                     logger.Debug($"File count in content library: {contentFiles?.Count}");
                     var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(templateUri.AbsolutePath));
                     if (filterFile != null)
@@ -539,7 +540,7 @@ namespace Ser.ConAai
                 else if (templateUri.Scheme.ToLowerInvariant() == "lib")
                 {
                     var connections = GetConnections(onDemandConfig.Connection.ServerUri, parameter.AppId, cookie);
-                    dynamic libResult = connections?.FirstOrDefault(n => n["qName"]?.ToString()?.ToLowerInvariant() == templateUri.Host) ?? null;
+                    dynamic libResult = connections?.FirstOrDefault(n => n["qName"]?.ToString()?.ToLowerInvariant() == result.Item2) ?? null;
                     if (libResult != null)
                     {
                         var libPath = libResult.qConnectionString.ToString();
