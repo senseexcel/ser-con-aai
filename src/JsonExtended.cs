@@ -10,14 +10,11 @@ namespace Ser.ConAai
     {
         public static JToken RemoveFields(this JToken token, string[] fields)
         {
-            JContainer container = token as JContainer;
-            if (container == null) return token;
-
+            if (!(token is JContainer container)) return token;
             List<JToken> removeList = new List<JToken>();
             foreach (JToken el in container.Children())
             {
-                JProperty p = el as JProperty;
-                if (p != null && fields.Contains(p.Name))
+                if (el is JProperty p && fields.Contains(p.Name))
                 {
                     removeList.Add(el);
                 }

@@ -27,7 +27,7 @@ namespace Ser.ConAai
     public class SerOnDemandConfig
     {
         #region Logger
-        private static Logger logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
         #region Properties
@@ -42,6 +42,7 @@ namespace Ser.ConAai
         public string Architecture { get; private set; } = RuntimeInformation.OSArchitecture.ToString();
         public string AppVersion { get; private set; } = PlatformServices.Default.Application.ApplicationVersion;
         public string AppName { get; private set; } = PlatformServices.Default.Application.ApplicationName;
+        public List<VersionInfo> PackageVersions { get; set; }
         #endregion
 
         public string GetCertPath()

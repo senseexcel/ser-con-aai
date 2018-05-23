@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -20,10 +20,10 @@
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
       </PropertyGroup>
       <ItemGroup>
-        <PackageReference Include="SerApi" Version="3.0.0" />
-        <PackageReference Include="SerDistribute" Version="2.0.1" />
+        <PackageReference Include="SerApi" Version="3.1.1" />
+        <PackageReference Include="SerDistribute" Version="2.0.4" />
         <PackageReference Include="Q2gHelperPem" Version="1.0.6" />
-        <PackageReference Include="Q2gHelperQrs" Version="1.0.12" />
+        <PackageReference Include="Q2gHelperQrs" Version="1.1.0" />
       </ItemGroup>
     </When>
     <Otherwise>
@@ -79,11 +79,15 @@
     </PackageReference>
     <PackageReference Include="Hjson" Version="3.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
-    <PackageReference Include="NLog" Version="5.0.0-beta11" />
+    <PackageReference Include="NLog" Version="4.5.4" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.6" />
     <PackageReference Include="qlik-sseapi" Version="1.1.1" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.2.2" />
     <PackageReference Include="WebSocket4Net" Version="0.15.2" />
+  </ItemGroup>  
+  
+  <ItemGroup>
+    <Folder Include="Properties\PublishProfiles\" />
   </ItemGroup>
 
 </Project>
