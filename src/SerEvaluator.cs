@@ -645,7 +645,7 @@ namespace Ser.ConAai
 
                     report["connections"] = new JArray(newUserConnections);
                     var distribute = report["distribute"];
-                    var children = distribute.Children().Children();
+                    var children = distribute?.Children().Children().ToList() ?? new List<JToken>();
                     foreach (var child in children)
                     {
                         var connection = child["connections"] ?? null;
