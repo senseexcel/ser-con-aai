@@ -88,6 +88,7 @@ namespace Ser.ConAai
         private static void InstallTest(string certPath, string privateKey)
         {
             var manager = new TaskManager();
+            var domainUser = new Ser.Api.DomainUser("nb-fc-208000\\mberthold");
             var task = manager.GetSession(new Api.SerConnection()
             {
                 ServerUri = new Uri("http://nb-fc-208000/ser"),
@@ -98,8 +99,7 @@ namespace Ser.ConAai
                     PrivateKey = privateKey,
                     Key = "X-Qlik-Session-ser",
                 }
-            }, new UserParameter() { AppId = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd",
-               DomainUser = new Api.DomainUser("nb-fc-208000\\mberthold") });
+            }, new ActiveTask() { AppId = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd", UserId = domainUser});
 
             var test = manager.GetAllTaskForAppId("dfacdb29-6cee-4cc6-b8b1-7a89014394dd");
 

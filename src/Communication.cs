@@ -49,11 +49,12 @@ namespace Ser.ConAai
         public int ProcessId { get; set; }
         public string DownloadLink { get; set; }
         public int Status { get; set; }
-        public string TaskId { get; set; }
+        public string Id { get; set; }
         public DateTime StartTime { get; set; }
-        public string AppName { get; set; }
+        //public string AppName { get; set; }
         public string AppId { get; set; }
-        public string UserId { get; set; }
+        public DomainUser UserId { get; set; }
+        public SessionInfo Session { get; set; }
     }
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,

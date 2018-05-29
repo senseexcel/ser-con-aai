@@ -187,7 +187,8 @@ namespace Ser.ConAai
                     //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
                     userParameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
                     logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
-                    var tmpsession = taskManager.GetSession(onDemandConfig.Connection, userParameter);
+                    var tmpTask = taskManager.CreateTask(userParameter);
+                    var tmpsession = taskManager.GetSession(onDemandConfig.Connection, tmpTask);
                     var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
                     var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
                     var hubInfo = JsonConvert.DeserializeObject<HubInfo>(qrsResult);
@@ -337,7 +338,7 @@ namespace Ser.ConAai
 
         private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir)
         {
-            var taskId = String.Empty;
+            ActiveTask activeTask = null;
 
             try
             {
@@ -345,47 +346,46 @@ namespace Ser.ConAai
                 var currentWorkingDir = String.Empty;
                 if (!Guid.TryParse(id, out var result))
                 {
-                    taskId = Guid.NewGuid().ToString();
-                    currentWorkingDir = Path.Combine(workDir, taskId);
+                    activeTask = taskManager.CreateTask(parameter);
+                    currentWorkingDir = Path.Combine(workDir, activeTask.Id);
                     Directory.CreateDirectory(currentWorkingDir);
+                    logger.Debug($"New Task-ID: {activeTask.Id}");
                 }
                 else
                 {
-                    taskId = id;
+                    activeTask = new ActiveTask()
+                    {
+                         Id = id,
+                         AppId = parameter.AppId,
+                         UserId = parameter.DomainUser,
+                    };
+
+                    logger.Debug($"Current Task-ID: {activeTask.Id}");
                     currentWorkingDir = workDir;
                 }
 
-                logger.Debug($"New Task-ID: {taskId}");
                 logger.Debug($"TempFolder: {currentWorkingDir}");
 
                 //check for task is already running
-                var task = taskManager.GetRunningTask(taskId);
+                var task = taskManager.GetRunningTask(activeTask.Id);
                 if (task != null)
                 {
                     if (task.Status == 1 || task.Status == 2)
                     {
                         logger.Debug("Session ist already running.");
-                        return new OnDemandResult() { TaskId = task.TaskId };
+                        return new OnDemandResult() { TaskId = activeTask.Id };
                     }
                 }
 
-                var newTask = new ActiveTask()
-                {
-                    Status = 1,
-                    TaskId = taskId,
-                    StartTime = DateTime.Now,
-                    AppId = parameter.AppId,
-                    UserId = parameter.DomainUser.ToString(),
-                };
-
                 //get a session
-                var session = taskManager.GetSession(onDemandConfig.Connection, parameter, newTask);
+                var session = taskManager.GetSession(onDemandConfig.Connection, activeTask);
                 if (session == null)
                 {
                     SoftDelete(currentWorkingDir);
                     throw new Exception("No session cookie generated.");
                 }
                 parameter.ConnectCookie = session?.Cookie;
+                activeTask.Status = 1;
 
                 //get engine config
                 var newEngineConfig = GetNewJson(parameter, json, currentWorkingDir);
@@ -408,25 +408,26 @@ namespace Ser.ConAai
                 serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\"";
                 serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 serProcess.Start();
-                newTask.ProcessId = serProcess.Id;
+                activeTask.ProcessId = serProcess.Id;
 
                 //Write process file
                 var procFileName = $"{Path.GetFileNameWithoutExtension(serProcess.StartInfo.FileName)}.pid";
                 File.WriteAllText(Path.Combine(currentWorkingDir, procFileName),
                                   $"{serProcess.Id.ToString()}|{parameter.AppId.ToString()}|{parameter.DomainUser.ToString()}");
 
-                var statusThread = new Thread(() => CheckStatus(currentWorkingDir, parameter, newTask))
+                var statusThread = new Thread(() => CheckStatus(currentWorkingDir, parameter, activeTask))
                 {
                     IsBackground = true
                 };
                 statusThread.Start();
-                return new OnDemandResult() { TaskId = taskId, Status = 1 };
+                return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
             }
             catch (Exception ex)
             {
-                var task = taskManager.GetRunningTask(taskId);
-                task.Status = -1;
-                return new OnDemandResult() { TaskId = taskId, Status = -1, Log = ex.Message };
+                var task = taskManager.GetRunningTask(activeTask.Id);
+                if (task != null)
+                    task.Status = -1;
+                return new OnDemandResult() { TaskId = activeTask.Id, Status = -1, Log = ex.Message };
                 throw new Exception("The report could not be created.", ex);
             }
         }
@@ -763,6 +764,11 @@ namespace Ser.ConAai
             while (status != 2)
             {
                 Thread.Sleep(250);
+                if (task.Status == -1 || task.Status == 0)
+                {
+                    status = task.Status;
+                    break;
+                }
                 status = Status(currentWorkingDir, task.Status);
                 if (status == -1 || status == 0)
                     break;
@@ -792,8 +798,8 @@ namespace Ser.ConAai
                 {
                     logger.Debug($"Cleanup Process, Folder and Task");
                     KillProcess(task.ProcessId);
-                    SoftDelete($"{workDir}\\{task.TaskId}");
-                    taskManager.RemoveTask(task.TaskId);
+                    SoftDelete($"{workDir}\\{task.Id}");
+                    taskManager.RemoveTask(task.Id);
                     logger.Debug($"Cleanup complete");
                 });
             }
