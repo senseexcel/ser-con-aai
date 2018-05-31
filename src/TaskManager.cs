@@ -46,8 +46,8 @@ namespace Ser.ConAai
         #endregion
 
         #region Variables & Properties
-        public List<ActiveTask> Tasks { get; private set; } = new List<ActiveTask>();
-        public List<SessionInfo> Sessions { get; private set; } = new List<SessionInfo>();
+        private List<ActiveTask> Tasks = new List<ActiveTask>();
+        private List<SessionInfo> Sessions = new List<SessionInfo>();
         #endregion
 
         #region Private Methods
@@ -76,7 +76,6 @@ namespace Ser.ConAai
                 };
 
                 var connection = new HttpClient(connectionHandler);
-                logger.Debug($"Bearer token: {token}");
                 connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
                 var message = connection.GetAsync(connectUri).Result;
                 logger.Debug($"Message: {message}");
@@ -113,7 +112,15 @@ namespace Ser.ConAai
         #region Public Methods
         public List<ActiveTask> GetAllTaskForAppId(string appId)
         {
-            return Tasks.Where(t => t.AppId == appId).ToList();
+            try
+            {
+                return Tasks.Where(t => t.AppId == appId).ToList();
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+                return null;
+            }
         }
 
         public List<ActiveTask> GetAllTasksForUser(Uri serverUri, Cookie cookie, DomainUser user)
@@ -198,17 +205,25 @@ namespace Ser.ConAai
 
         public ActiveTask CreateTask(UserParameter parameter)
         {
-            var newTask = new ActiveTask()
+            try
             {
-                Status = 0,
-                Id = Guid.NewGuid().ToString(),
-                StartTime = DateTime.Now,
-                AppId = parameter.AppId,
-                UserId = parameter.DomainUser,
-            };
+                var newTask = new ActiveTask()
+                {
+                    Status = 0,
+                    Id = Guid.NewGuid().ToString(),
+                    StartTime = DateTime.Now,
+                    AppId = parameter.AppId,
+                    UserId = parameter.DomainUser,
+                };
 
-            Tasks.Add(newTask);
-            return newTask;
+                Tasks.Add(newTask);
+                return newTask;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+                return null;
+            }
         }
 
         public SessionInfo GetSession(SerConnection connection, ActiveTask task)

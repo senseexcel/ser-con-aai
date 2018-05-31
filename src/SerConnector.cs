@@ -27,6 +27,9 @@ namespace Ser.ConAai
     using PeterKottas.DotNetCore.WindowsService.Base;
     using Q2g.HelperPem;
     using System.Net;
+    using Q2g.HelperQrs;
+    using System.Threading.Tasks;
+    using System.Threading;
     #endregion
 
     public class SSEtoSER : MicroService, IMicroService
@@ -39,6 +42,7 @@ namespace Ser.ConAai
         private Server server;
         private SerEvaluator serEvaluator;
         private delegate IPHostEntry GetHostEntryHandler(string name);
+        private static SerOnDemandConfig config;
         #endregion
 
         #region Private Methods
@@ -58,9 +62,77 @@ namespace Ser.ConAai
                 logger.Error(ex, $"The Method {nameof(CreateCertificate)} was failed.");
             }
         }
+
+        private bool CheckConnection()
+        {
+            try
+            {
+                var connection = config.Connection;
+                var task = new ActiveTask()
+                {
+                    AppId = connection.App,
+                    UserId = new DomainUser("INTERNAL\\ser_scheduler"),
+                };
+
+                var taskManager = new TaskManager();
+                var session = taskManager.GetSession(connection, task);
+                if (session.Cookie != null)
+                {
+                    logger.Debug("The connection to Qlik Sense was successful.");
+                    return true;
+                }
+
+                logger.Error("NO PROXY CONNECTION TO QLIK SENSE!!!");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Connection check failed.");
+                return false;
+            }
+        }
         #endregion
 
         #region Public Methods
+        public static void CheckQlikConnection()
+        {
+            var newTask = Task<bool>.Factory.StartNew(() =>
+            {
+                try
+                {
+                    var connection = config.Connection;
+                    var task = new ActiveTask()
+                    {
+                        AppId = connection.App,
+                        UserId = new DomainUser("INTERNAL\\ser_scheduler"),
+                    };
+
+                    var taskManager = new TaskManager();
+                    var session = taskManager.GetSession(connection, task);
+                    if (session?.Cookie != null)
+                    {
+                        logger.Info("The connection to Qlik Sense was successful.");
+                        return true;
+                    }
+
+                    logger.Error("NO PROXY CONNECTION TO QLIK SENSE!!!");
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, "Connection check failed.");
+                    return false;
+                }
+            }).ContinueWith((preTask) =>
+            {
+                if (!preTask.Result)
+                {
+                    Thread.Sleep(30000);
+                    CheckQlikConnection();
+                }
+            });
+        }
+
         public void Start()
         {
             try
@@ -88,7 +160,7 @@ namespace Ser.ConAai
                 };
                 var virtConnection = JObject.Parse(JsonConvert.SerializeObject(vconnection, Formatting.Indented));
                 virtConnection.Merge(configObject);
-                var config = JsonConvert.DeserializeObject<SerOnDemandConfig>(virtConnection.ToString());
+                config = JsonConvert.DeserializeObject<SerOnDemandConfig>(virtConnection.ToString());
                 logger.Debug($"ServerUri: {config.Connection.ServerUri}");
 
                 //Read Assembly versions
@@ -116,6 +188,9 @@ namespace Ser.ConAai
                 logger.Debug("Service running...");
                 logger.Debug($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}");
                 logger.Debug($"Server start...");
+
+                logger.Debug($"Check qlik connection...");
+                //CheckQlikConnection();
 
                 using (serEvaluator = new SerEvaluator(config))
                 {

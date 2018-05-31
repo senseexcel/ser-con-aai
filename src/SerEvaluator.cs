@@ -181,14 +181,15 @@ namespace Ser.ConAai
                 dynamic jsonObject;
 
                 //Caution: Personal//Me => Desktop Mode
+                ActiveTask activeTask = null;
                 if (userParameter.DomainUser.UserId == "sa_scheduler" &&
                     userParameter.DomainUser.UserDirectory == "INTERNAL")
                 {
                     //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
                     userParameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
                     logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
-                    var tmpTask = taskManager.CreateTask(userParameter);
-                    var tmpsession = taskManager.GetSession(onDemandConfig.Connection, tmpTask);
+                    activeTask = taskManager.CreateTask(userParameter);
+                    var tmpsession = taskManager.GetSession(onDemandConfig.Connection, activeTask);
                     var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
                     var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
                     var hubInfo = JsonConvert.DeserializeObject<HubInfo>(qrsResult);
@@ -200,12 +201,11 @@ namespace Ser.ConAai
                 string taskId = null;
                 string versions = null;
                 string tasks = null;
-                ActiveTask activeTask = null;
 
                 switch (functionCall)
                 {
                     case SerFunction.START:
-                        result = CreateReport(userParameter, json, workDir);
+                        result = CreateReport(userParameter, json, workDir, activeTask);
                         break;
                     case SerFunction.STATUS:
                         #region Status
@@ -304,6 +304,7 @@ namespace Ser.ConAai
             if (!onDemandConfig.Connection.SslVerify)
                 return true;
 
+            logger.Debug("Validate Server Certificate...");
             Uri requestUri = null;
             if (sender is HttpRequestMessage hrm)
                 requestUri = hrm.RequestUri;
@@ -336,31 +337,25 @@ namespace Ser.ConAai
             return false;
         }
 
-        private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir)
+        private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir, ActiveTask activeTask = null)
         {
-            ActiveTask activeTask = null;
-
             try
             {
                 var id = new DirectoryInfo(workDir).Name;
                 var currentWorkingDir = String.Empty;
                 if (!Guid.TryParse(id, out var result))
                 {
-                    activeTask = taskManager.CreateTask(parameter);
+                    if (activeTask == null)
+                        activeTask = taskManager.CreateTask(parameter);
+
                     currentWorkingDir = Path.Combine(workDir, activeTask.Id);
                     Directory.CreateDirectory(currentWorkingDir);
                     logger.Debug($"New Task-ID: {activeTask.Id}");
                 }
                 else
                 {
-                    activeTask = new ActiveTask()
-                    {
-                         Id = id,
-                         AppId = parameter.AppId,
-                         UserId = parameter.DomainUser,
-                    };
-
-                    logger.Debug($"Current Task-ID: {activeTask.Id}");
+                    activeTask = taskManager.GetRunningTask(id);
+                    logger.Debug($"Running Task-ID: {activeTask.Id}");
                     currentWorkingDir = workDir;
                 }
 
@@ -382,6 +377,7 @@ namespace Ser.ConAai
                 if (session == null)
                 {
                     SoftDelete(currentWorkingDir);
+                    SSEtoSER.CheckQlikConnection();
                     throw new Exception("No session cookie generated.");
                 }
                 parameter.ConnectCookie = session?.Cookie;
@@ -427,7 +423,9 @@ namespace Ser.ConAai
                 var task = taskManager.GetRunningTask(activeTask.Id);
                 if (task != null)
                     task.Status = -1;
-                return new OnDemandResult() { TaskId = activeTask.Id, Status = -1, Log = ex.Message };
+                if (task.Session == null)
+                    task.Status = -2;
+                return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = ex.Message };
                 throw new Exception("The report could not be created.", ex);
             }
         }
