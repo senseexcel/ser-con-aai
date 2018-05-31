@@ -190,7 +190,7 @@ namespace Ser.ConAai
                 logger.Debug($"Server start...");
 
                 logger.Debug($"Check qlik connection...");
-                //CheckQlikConnection();
+                CheckQlikConnection();
 
                 using (serEvaluator = new SerEvaluator(config))
                 {
