@@ -231,14 +231,21 @@ namespace Ser.ConAai
                             activeTask = taskManager.GetRunningTask(taskId);
                             if (activeTask != null)
                             {
-                                //if (tasks == "all")
-                                //    statusResult.Tasks = taskManager.GetAllTasksForUser(session.ConnectUri, session.Cookie, userParameter.DomainUser);
+                                if (tasks == "all")
+                                {
+                                    var session = activeTask.Session;
+                                    statusResult.Tasks = taskManager.GetAllTasksForUser(session?.ConnectUri, 
+                                                                                        session?.Cookie, activeTask.UserId);
+                                }
+
                                 statusResult.Status = activeTask.Status;
                                 statusResult.Link = activeTask.DownloadLink;
                             }
                             else
                             {
                                 logger.Debug($"No existing task id {taskId} found.");
+
+
                             }
                         }
                         result = statusResult;  

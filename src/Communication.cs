@@ -66,7 +66,7 @@ namespace Ser.ConAai
         public string TaskId { get; set; }
         public string Link { get; set; }
         public string Log { get; set; }
-        public List<SessionInfo> Tasks { get; set; }
+        public List<ActiveTask> Tasks { get; set; }
         public List<VersionInfo> Versions { get; set; }
         #endregion
 

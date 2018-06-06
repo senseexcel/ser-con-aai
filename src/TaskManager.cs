@@ -126,23 +126,18 @@ namespace Ser.ConAai
         public List<ActiveTask> GetAllTasksForUser(Uri serverUri, Cookie cookie, DomainUser user)
         {
             var qrsHub = new QlikQrsHub(serverUri, cookie);
-            var results = qrsHub.SendRequestAsync("app/full", HttpMethod.Get).Result;
+            var filter = $"owner.userid eq '{user.UserId}'&owner.userDirectory eq '{user.UserDirectory}'";
+            var results = qrsHub.SendRequestAsync("app/full", HttpMethod.Get, null, filter).Result;
+            var taskList = new List<ActiveTask>();
             if (results == null)
-                return new List<ActiveTask>();
+                return taskList;
 
             var apps = JArray.Parse(results).ToList();
-            var taskList = new List<ActiveTask>();
-            foreach (var task in Tasks)
+            foreach (var app in apps)
             {
-                foreach (var app in apps)
-                {
-                    var owner = JsonConvert.DeserializeObject<Owner>(app["owner"].ToString());
-                    if (owner.ToString() == user.ToString())
-                    {
-                        //task.AppName = app["name"].ToString() ?? null;
-                        taskList.Add(task);
-                    }
-                }
+                var owner = JsonConvert.DeserializeObject<Owner>(app["owner"].ToString());
+                if (owner.ToString() == user.ToString())
+                    taskList.AddRange(Tasks.Where(t => t.AppId == app["id"].ToString()));
             }
 
             return taskList;
