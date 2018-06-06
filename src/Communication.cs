@@ -28,7 +28,7 @@ namespace Ser.ConAai
     public class UserParameter
     {
         #region Properties
-        public string TemplateFileName { get; set; }
+        //public string TemplateFileName { get; set; }
         public string SaveFormats { get; set; }
         public SelectionMode UseUserSelesction { get; set; }
         public string AppId { get; set; }
@@ -49,11 +49,12 @@ namespace Ser.ConAai
         public int ProcessId { get; set; }
         public string DownloadLink { get; set; }
         public int Status { get; set; }
-        public string TaskId { get; set; }
+        public string Id { get; set; }
         public DateTime StartTime { get; set; }
-        public string AppName { get; set; }
+        //public string AppName { get; set; }
         public string AppId { get; set; }
-        public string UserId { get; set; }
+        public DomainUser UserId { get; set; }
+        public SessionInfo Session { get; set; }
     }
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
@@ -65,7 +66,7 @@ namespace Ser.ConAai
         public string TaskId { get; set; }
         public string Link { get; set; }
         public string Log { get; set; }
-        public List<SessionInfo> Tasks { get; set; }
+        public List<ActiveTask> Tasks { get; set; }
         public List<VersionInfo> Versions { get; set; }
         #endregion
 

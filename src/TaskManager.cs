@@ -35,8 +35,7 @@ namespace Ser.ConAai
         public Cookie Cookie { get; set; }
         public Uri ConnectUri { get; set; }
         public string AppId { get; set; }
-        public string UserId { get; set; }
-        public List<ActiveTask> ActiveTasks { get; set; } = new List<ActiveTask>();
+        public DomainUser UserId { get; set; }
         #endregion
     }
 
@@ -47,7 +46,8 @@ namespace Ser.ConAai
         #endregion
 
         #region Variables & Properties
-        public List<SessionInfo> Sessions { get; private set; } = new List<SessionInfo>();
+        private List<ActiveTask> Tasks = new List<ActiveTask>();
+        private List<SessionInfo> Sessions = new List<SessionInfo>();
         #endregion
 
         #region Private Methods
@@ -65,7 +65,6 @@ namespace Ser.ConAai
                 {
                     UseDefaultCredentials = true,
                     CookieContainer = cookieContainer,
-                    
                 };
                                 
                 connectionHandler.ServerCertificateCustomValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
@@ -77,7 +76,6 @@ namespace Ser.ConAai
                 };
 
                 var connection = new HttpClient(connectionHandler);
-                logger.Debug($"Bearer token: {token}");
                 connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
                 var message = connection.GetAsync(connectUri).Result;
                 logger.Debug($"Message: {message}");
@@ -112,31 +110,34 @@ namespace Ser.ConAai
         #endregion
 
         #region Public Methods
-        public List<SessionInfo> GetAllTaskForAppId(string appId)
+        public List<ActiveTask> GetAllTaskForAppId(string appId)
         {
-            return Sessions.Where(l => l.AppId == appId).ToList();
+            try
+            {
+                return Tasks.Where(t => t.AppId == appId).ToList();
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+                return null;
+            }
         }
 
-        public List<SessionInfo> GetAllTasksForUser(Uri serverUri, Cookie cookie, DomainUser user)
+        public List<ActiveTask> GetAllTasksForUser(Uri serverUri, Cookie cookie, DomainUser user)
         {
             var qrsHub = new QlikQrsHub(serverUri, cookie);
-            var results = qrsHub.SendRequestAsync("app/full", HttpMethod.Get).Result;
+            var filter = $"owner.userid eq '{user.UserId}'&owner.userDirectory eq '{user.UserDirectory}'";
+            var results = qrsHub.SendRequestAsync("app/full", HttpMethod.Get, null, filter).Result;
+            var taskList = new List<ActiveTask>();
             if (results == null)
-                return new List<SessionInfo>();
+                return taskList;
 
             var apps = JArray.Parse(results).ToList();
-            var taskList = new List<SessionInfo>();
-            foreach (var task in Sessions)
+            foreach (var app in apps)
             {
-                foreach (var app in apps)
-                {
-                    var owner = JsonConvert.DeserializeObject<Owner>(app["owner"].ToString());
-                    if (owner.ToString() == user.ToString())
-                    {
-                        //task.AppName = app["name"].ToString() ?? null;
-                        taskList.Add(task);
-                    }
-                }
+                var owner = JsonConvert.DeserializeObject<Owner>(app["owner"].ToString());
+                if (owner.ToString() == user.ToString())
+                    taskList.AddRange(Tasks.Where(t => t.AppId == app["id"].ToString()));
             }
 
             return taskList;
@@ -171,14 +172,8 @@ namespace Ser.ConAai
         {
             try
             {
-                foreach (var session in Sessions)
-                {
-                    var task = session?.ActiveTasks?.FirstOrDefault(t => t.TaskId == taskId) ?? null;
-                    if (task != null)
-                        return task;
-                }
-
-                return null;
+                var result = Tasks.FirstOrDefault(t => t.Id == taskId) ?? null;
+                return result;
             }
             catch (Exception ex)
             {
@@ -191,11 +186,10 @@ namespace Ser.ConAai
         {
             try
             {
-                foreach (var session in Sessions)
+                lock (this)
                 {
-                    var task = session?.ActiveTasks?.FirstOrDefault(t => t.TaskId == taskId) ?? null;
-                    if (task != null)
-                        session.ActiveTasks.Remove(task);
+                    var task = Tasks.FirstOrDefault(t => t.Id == taskId);
+                    Tasks.Remove(task);
                 }
             }
             catch (Exception ex)
@@ -204,24 +198,47 @@ namespace Ser.ConAai
             }
         }
 
-        public SessionInfo GetSession(SerConnection connection, UserParameter parameter, ActiveTask newTask = null)
+        public ActiveTask CreateTask(UserParameter parameter)
         {
             try
             {
-                var domainUser = parameter.DomainUser;
+                var newTask = new ActiveTask()
+                {
+                    Status = 0,
+                    Id = Guid.NewGuid().ToString(),
+                    StartTime = DateTime.Now,
+                    AppId = parameter.AppId,
+                    UserId = parameter.DomainUser,
+                };
+
+                Tasks.Add(newTask);
+                return newTask;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+                return null;
+            }
+        }
+
+        public SessionInfo GetSession(SerConnection connection, ActiveTask task)
+        {
+            try
+            {
+                var domainUser = task.UserId;
                 lock (this)
                 {
                     var uri = connection.ServerUri;
+                    var oldTask = GetRunningTask(task.Id);
                     var oldSession = Sessions?.FirstOrDefault(u => u.ConnectUri.OriginalString == uri.OriginalString
-                                                          && u.UserId == parameter.DomainUser.ToString()
-                                                          && u.AppId == parameter.AppId) ?? null;
+                                                          && u.UserId.ToString() == domainUser.ToString()
+                                                          && u.AppId == task.AppId) ?? null;
                     if (oldSession != null)
                     {
                         var result = ValidateSession(oldSession.ConnectUri, oldSession.Cookie);
                         if (result)
                         {
-                            if (newTask != null)
-                                oldSession.ActiveTasks.Add(newTask);
+                            task.Session = oldSession;
                             return oldSession;
                         }
                         Sessions.Remove(oldSession);
@@ -238,12 +255,12 @@ namespace Ser.ConAai
                     {
                         Cookie = cookie,
                         ConnectUri = connection.ServerUri,
-                        AppId = parameter.AppId,
-                        UserId = parameter.DomainUser.ToString(),
+                        AppId = task.AppId,
+                        UserId = task.UserId,
                     };
-                    if (newTask != null)
-                        sessionInfo.ActiveTasks.Add(newTask);
+                
                     Sessions.Add(sessionInfo);
+                    task.Session = sessionInfo;
                     return sessionInfo;
                 }
 
