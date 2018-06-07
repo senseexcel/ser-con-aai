@@ -11,6 +11,7 @@ namespace Ser.ConAai
 {
     #region Usings
     using Microsoft.Extensions.PlatformAbstractions;
+    using Newtonsoft.Json;
     using NLog;
     using NLog.Config;
     using PeterKottas.DotNetCore.WindowsService;
@@ -20,6 +21,8 @@ namespace Ser.ConAai
     using System.Linq;
     using System.Net;
     using System.Security.Cryptography.X509Certificates;
+    using System.Text;
+    using System.Xml;
     #endregion
 
     class Program
