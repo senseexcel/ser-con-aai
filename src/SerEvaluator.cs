@@ -778,12 +778,15 @@ namespace Ser.ConAai
                 if (status == -1 || status == 0)
                     break;
 
-                var serProcess = GetProcess(task.ProcessId);
-                if(serProcess == null)
+                if (status == 1)
                 {
-                    status = -1;
-                    logger.Error("Engine process wurde beendet.");
-                    break;
+                    var serProcess = GetProcess(task.ProcessId);
+                    if (serProcess == null)
+                    {
+                        status = -1;
+                        logger.Error("Engine process wurde beendet.");
+                        break;
+                    }
                 }
             }
 
