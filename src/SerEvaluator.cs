@@ -784,7 +784,7 @@ namespace Ser.ConAai
                     if (serProcess == null)
                     {
                         status = -1;
-                        logger.Error("Engine process wurde beendet.");
+                        logger.Error("The engine process was terminated.");
                         break;
                     }
                 }
