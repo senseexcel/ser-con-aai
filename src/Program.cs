@@ -80,7 +80,7 @@ namespace Ser.ConAai
             try
             {
                 var path = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, configName);
-                if (!File.Exists(path))
+                if (File.Exists(path))
                 {
                     var root = new FileInfo(path).Directory?.Parent?.Parent?.Parent;
                     var files = root.GetFiles(configName, SearchOption.AllDirectories).ToList();
@@ -88,6 +88,10 @@ namespace Ser.ConAai
                     var jsonContent = File.ReadAllText(path);
                     var xdoc = JsonConvert.DeserializeXNode(jsonContent);
                     logger.Factory.Configuration = new XmlLoggingConfiguration(xdoc.CreateReader(), Path.GetFileName(path));
+                }
+                else
+                {
+                    throw new Exception("No logger config load.");
                 }
             }
             catch
