@@ -395,7 +395,7 @@ namespace Ser.ConAai
                 parameter.CleanupTimeout = newEngineConfig.Tasks.FirstOrDefault()
                                            .Reports.FirstOrDefault().General.CleanupTimeOut * 1000;
 
-                //save template from content libary
+                //Save template from content libary
                 FindTemplatePaths(parameter, newEngineConfig, currentWorkingDir);
 
                 //Save config for SER engine
