@@ -23,6 +23,7 @@ namespace Ser.ConAai
     using System.Security.Cryptography.X509Certificates;
     using System.Text;
     using System.Xml;
+    using System.Xml.Linq;
     #endregion
 
     class Program
@@ -35,7 +36,7 @@ namespace Ser.ConAai
         {
             try
             {
-                SetLoggerSettings("App.config");
+                SetLoggerSettings("App.json");
                 ServiceRunner<SSEtoSER>.Run(config =>
                 {
                     config.SetDisplayName("Qlik Connector for SER");
@@ -76,15 +77,23 @@ namespace Ser.ConAai
         #region Private Methods
         private static void SetLoggerSettings(string configName)
         {
-            var path = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, configName);
-            if (!File.Exists(path))
+            try
             {
-                var root = new FileInfo(path).Directory?.Parent?.Parent?.Parent;
-                var files = root.GetFiles("App.config", SearchOption.AllDirectories).ToList();
-                path = files.FirstOrDefault()?.FullName;
+                var path = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, configName);
+                if (!File.Exists(path))
+                {
+                    var root = new FileInfo(path).Directory?.Parent?.Parent?.Parent;
+                    var files = root.GetFiles(configName, SearchOption.AllDirectories).ToList();
+                    path = files.FirstOrDefault()?.FullName;
+                    var jsonContent = File.ReadAllText(path);
+                    var xdoc = JsonConvert.DeserializeXNode(jsonContent);
+                    logger.Factory.Configuration = new XmlLoggingConfiguration(xdoc.CreateReader(), Path.GetFileName(path));
+                }
             }
-
-            logger.Factory.Configuration = new XmlLoggingConfiguration(path, false);
+            catch
+            {
+                Console.WriteLine("The logger setting are invalid!!!\nPlease check the app.json in the app folder.");
+            }
         }
 
         //NUR ZUM DEBUGGEN DES INSTALL-PROZESSES
