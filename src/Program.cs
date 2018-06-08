@@ -92,7 +92,7 @@ namespace Ser.ConAai
             }
             catch
             {
-                Console.WriteLine("The logger setting are invalid!!!\nPlease check the app.json in the app folder.");
+                Console.WriteLine($"The logger setting are invalid!!!\nPlease check the {configName} in the app folder.");
             }
         }
 
