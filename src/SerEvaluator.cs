@@ -408,7 +408,7 @@ namespace Ser.ConAai
                 logger.Debug($"Start Engine \"{currentWorkingDir}\"...");
                 var serProcess = new Process();
                 serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
-                serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\"";
+                serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\" --privatekeypath \"{parameter.PrivateKeyPath}\"";
                 serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 serProcess.Start();
                 activeTask.ProcessId = serProcess.Id;
