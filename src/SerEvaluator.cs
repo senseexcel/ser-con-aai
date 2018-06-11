@@ -395,7 +395,7 @@ namespace Ser.ConAai
                 parameter.CleanupTimeout = newEngineConfig.Tasks.FirstOrDefault()
                                            .Reports.FirstOrDefault().General.CleanupTimeOut * 1000;
 
-                //save template from content libary
+                //Save template from content libary
                 FindTemplatePaths(parameter, newEngineConfig, currentWorkingDir);
 
                 //Save config for SER engine
@@ -408,7 +408,7 @@ namespace Ser.ConAai
                 logger.Debug($"Start Engine \"{currentWorkingDir}\"...");
                 var serProcess = new Process();
                 serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
-                serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\"";
+                serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\" --privatekeypath \"{parameter.PrivateKeyPath}\"";
                 serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 serProcess.Start();
                 activeTask.ProcessId = serProcess.Id;
@@ -777,6 +777,17 @@ namespace Ser.ConAai
                 status = Status(currentWorkingDir, task.Status);
                 if (status == -1 || status == 0)
                     break;
+
+                if (status == 1)
+                {
+                    var serProcess = GetProcess(task.ProcessId);
+                    if (serProcess == null)
+                    {
+                        status = -1;
+                        logger.Error("The engine process was terminated.");
+                        break;
+                    }
+                }
             }
 
             //Reports Generated

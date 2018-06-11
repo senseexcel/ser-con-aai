@@ -11,6 +11,7 @@ namespace Ser.ConAai
 {
     #region Usings
     using Microsoft.Extensions.PlatformAbstractions;
+    using Newtonsoft.Json;
     using NLog;
     using NLog.Config;
     using PeterKottas.DotNetCore.WindowsService;
@@ -20,6 +21,9 @@ namespace Ser.ConAai
     using System.Linq;
     using System.Net;
     using System.Security.Cryptography.X509Certificates;
+    using System.Text;
+    using System.Xml;
+    using System.Xml.Linq;
     #endregion
 
     class Program
@@ -32,7 +36,7 @@ namespace Ser.ConAai
         {
             try
             {
-                SetLoggerSettings("App.config");
+                SetLoggerSettings();
                 ServiceRunner<SSEtoSER>.Run(config =>
                 {
                     config.SetDisplayName("Qlik Connector for SER");
@@ -71,17 +75,51 @@ namespace Ser.ConAai
         }
 
         #region Private Methods
-        private static void SetLoggerSettings(string configName)
+        private static XmlReader GetXmlReader(string path)
         {
-            var path = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, configName);
-            if (!File.Exists(path))
-            {
-                var root = new FileInfo(path).Directory?.Parent?.Parent?.Parent;
-                var files = root.GetFiles("App.config", SearchOption.AllDirectories).ToList();
-                path = files.FirstOrDefault()?.FullName;
-            }
+            var jsonContent = File.ReadAllText(path);
+            var xdoc = JsonConvert.DeserializeXNode(jsonContent);
+            return xdoc.CreateReader();
+        }
 
-            logger.Factory.Configuration = new XmlLoggingConfiguration(path, false);
+        private static void SetLoggerSettings()
+        {
+            var path = String.Empty;
+
+            try
+            {
+                var appPath = PlatformServices.Default.Application.ApplicationBasePath;
+                var files = Directory.GetFiles(appPath, "*.*", SearchOption.TopDirectoryOnly)
+                                     .Where(f => f.ToLowerInvariant().EndsWith("\\app.config") || 
+                                                 f.ToLowerInvariant().EndsWith("\\app.json")).ToList();
+                if (files != null && files.Count > 0)
+                {
+                    if (files.Count > 1)
+                        throw new Exception("Too many logger configs found.");
+
+                    path = files.FirstOrDefault();
+                    var extention = Path.GetExtension(path);
+                    switch (extention)
+                    {
+                        case ".json":
+                            logger.Factory.Configuration = new XmlLoggingConfiguration(GetXmlReader(path), Path.GetFileName(path));
+                            break;
+                        case ".config":
+                            logger.Factory.Configuration = new XmlLoggingConfiguration(path);
+                            break;
+                        default:
+                            throw new Exception($"unknown log format {extention}.");
+                    }
+                }
+                else
+                {
+                    throw new Exception("No logger config loaded.");
+                }
+            }
+            catch
+            {
+                Console.WriteLine($"The logger setting are invalid!!!\nPlease check the {path} in the app folder.");
+            }
         }
 
         //NUR ZUM DEBUGGEN DES INSTALL-PROZESSES
