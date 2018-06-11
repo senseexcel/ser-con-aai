@@ -108,7 +108,7 @@ namespace Ser.ConAai
                             logger.Factory.Configuration = new XmlLoggingConfiguration(path);
                             break;
                         default:
-                            throw new Exception($"unkown log format {extention}.");
+                            throw new Exception($"unknown log format {extention}.");
                     }
                 }
                 else
