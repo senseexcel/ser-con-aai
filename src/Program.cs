@@ -36,7 +36,7 @@ namespace Ser.ConAai
         {
             try
             {
-                SetLoggerSettings("App.json");
+                SetLoggerSettings();
                 ServiceRunner<SSEtoSER>.Run(config =>
                 {
                     config.SetDisplayName("Qlik Connector for SER");
@@ -75,28 +75,50 @@ namespace Ser.ConAai
         }
 
         #region Private Methods
-        private static void SetLoggerSettings(string configName)
+        private static XmlReader GetXmlReader(string path)
         {
+            var jsonContent = File.ReadAllText(path);
+            var xdoc = JsonConvert.DeserializeXNode(jsonContent);
+            return xdoc.CreateReader();
+        }
+
+        private static void SetLoggerSettings()
+        {
+            var path = String.Empty;
+
             try
             {
-                var path = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, configName);
-                if (File.Exists(path))
+                var appPath = PlatformServices.Default.Application.ApplicationBasePath;
+                var files = Directory.GetFiles(appPath, "*.*", SearchOption.TopDirectoryOnly)
+                                     .Where(f => f.ToLowerInvariant().EndsWith("\\app.config") || 
+                                                 f.ToLowerInvariant().EndsWith("\\app.json")).ToList();
+                if (files != null && files.Count > 0)
                 {
-                    var root = new FileInfo(path).Directory?.Parent?.Parent?.Parent;
-                    var files = root.GetFiles(configName, SearchOption.AllDirectories).ToList();
-                    path = files.FirstOrDefault()?.FullName;
-                    var jsonContent = File.ReadAllText(path);
-                    var xdoc = JsonConvert.DeserializeXNode(jsonContent);
-                    logger.Factory.Configuration = new XmlLoggingConfiguration(xdoc.CreateReader(), Path.GetFileName(path));
+                    if (files.Count > 1)
+                        throw new Exception("Too many logger configs found.");
+
+                    path = files.FirstOrDefault();
+                    var extention = Path.GetExtension(path);
+                    switch (extention)
+                    {
+                        case ".json":
+                            logger.Factory.Configuration = new XmlLoggingConfiguration(GetXmlReader(path), Path.GetFileName(path));
+                            break;
+                        case ".config":
+                            logger.Factory.Configuration = new XmlLoggingConfiguration(path);
+                            break;
+                        default:
+                            throw new Exception($"unkown log format {extention}.");
+                    }
                 }
                 else
                 {
-                    throw new Exception("No logger config load.");
+                    throw new Exception("No logger config loaded.");
                 }
             }
             catch
             {
-                Console.WriteLine($"The logger setting are invalid!!!\nPlease check the {configName} in the app folder.");
+                Console.WriteLine($"The logger setting are invalid!!!\nPlease check the {path} in the app folder.");
             }
         }
 
