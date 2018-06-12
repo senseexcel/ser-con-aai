@@ -185,17 +185,26 @@ namespace Ser.ConAai
                 if (userParameter.DomainUser.UserId == "sa_scheduler" &&
                     userParameter.DomainUser.UserDirectory == "INTERNAL")
                 {
-                    //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
-                    userParameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
-                    logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
-                    activeTask = taskManager.CreateTask(userParameter);
-                    var tmpsession = taskManager.GetSession(onDemandConfig.Connection, activeTask);
-                    var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
-                    var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
-                    var hubInfo = JsonConvert.DeserializeObject<HubInfo>(qrsResult);
-                    if (hubInfo == null)
-                        throw new Exception($"No app owner for app id {userParameter.AppId} found.");
-                    userParameter.DomainUser = new DomainUser($"{hubInfo.Owner.UserDirectory}\\{hubInfo.Owner.UserId}");
+                    try
+                    {
+                        //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
+                        userParameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
+                        activeTask = taskManager.CreateTask(userParameter);
+                        var tmpsession = taskManager.GetSession(onDemandConfig.Connection, activeTask);
+                        var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
+                        var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
+                        logger.Trace($"appResult:{qrsResult}");
+                        var hubInfo = JsonConvert.DeserializeObject<HubInfo>(qrsResult);
+                        if (hubInfo == null)
+                            throw new Exception($"No app owner for app id {userParameter.AppId} found.");
+                        userParameter.DomainUser = new DomainUser($"{hubInfo.Owner.UserDirectory}\\{hubInfo.Owner.UserId}");
+                        logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
+                        taskManager.RemoveTask(activeTask.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, "could not switch the task user.");
+                    }
                 }
 
                 string taskId = null;
@@ -205,7 +214,9 @@ namespace Ser.ConAai
                 switch (functionCall)
                 {
                     case SerFunction.START:
-                        result = CreateReport(userParameter, json, workDir, activeTask);
+                        logger.Trace("Create report start");
+                        result = CreateReport(userParameter, json, workDir);
+                        logger.Trace("Create report end");
                         break;
                     case SerFunction.STATUS:
                         #region Status
@@ -344,8 +355,10 @@ namespace Ser.ConAai
             return false;
         }
 
-        private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir, ActiveTask activeTask = null)
+        private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir)
         {
+            ActiveTask activeTask = null;
+
             try
             {
                 var id = new DirectoryInfo(workDir).Name;
@@ -432,8 +445,8 @@ namespace Ser.ConAai
                     task.Status = -1;
                 if (task.Session == null)
                     task.Status = -2;
+                logger.Error(ex, "The report could not create.");
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = ex.Message };
-                throw new Exception("The report could not be created.", ex);
             }
         }
 
