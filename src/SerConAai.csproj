@@ -23,7 +23,7 @@
         <PackageReference Include="SerApi" Version="3.1.6" />
         <PackageReference Include="SerDistribute" Version="2.1.0" />
         <PackageReference Include="Q2gHelperPem" Version="1.0.6" />
-        <PackageReference Include="Q2gHelperQrs" Version="1.2.0" />
+        <PackageReference Include="Q2gHelperQrs" Version="1.2.1" />
       </ItemGroup>
     </When>
     <Otherwise>
