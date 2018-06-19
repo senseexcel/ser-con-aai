@@ -195,8 +195,15 @@ namespace Ser.ConAai
                         var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
                         logger.Trace($"appResult:{qrsResult}");
                         dynamic jObject = JObject.Parse(qrsResult);
-                        userParameter.DomainUser = new DomainUser($"{jObject?.owner?.userDirectory}\\{jObject?.owner?.userId}");
-                        logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
+                        var userDirectory = jObject?.owner?.userDirectory ?? null;
+                        var userId = jObject?.owner?.userId ?? null;
+                        if (String.IsNullOrEmpty(userDirectory) || String.IsNullOrEmpty(userId))
+                            logger.Warn($"No user directory {userDirectory} or user id {userId} found.");
+                        else
+                        {
+                            userParameter.DomainUser = new DomainUser($"{userDirectory}\\{userId}");
+                            logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
+                        }
                         taskManager.RemoveTask(activeTask.Id);
                     }
                     catch (Exception ex)
