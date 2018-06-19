@@ -194,11 +194,16 @@ namespace Ser.ConAai
                         var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
                         var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
                         logger.Trace($"appResult:{qrsResult}");
-                        var hubInfo = JsonConvert.DeserializeObject<HubInfo>(qrsResult);
-                        if (hubInfo == null)
-                            throw new Exception($"No app owner for app id {userParameter.AppId} found.");
-                        userParameter.DomainUser = new DomainUser($"{hubInfo.Owner.UserDirectory}\\{hubInfo.Owner.UserId}");
-                        logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
+                        dynamic jObject = JObject.Parse(qrsResult);
+                        string userDirectory = jObject?.owner?.userDirectory ?? null;
+                        string userId = jObject?.owner?.userId ?? null;
+                        if (String.IsNullOrEmpty(userDirectory) || String.IsNullOrEmpty(userId))
+                            logger.Warn($"No user directory {userDirectory} or user id {userId} found.");
+                        else
+                        {
+                            userParameter.DomainUser = new DomainUser($"{userDirectory}\\{userId}");
+                            logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
+                        }
                         taskManager.RemoveTask(activeTask.Id);
                     }
                     catch (Exception ex)
