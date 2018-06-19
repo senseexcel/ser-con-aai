@@ -195,8 +195,8 @@ namespace Ser.ConAai
                         var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
                         logger.Trace($"appResult:{qrsResult}");
                         dynamic jObject = JObject.Parse(qrsResult);
-                        var userDirectory = jObject?.owner?.userDirectory ?? null;
-                        var userId = jObject?.owner?.userId ?? null;
+                        string userDirectory = jObject?.owner?.userDirectory ?? null;
+                        string userId = jObject?.owner?.userId ?? null;
                         if (String.IsNullOrEmpty(userDirectory) || String.IsNullOrEmpty(userId))
                             logger.Warn($"No user directory {userDirectory} or user id {userId} found.");
                         else
