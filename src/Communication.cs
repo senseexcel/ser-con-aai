@@ -41,23 +41,4 @@ namespace Ser.ConAai
         public int CleanupTimeout { get; set; } = 20000;
         #endregion
     }
-
-    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
-                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
-    public class OnDemandResult
-    {
-        #region Properties
-        public int Status { get; set; }
-        public string TaskId { get; set; }
-        public string Link { get; set; }
-        public string Log { get; set; }
-        public List<ActiveTask> Tasks { get; set; }
-        public List<VersionInfo> Versions { get; set; }
-        #endregion
-
-        public override string ToString()
-        {
-            return $"{Status}";
-        }
-    }
 }
