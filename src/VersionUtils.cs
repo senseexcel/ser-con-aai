@@ -1,26 +1,15 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
-using Q2g.HelperPem;
-using Q2g.HelperQrs;
-using System;
-using System.Collections.Generic;
-using System.Reflection;
-using System.Text;
-
-namespace Ser.ConAai
+﻿namespace Ser.ConAai
 {
-    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
-                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
-    public class VersionInfo
-    {
-        public string Name { get; set; }
-        public string Version { get; set; }
-
-        public override string ToString()
-        {
-            return Name;
-        }
-}
+    #region Usings
+    using Newtonsoft.Json;
+    using Newtonsoft.Json.Serialization;
+    using Q2g.HelperPem;
+    using Q2g.HelperQrs;
+    using System;
+    using System.Collections.Generic;
+    using System.Reflection;
+    using System.Text;
+    #endregion
 
     public class VersionUtils
     {
@@ -32,7 +21,6 @@ namespace Ser.ConAai
                 var title = assembly.GetCustomAttribute(type) as AssemblyTitleAttribute;
                 type = typeof(AssemblyInformationalVersionAttribute);
                 var gitVersion = assembly.GetCustomAttribute(type) as AssemblyInformationalVersionAttribute;
-
                 return new VersionInfo()
                 {
                     Name = title?.Title,

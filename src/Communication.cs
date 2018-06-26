@@ -44,21 +44,6 @@ namespace Ser.ConAai
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
                 NamingStrategyType = typeof(CamelCaseNamingStrategy))]
-    public class ActiveTask
-    {
-        public int ProcessId { get; set; }
-        public string DownloadLink { get; set; }
-        public int Status { get; set; }
-        public string Id { get; set; }
-        public DateTime StartTime { get; set; }
-        //public string AppName { get; set; }
-        public string AppId { get; set; }
-        public DomainUser UserId { get; set; }
-        public SessionInfo Session { get; set; }
-    }
-
-    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
-                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
     public class OnDemandResult
     {
         #region Properties

@@ -29,11 +29,9 @@ namespace Ser.ConAai
     using Ser.Api;
     using Hjson;
     using System.Net.Http;
-    using Newtonsoft.Json.Serialization;
     using Ser.Distribute;
     using System.Security.Cryptography.X509Certificates;
     using System.Net.Security;
-    using System.Reflection;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -250,7 +248,7 @@ namespace Ser.ConAai
                                 if (tasks == "all")
                                 {
                                     var session = activeTask.Session;
-                                    statusResult.Tasks = taskManager.GetAllTasksForUser(session?.ConnectUri, 
+                                    statusResult.Tasks = taskManager.GetAllTasksForUser(session?.ConnectUri,
                                                                                         session?.Cookie, activeTask.UserId);
                                 }
 
@@ -258,11 +256,7 @@ namespace Ser.ConAai
                                 statusResult.Link = activeTask.DownloadLink;
                             }
                             else
-                            {
                                 logger.Debug($"No existing task id {taskId} found.");
-
-
-                            }
                         }
                         result = statusResult;  
                         break; 
@@ -348,12 +342,15 @@ namespace Ser.ConAai
                         if (!String.IsNullOrEmpty(item.Url))
                             uri = new Uri(item.Url);
                         var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "");
-                        if (thumbprint == cert.GetCertHashString() && uri == null || 
-                            thumbprint == cert.GetCertHashString() &&
-                            uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())
+                        if ((thumbprint == cert.GetCertHashString() && uri == null) ||
+                            (thumbprint == cert.GetCertHashString()) &&
+                            (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant()))
                             return true;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, "Thumbprint could not be validated.");
+                    }
                 }
             }
 

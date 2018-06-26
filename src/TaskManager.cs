@@ -29,16 +29,6 @@ namespace Ser.ConAai
     using Newtonsoft.Json.Linq;
     #endregion
 
-    public class SessionInfo
-    {
-        #region Properties
-        public Cookie Cookie { get; set; }
-        public Uri ConnectUri { get; set; }
-        public string AppId { get; set; }
-        public DomainUser UserId { get; set; }
-        #endregion
-    }
-
     public class TaskManager
     {
         #region Logger

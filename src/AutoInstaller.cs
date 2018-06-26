@@ -286,12 +286,4 @@
             }
         }
     }
-
-    public class InstallParameter
-    {
-        public string CookieHeaderName { get; set; }
-        public string Prefix { get; set; }
-        public string CertificatePath { get; set; }
-        public string ExtentionPath { get; set; }
-    }
 }
