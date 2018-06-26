@@ -20,7 +20,6 @@ namespace Ser.ConAai
     using System.Net;
     using System.Threading;
     using System.Threading.Tasks;
-    using static Qlik.Sse.Connector;
     using NLog;
     using System.IO;
     using Newtonsoft.Json;
@@ -32,6 +31,7 @@ namespace Ser.ConAai
     using Ser.Distribute;
     using System.Security.Cryptography.X509Certificates;
     using System.Net.Security;
+    using static Qlik.Sse.Connector;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -76,7 +76,7 @@ namespace Ser.ConAai
         public SerEvaluator(SerOnDemandConfig config)
         {
             onDemandConfig = config;
-            taskManager = new TaskManager();            
+            taskManager = new TaskManager();
             ServicePointManager.ServerCertificateValidationCallback += ValidateRemoteCertificate;
             //RestoreTasks();
         }
@@ -90,7 +90,7 @@ namespace Ser.ConAai
             try
             {
                 logger.Info($"GetCapabilities was called");
-      
+
                 return Task.FromResult(new Capabilities
                 {
                     PluginVersion = onDemandConfig.AppVersion,
@@ -141,7 +141,9 @@ namespace Ser.ConAai
             }
         }
 
-        public override async Task ExecuteFunction(IAsyncStreamReader<BundledRows> requestStream, IServerStreamWriter<BundledRows> responseStream, ServerCallContext context)
+        public override async Task ExecuteFunction(IAsyncStreamReader<BundledRows> requestStream,
+                                                   IServerStreamWriter<BundledRows> responseStream,
+                                                   ServerCallContext context)
         {
             try
             {
@@ -149,9 +151,7 @@ namespace Ser.ConAai
                 Thread.Sleep(200);
                 var functionRequestHeaderStream = context.RequestHeaders.SingleOrDefault(header => header.Key == "qlik-functionrequestheader-bin");
                 if (functionRequestHeaderStream == null)
-                {
                     throw new Exception("ExecuteFunction called without Function Request Header in Request Headers.");
-                }
 
                 var functionRequestHeader = new FunctionRequestHeader();
                 functionRequestHeader.MergeFrom(new CodedInputStream(functionRequestHeaderStream.ValueBytes));
@@ -213,6 +213,7 @@ namespace Ser.ConAai
                 string taskId = null;
                 string versions = null;
                 string tasks = null;
+                string log = null;
 
                 switch (functionCall)
                 {
@@ -230,6 +231,7 @@ namespace Ser.ConAai
                             taskId = jsonObject?.taskId ?? null;
                             versions = jsonObject?.versions ?? null;
                             tasks = jsonObject.tasks ?? null;
+                            log = jsonObject.log ?? null;
                         }
 
                         var statusResult = new OnDemandResult()
@@ -251,15 +253,15 @@ namespace Ser.ConAai
                                     statusResult.Tasks = taskManager.GetAllTasksForUser(session?.ConnectUri,
                                                                                         session?.Cookie, activeTask.UserId);
                                 }
-
                                 statusResult.Status = activeTask.Status;
+                                statusResult.Log = log;
                                 statusResult.Link = activeTask.DownloadLink;
                             }
                             else
                                 logger.Debug($"No existing task id {taskId} found.");
                         }
-                        result = statusResult;  
-                        break; 
+                        result = statusResult;
+                        break;
                     #endregion
                     case SerFunction.STOP:
                         #region Stop
@@ -286,7 +288,7 @@ namespace Ser.ConAai
                         }
 
                         result = new OnDemandResult() { Status = activeTask.Status };
-                        break; 
+                        break;
                     #endregion
                     default:
                         throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
