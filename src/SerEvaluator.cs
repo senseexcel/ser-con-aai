@@ -359,6 +359,14 @@ namespace Ser.ConAai
             return false;
         }
 
+        private string FindAppId(string appId, SerConfig config)
+        {
+            foreach (var task in config.Tasks)
+                foreach (var report in task.Reports)
+                    return report?.Connections?.FirstOrDefault(c => c.App == appId)?.App ?? null;
+            return null;
+        }
+
         private OnDemandResult CreateReport(UserParameter parameter, string json)
         {
             ActiveTask activeTask = null;
@@ -421,25 +429,11 @@ namespace Ser.ConAai
                 var serConfig = JsonConvert.SerializeObject(newEngineConfig, Formatting.Indented);
                 File.WriteAllText(savePath, serConfig);
 
-                //Start SER Engine as Process
-                logger.Debug($"Start Engine \"{currentWorkingDir}\"...");
-                var serProcess = new Process();
-                serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
-                serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\" --privatekeypath \"{parameter.PrivateKeyPath}\"";
-                serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                serProcess.Start();
-                activeTask.ProcessId = serProcess.Id;
-
-                //Write process file
-                var procFileName = $"{Path.GetFileNameWithoutExtension(serProcess.StartInfo.FileName)}.pid";
-                File.WriteAllText(Path.Combine(currentWorkingDir, procFileName),
-                                  $"{serProcess.Id.ToString()}|{parameter.AppId.ToString()}|{parameter.DomainUser.ToString()}");
-
-                var statusThread = new Thread(() => CheckStatus(parameter, activeTask))
-                {
-                    IsBackground = true
-                };
-                statusThread.Start();
+                //Use the connector in the same App
+                if (FindAppId(parameter.AppId, newEngineConfig) != null)
+                    Task.Run(() => WaitForDataLoad(activeTask, parameter));
+                else
+                    StartProcess(activeTask, parameter);
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
             }
             catch (Exception ex)
@@ -451,6 +445,46 @@ namespace Ser.ConAai
                     task.Status = -2;
                 logger.Error(ex, "The report could not create.");
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = ex.Message };
+            }
+        }
+
+        private void StartProcess(ActiveTask task, UserParameter parameter)
+        {
+            //Start SER Engine as Process
+            var currentWorkDir = Path.Combine(parameter.WorkDir, task.Id);
+            logger.Debug($"Start Engine \"{onDemandConfig.SerEnginePath}\"...");
+            var serProcess = new Process();
+            serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
+            serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkDir}\" --privatekeypath \"{parameter.PrivateKeyPath}\"";
+            serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+            serProcess.Start();
+            task.ProcessId = serProcess.Id;
+
+            //Write process file
+            var procFileName = $"{Path.GetFileNameWithoutExtension(serProcess.StartInfo.FileName)}.pid";
+            File.WriteAllText(Path.Combine(currentWorkDir, procFileName),
+                              $"{serProcess.Id.ToString()}|{parameter.AppId.ToString()}|{parameter.DomainUser.ToString()}");
+
+            var statusThread = new Thread(() => CheckStatus(parameter, task))
+            {
+                IsBackground = true
+            };
+            statusThread.Start();
+        }
+
+        private void WaitForDataLoad(ActiveTask task, UserParameter parameter)
+        {
+            var reloadTime = GetLastReloadTime(task, parameter.AppId);
+            if (reloadTime != null)
+            {
+                while (true)
+                {
+                    Thread.Sleep(500);
+                    var tempLoad = GetLastReloadTime(task, parameter.AppId);
+                    if (reloadTime.Value.Ticks < tempLoad.Value.Ticks)
+                        break;
+                }
+                StartProcess(task, parameter);
             }
         }
 
@@ -472,6 +506,24 @@ namespace Ser.ConAai
             {
                 logger.Error(ex);
                 return false;
+            }
+        }
+
+        private DateTime? GetLastReloadTime(ActiveTask task, string appId)
+        {
+            try
+            {
+                var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, task.Session.Cookie);
+                var qrsResult = qrshub.SendRequestAsync($"app/{appId}", HttpMethod.Get).Result;
+                logger.Trace($"appResult:{qrsResult}");
+                dynamic jObject = JObject.Parse(qrsResult);
+                DateTime reloadTime = jObject?.lastReloadTime.ToObject<DateTime>() ?? null;
+                return reloadTime;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The last reload time could not found.");
+                return null;
             }
         }
 
