@@ -28,6 +28,7 @@ namespace Ser.ConAai
     public class UserParameter
     {
         #region Properties
+        public string WorkDir { get; set; }
         public string SaveFormats { get; set; }
         public SelectionMode UseUserSelesction { get; set; }
         public string AppId { get; set; }

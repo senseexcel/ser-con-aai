@@ -165,7 +165,8 @@ namespace Ser.ConAai
                 {
                     AppId = commonHeader.AppId,
                     DomainUser = domainUser,
-                };
+                    WorkDir = PathUtils.GetFullPathFromApp(onDemandConfig.WorkingDir),
+            };
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
 
@@ -175,7 +176,6 @@ namespace Ser.ConAai
 
                 var functionCall = (SerFunction)functionRequestHeader.FunctionId;
                 logger.Debug($"Function id: {functionCall}");
-                var workDir = PathUtils.GetFullPathFromApp(onDemandConfig.WorkingDir);
                 dynamic jsonObject;
 
                 //Caution: Personal//Me => Desktop Mode
@@ -219,7 +219,7 @@ namespace Ser.ConAai
                 {
                     case SerFunction.START:
                         logger.Trace("Create report start");
-                        result = CreateReport(userParameter, json, workDir);
+                        result = CreateReport(userParameter, json);
                         logger.Trace("Create report end");
                         break;
                     case SerFunction.STATUS:
@@ -262,7 +262,7 @@ namespace Ser.ConAai
                         }
                         result = statusResult;
                         break;
-                    #endregion
+                        #endregion
                     case SerFunction.STOP:
                         #region Stop
                         json = GetNormalizeJson(json);
@@ -284,12 +284,12 @@ namespace Ser.ConAai
                         else
                         {
                             activeTask.Status = 0;
-                            FinishTask(workDir, userParameter.CleanupTimeout, activeTask);
+                            FinishTask(userParameter, activeTask);
                         }
 
                         result = new OnDemandResult() { Status = activeTask.Status };
                         break;
-                    #endregion
+                         #endregion
                     default:
                         throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
                 }
@@ -304,7 +304,7 @@ namespace Ser.ConAai
                 {
                     Log = ex.ToString(),
                     Status = -1
-                }));
+                })); 
             }
             finally
             {
@@ -359,20 +359,20 @@ namespace Ser.ConAai
             return false;
         }
 
-        private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir)
+        private OnDemandResult CreateReport(UserParameter parameter, string json)
         {
             ActiveTask activeTask = null;
 
             try
             {
-                var id = new DirectoryInfo(workDir).Name;
+                var id = new DirectoryInfo(parameter.WorkDir).Name;
                 var currentWorkingDir = String.Empty;
                 if (!Guid.TryParse(id, out var result))
                 {
                     if (activeTask == null)
                         activeTask = taskManager.CreateTask(parameter);
 
-                    currentWorkingDir = Path.Combine(workDir, activeTask.Id);
+                    currentWorkingDir = Path.Combine(parameter.WorkDir, activeTask.Id);
                     Directory.CreateDirectory(currentWorkingDir);
                     logger.Debug($"New Task-ID: {activeTask.Id}");
                 }
@@ -380,7 +380,7 @@ namespace Ser.ConAai
                 {
                     activeTask = taskManager.GetRunningTask(id);
                     logger.Debug($"Running Task-ID: {activeTask.Id}");
-                    currentWorkingDir = workDir;
+                    currentWorkingDir = parameter.WorkDir;
                 }
 
                 logger.Debug($"TempFolder: {currentWorkingDir}");
@@ -401,7 +401,7 @@ namespace Ser.ConAai
                 if (session == null)
                 {
                     SoftDelete(currentWorkingDir);
-                    SSEtoSER.CheckQlikConnection();
+                    Program.Service?.CheckQlikConnection();
                     throw new Exception("No session cookie generated.");
                 }
                 parameter.ConnectCookie = session?.Cookie;
@@ -435,7 +435,7 @@ namespace Ser.ConAai
                 File.WriteAllText(Path.Combine(currentWorkingDir, procFileName),
                                   $"{serProcess.Id.ToString()}|{parameter.AppId.ToString()}|{parameter.DomainUser.ToString()}");
 
-                var statusThread = new Thread(() => CheckStatus(currentWorkingDir, parameter, activeTask))
+                var statusThread = new Thread(() => CheckStatus(parameter, activeTask))
                 {
                     IsBackground = true
                 };
@@ -510,6 +510,7 @@ namespace Ser.ConAai
                             {
                                 AppId = contentArray[1],
                                 DomainUser = new DomainUser(contentArray[2]),
+                                WorkDir = folder,
                             };
 
                             var jobJsonFile = files.Where(f => f.EndsWith("userJson.hjson")).FirstOrDefault();
@@ -520,7 +521,7 @@ namespace Ser.ConAai
                             if (resultFile != null)
                                 SoftDelete(Path.GetDirectoryName(resultFile));
 
-                            CreateReport(parameter, json, folder);
+                            CreateReport(parameter, json);
                         }
                         else
                         {
@@ -692,15 +693,23 @@ namespace Ser.ConAai
 
         private List<JToken> GetConnections(Uri host, string appId, Cookie cookie)
         {
-            var qlikWebSocket = new QlikWebSocket(host, cookie);
-            var isOpen = qlikWebSocket.OpenSocket();
-            dynamic response = qlikWebSocket.OpenDoc(appId);
-            if (response.ToString().Contains("App already open"))
-                response = qlikWebSocket.GetActiveDoc();
-            var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
-            response = qlikWebSocket.GetConnections(handle);
-            JArray results = response.result.qConnections;
-            return results.ToList();
+            try
+            {
+                var qlikWebSocket = new QlikWebSocket(host, cookie);
+                var isOpen = qlikWebSocket.OpenSocket();
+                dynamic response = qlikWebSocket.OpenDoc(appId);
+                if (response.ToString().Contains("App already open"))
+                    response = qlikWebSocket.GetActiveDoc();
+                var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
+                response = qlikWebSocket.GetConnections(handle);
+                JArray results = response.result.qConnections;
+                return results.ToList();
+            }
+            catch(Exception ex)
+            {
+                logger.Error(ex, "Could not read the lib connections.");
+                return new List<JToken>();
+            }
         }
 
         private List<string> GetLibraryContentInternal(QlikWebSocket qlikWebSocket, string handle, string qName)
@@ -780,7 +789,7 @@ namespace Ser.ConAai
             return resultBundle;
         }
 
-        private void CheckStatus(string currentWorkingDir, UserParameter parameter, ActiveTask task)
+        private void CheckStatus(UserParameter parameter, ActiveTask task)
         {
             var status = 0;
             while (status != 2)
@@ -791,7 +800,7 @@ namespace Ser.ConAai
                     status = task.Status;
                     break;
                 }
-                status = Status(currentWorkingDir, task.Status);
+                status = Status(Path.Combine(parameter.WorkDir, task.Id), task.Status);
                 if (status == -1 || status == 0)
                     break;
 
@@ -813,25 +822,25 @@ namespace Ser.ConAai
                 return;
 
             //Delivery
-            status = StartDeliveryTool(currentWorkingDir, task, parameter.OnDemand, parameter.PrivateKeyPath);
+            status = StartDeliveryTool(task, parameter);
             task.Status = status;
 
             //Cleanup
             if (!parameter.OnDemand)
-                FinishTask(currentWorkingDir, parameter.CleanupTimeout, task);
+                FinishTask(parameter, task);
         }
 
-        private void FinishTask(string workDir, int cleanupTimeout, ActiveTask task)
+        private void FinishTask(UserParameter parameter, ActiveTask task)
         {
             try
             {
                 var finTask = Task
-                .Delay(cleanupTimeout)
+                .Delay(parameter.CleanupTimeout)
                 .ContinueWith((_) =>
                 {
                     logger.Debug($"Cleanup Process, Folder and Task");
                     KillProcess(task.ProcessId);
-                    SoftDelete($"{workDir}\\{task.Id}");
+                    SoftDelete($"{parameter.WorkDir}\\{task.Id}");
                     taskManager.RemoveTask(task.Id);
                     logger.Debug($"Cleanup complete");
                 });
@@ -897,14 +906,14 @@ namespace Ser.ConAai
             }
         }
 
-        private int StartDeliveryTool(string workdir, ActiveTask task, bool ondemand = false, string privateKeyPath = null)
+        private int StartDeliveryTool(ActiveTask task, UserParameter parameter)
         {
             try
             {
-                var jobResultPath = Path.Combine(workdir, "JobResults");
+                var jobResultPath = Path.Combine(parameter.WorkDir, task.Id, "JobResults");
                 var distribute = new Distribute();
-                var privateKeyFullname = PathUtils.GetFullPathFromApp(privateKeyPath);
-                var result = distribute.Run(jobResultPath, ondemand, privateKeyFullname);
+                var privateKeyFullname = PathUtils.GetFullPathFromApp(parameter.PrivateKeyPath);
+                var result = distribute.Run(jobResultPath, parameter.OnDemand, privateKeyFullname);
                 if (result != null)
                 {
                     task.DownloadLink = result;

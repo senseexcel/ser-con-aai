@@ -62,39 +62,10 @@ namespace Ser.ConAai
                 logger.Error(ex, $"The Method {nameof(CreateCertificate)} was failed.");
             }
         }
-
-        private bool CheckConnection()
-        {
-            try
-            {
-                var connection = config.Connection;
-                var task = new ActiveTask()
-                {
-                    AppId = connection.App,
-                    UserId = new DomainUser("INTERNAL\\ser_scheduler"),
-                };
-
-                var taskManager = new TaskManager();
-                var session = taskManager.GetSession(connection, task);
-                if (session.Cookie != null)
-                {
-                    logger.Debug("The connection to Qlik Sense was successful.");
-                    return true;
-                }
-
-                logger.Error("NO PROXY CONNECTION TO QLIK SENSE!!!");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "Connection check failed.");
-                return false;
-            }
-        }
         #endregion
 
         #region Public Methods
-        public static void CheckQlikConnection()
+        public void CheckQlikConnection()
         {
             var newTask = Task<bool>.Factory.StartNew(() =>
             {
@@ -114,7 +85,7 @@ namespace Ser.ConAai
                         logger.Info("The connection to Qlik Sense was successful.");
                         return true;
                     }
-
+                    
                     logger.Error("NO PROXY CONNECTION TO QLIK SENSE!!!");
                     return false;
                 }
@@ -165,6 +136,9 @@ namespace Ser.ConAai
 
                 //Read Assembly versions
                 var enginePath = PathUtils.GetFullPathFromApp(config.SerEnginePath);
+                if (!File.Exists(enginePath))
+                    logger.Warn($"The engine path \"{enginePath}\" does not exists.");
+
                 config.PackageVersions = VersionUtils.ReadAssemblyVersions(enginePath);
                 foreach (var package in config.PackageVersions)
                     logger.Debug($"Assembly: {package.Name} / {package.Version}");
