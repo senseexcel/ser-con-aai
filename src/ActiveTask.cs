@@ -10,34 +10,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace Ser.ConAai
 {
     #region Usings
-    using Newtonsoft.Json.Linq;
+    using Newtonsoft.Json;
+    using Newtonsoft.Json.Serialization;
+    using Ser.Api;
     using System;
     using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
     #endregion
 
-    public static class JsonExtended
+    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
+                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
+    public class ActiveTask
     {
-        public static JToken RemoveFields(this JToken token, string[] fields)
-        {
-            if (!(token is JContainer container)) return token;
-            List<JToken> removeList = new List<JToken>();
-            foreach (JToken el in container.Children())
-            {
-                if (el is JProperty p && fields.Contains(p.Name))
-                {
-                    removeList.Add(el);
-                }
-                el.RemoveFields(fields);
-            }
-
-            foreach (JToken el in removeList)
-            {
-                el.Remove();
-            }
-
-            return token;
-        }
+        public int ProcessId { get; set; }
+        public string DownloadLink { get; set; }
+        public int Status { get; set; }
+        public string Id { get; set; }
+        public DateTime StartTime { get; set; }
+        public string AppId { get; set; }
+        public DomainUser UserId { get; set; }
+        public SessionInfo Session { get; set; }
     }
 }

@@ -8,36 +8,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #endregion
 
 namespace Ser.ConAai
-{
+{  
     #region Usings
-    using Newtonsoft.Json.Linq;
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using System.Text;
+    using Newtonsoft.Json;
+    using Newtonsoft.Json.Serialization;
     #endregion
 
-    public static class JsonExtended
+    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
+                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
+    public class OnDemandResult
     {
-        public static JToken RemoveFields(this JToken token, string[] fields)
+        #region Properties
+        public int Status { get; set; }
+        public string TaskId { get; set; }
+        public string Link { get; set; }
+        public string Log { get; set; }
+        public List<ActiveTask> Tasks { get; set; }
+        public List<VersionInfo> Versions { get; set; }
+        #endregion
+
+        public override string ToString()
         {
-            if (!(token is JContainer container)) return token;
-            List<JToken> removeList = new List<JToken>();
-            foreach (JToken el in container.Children())
-            {
-                if (el is JProperty p && fields.Contains(p.Name))
-                {
-                    removeList.Add(el);
-                }
-                el.RemoveFields(fields);
-            }
-
-            foreach (JToken el in removeList)
-            {
-                el.Remove();
-            }
-
-            return token;
+            return $"{Status}";
         }
     }
 }

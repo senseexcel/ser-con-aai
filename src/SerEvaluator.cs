@@ -20,7 +20,6 @@ namespace Ser.ConAai
     using System.Net;
     using System.Threading;
     using System.Threading.Tasks;
-    using static Qlik.Sse.Connector;
     using NLog;
     using System.IO;
     using Newtonsoft.Json;
@@ -29,11 +28,10 @@ namespace Ser.ConAai
     using Ser.Api;
     using Hjson;
     using System.Net.Http;
-    using Newtonsoft.Json.Serialization;
     using Ser.Distribute;
     using System.Security.Cryptography.X509Certificates;
     using System.Net.Security;
-    using System.Reflection;
+    using static Qlik.Sse.Connector;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -78,7 +76,7 @@ namespace Ser.ConAai
         public SerEvaluator(SerOnDemandConfig config)
         {
             onDemandConfig = config;
-            taskManager = new TaskManager();            
+            taskManager = new TaskManager();
             ServicePointManager.ServerCertificateValidationCallback += ValidateRemoteCertificate;
             //RestoreTasks();
         }
@@ -92,7 +90,7 @@ namespace Ser.ConAai
             try
             {
                 logger.Info($"GetCapabilities was called");
-      
+
                 return Task.FromResult(new Capabilities
                 {
                     PluginVersion = onDemandConfig.AppVersion,
@@ -143,7 +141,9 @@ namespace Ser.ConAai
             }
         }
 
-        public override async Task ExecuteFunction(IAsyncStreamReader<BundledRows> requestStream, IServerStreamWriter<BundledRows> responseStream, ServerCallContext context)
+        public override async Task ExecuteFunction(IAsyncStreamReader<BundledRows> requestStream,
+                                                   IServerStreamWriter<BundledRows> responseStream,
+                                                   ServerCallContext context)
         {
             try
             {
@@ -151,9 +151,7 @@ namespace Ser.ConAai
                 Thread.Sleep(200);
                 var functionRequestHeaderStream = context.RequestHeaders.SingleOrDefault(header => header.Key == "qlik-functionrequestheader-bin");
                 if (functionRequestHeaderStream == null)
-                {
                     throw new Exception("ExecuteFunction called without Function Request Header in Request Headers.");
-                }
 
                 var functionRequestHeader = new FunctionRequestHeader();
                 functionRequestHeader.MergeFrom(new CodedInputStream(functionRequestHeaderStream.ValueBytes));
@@ -167,7 +165,8 @@ namespace Ser.ConAai
                 {
                     AppId = commonHeader.AppId,
                     DomainUser = domainUser,
-                };
+                    WorkDir = PathUtils.GetFullPathFromApp(onDemandConfig.WorkingDir),
+            };
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
 
@@ -177,7 +176,6 @@ namespace Ser.ConAai
 
                 var functionCall = (SerFunction)functionRequestHeader.FunctionId;
                 logger.Debug($"Function id: {functionCall}");
-                var workDir = PathUtils.GetFullPathFromApp(onDemandConfig.WorkingDir);
                 dynamic jsonObject;
 
                 //Caution: Personal//Me => Desktop Mode
@@ -215,12 +213,13 @@ namespace Ser.ConAai
                 string taskId = null;
                 string versions = null;
                 string tasks = null;
+                string log = null;
 
                 switch (functionCall)
                 {
                     case SerFunction.START:
                         logger.Trace("Create report start");
-                        result = CreateReport(userParameter, json, workDir);
+                        result = CreateReport(userParameter, json);
                         logger.Trace("Create report end");
                         break;
                     case SerFunction.STATUS:
@@ -232,6 +231,7 @@ namespace Ser.ConAai
                             taskId = jsonObject?.taskId ?? null;
                             versions = jsonObject?.versions ?? null;
                             tasks = jsonObject.tasks ?? null;
+                            log = jsonObject.log ?? null;
                         }
 
                         var statusResult = new OnDemandResult()
@@ -250,23 +250,19 @@ namespace Ser.ConAai
                                 if (tasks == "all")
                                 {
                                     var session = activeTask.Session;
-                                    statusResult.Tasks = taskManager.GetAllTasksForUser(session?.ConnectUri, 
+                                    statusResult.Tasks = taskManager.GetAllTasksForUser(session?.ConnectUri,
                                                                                         session?.Cookie, activeTask.UserId);
                                 }
-
                                 statusResult.Status = activeTask.Status;
+                                statusResult.Log = log;
                                 statusResult.Link = activeTask.DownloadLink;
                             }
                             else
-                            {
                                 logger.Debug($"No existing task id {taskId} found.");
-
-
-                            }
                         }
-                        result = statusResult;  
-                        break; 
-                    #endregion
+                        result = statusResult;
+                        break;
+                        #endregion
                     case SerFunction.STOP:
                         #region Stop
                         json = GetNormalizeJson(json);
@@ -288,12 +284,12 @@ namespace Ser.ConAai
                         else
                         {
                             activeTask.Status = 0;
-                            FinishTask(workDir, userParameter.CleanupTimeout, activeTask);
+                            FinishTask(userParameter, activeTask);
                         }
 
                         result = new OnDemandResult() { Status = activeTask.Status };
-                        break; 
-                    #endregion
+                        break;
+                         #endregion
                     default:
                         throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
                 }
@@ -308,7 +304,7 @@ namespace Ser.ConAai
                 {
                     Log = ex.ToString(),
                     Status = -1
-                }));
+                })); 
             }
             finally
             {
@@ -348,32 +344,43 @@ namespace Ser.ConAai
                         if (!String.IsNullOrEmpty(item.Url))
                             uri = new Uri(item.Url);
                         var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "");
-                        if (thumbprint == cert.GetCertHashString() && uri == null || 
-                            thumbprint == cert.GetCertHashString() &&
-                            uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())
+                        if ((thumbprint == cert.GetCertHashString() && uri == null) ||
+                            (thumbprint == cert.GetCertHashString()) &&
+                            (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant()))
                             return true;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, "Thumbprint could not be validated.");
+                    }
                 }
             }
 
             return false;
         }
 
-        private OnDemandResult CreateReport(UserParameter parameter, string json, string workDir)
+        private string FindAppId(string appId, SerConfig config)
+        {
+            foreach (var task in config.Tasks)
+                foreach (var report in task.Reports)
+                    return report?.Connections?.FirstOrDefault(c => c.App == appId)?.App ?? null;
+            return null;
+        }
+
+        private OnDemandResult CreateReport(UserParameter parameter, string json)
         {
             ActiveTask activeTask = null;
 
             try
             {
-                var id = new DirectoryInfo(workDir).Name;
+                var id = new DirectoryInfo(parameter.WorkDir).Name;
                 var currentWorkingDir = String.Empty;
                 if (!Guid.TryParse(id, out var result))
                 {
                     if (activeTask == null)
                         activeTask = taskManager.CreateTask(parameter);
 
-                    currentWorkingDir = Path.Combine(workDir, activeTask.Id);
+                    currentWorkingDir = Path.Combine(parameter.WorkDir, activeTask.Id);
                     Directory.CreateDirectory(currentWorkingDir);
                     logger.Debug($"New Task-ID: {activeTask.Id}");
                 }
@@ -381,7 +388,7 @@ namespace Ser.ConAai
                 {
                     activeTask = taskManager.GetRunningTask(id);
                     logger.Debug($"Running Task-ID: {activeTask.Id}");
-                    currentWorkingDir = workDir;
+                    currentWorkingDir = parameter.WorkDir;
                 }
 
                 logger.Debug($"TempFolder: {currentWorkingDir}");
@@ -402,7 +409,7 @@ namespace Ser.ConAai
                 if (session == null)
                 {
                     SoftDelete(currentWorkingDir);
-                    SSEtoSER.CheckQlikConnection();
+                    Program.Service?.CheckQlikConnection();
                     throw new Exception("No session cookie generated.");
                 }
                 parameter.ConnectCookie = session?.Cookie;
@@ -422,25 +429,11 @@ namespace Ser.ConAai
                 var serConfig = JsonConvert.SerializeObject(newEngineConfig, Formatting.Indented);
                 File.WriteAllText(savePath, serConfig);
 
-                //Start SER Engine as Process
-                logger.Debug($"Start Engine \"{currentWorkingDir}\"...");
-                var serProcess = new Process();
-                serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
-                serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkingDir}\" --privatekeypath \"{parameter.PrivateKeyPath}\"";
-                serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                serProcess.Start();
-                activeTask.ProcessId = serProcess.Id;
-
-                //Write process file
-                var procFileName = $"{Path.GetFileNameWithoutExtension(serProcess.StartInfo.FileName)}.pid";
-                File.WriteAllText(Path.Combine(currentWorkingDir, procFileName),
-                                  $"{serProcess.Id.ToString()}|{parameter.AppId.ToString()}|{parameter.DomainUser.ToString()}");
-
-                var statusThread = new Thread(() => CheckStatus(currentWorkingDir, parameter, activeTask))
-                {
-                    IsBackground = true
-                };
-                statusThread.Start();
+                //Use the connector in the same App
+                if (FindAppId(parameter.AppId, newEngineConfig) != null)
+                    Task.Run(() => WaitForDataLoad(activeTask, parameter));
+                else
+                    StartProcess(activeTask, parameter);
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
             }
             catch (Exception ex)
@@ -452,6 +445,46 @@ namespace Ser.ConAai
                     task.Status = -2;
                 logger.Error(ex, "The report could not create.");
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = ex.Message };
+            }
+        }
+
+        private void StartProcess(ActiveTask task, UserParameter parameter)
+        {
+            //Start SER Engine as Process
+            var currentWorkDir = Path.Combine(parameter.WorkDir, task.Id);
+            logger.Debug($"Start Engine \"{onDemandConfig.SerEnginePath}\"...");
+            var serProcess = new Process();
+            serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
+            serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkDir}\" --privatekeypath \"{parameter.PrivateKeyPath}\"";
+            serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+            serProcess.Start();
+            task.ProcessId = serProcess.Id;
+
+            //Write process file
+            var procFileName = $"{Path.GetFileNameWithoutExtension(serProcess.StartInfo.FileName)}.pid";
+            File.WriteAllText(Path.Combine(currentWorkDir, procFileName),
+                              $"{serProcess.Id.ToString()}|{parameter.AppId.ToString()}|{parameter.DomainUser.ToString()}");
+
+            var statusThread = new Thread(() => CheckStatus(parameter, task))
+            {
+                IsBackground = true
+            };
+            statusThread.Start();
+        }
+
+        private void WaitForDataLoad(ActiveTask task, UserParameter parameter)
+        {
+            var reloadTime = GetLastReloadTime(task, parameter.AppId);
+            if (reloadTime != null)
+            {
+                while (true)
+                {
+                    Thread.Sleep(500);
+                    var tempLoad = GetLastReloadTime(task, parameter.AppId);
+                    if (reloadTime.Value.Ticks < tempLoad.Value.Ticks)
+                        break;
+                }
+                StartProcess(task, parameter);
             }
         }
 
@@ -473,6 +506,24 @@ namespace Ser.ConAai
             {
                 logger.Error(ex);
                 return false;
+            }
+        }
+
+        private DateTime? GetLastReloadTime(ActiveTask task, string appId)
+        {
+            try
+            {
+                var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, task.Session.Cookie);
+                var qrsResult = qrshub.SendRequestAsync($"app/{appId}", HttpMethod.Get).Result;
+                logger.Trace($"appResult:{qrsResult}");
+                dynamic jObject = JObject.Parse(qrsResult);
+                DateTime reloadTime = jObject?.lastReloadTime.ToObject<DateTime>() ?? null;
+                return reloadTime;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The last reload time could not found.");
+                return null;
             }
         }
 
@@ -511,6 +562,7 @@ namespace Ser.ConAai
                             {
                                 AppId = contentArray[1],
                                 DomainUser = new DomainUser(contentArray[2]),
+                                WorkDir = folder,
                             };
 
                             var jobJsonFile = files.Where(f => f.EndsWith("userJson.hjson")).FirstOrDefault();
@@ -521,7 +573,7 @@ namespace Ser.ConAai
                             if (resultFile != null)
                                 SoftDelete(Path.GetDirectoryName(resultFile));
 
-                            CreateReport(parameter, json, folder);
+                            CreateReport(parameter, json);
                         }
                         else
                         {
@@ -693,15 +745,23 @@ namespace Ser.ConAai
 
         private List<JToken> GetConnections(Uri host, string appId, Cookie cookie)
         {
-            var qlikWebSocket = new QlikWebSocket(host, cookie);
-            var isOpen = qlikWebSocket.OpenSocket();
-            dynamic response = qlikWebSocket.OpenDoc(appId);
-            if (response.ToString().Contains("App already open"))
-                response = qlikWebSocket.GetActiveDoc();
-            var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
-            response = qlikWebSocket.GetConnections(handle);
-            JArray results = response.result.qConnections;
-            return results.ToList();
+            try
+            {
+                var qlikWebSocket = new QlikWebSocket(host, cookie);
+                var isOpen = qlikWebSocket.OpenSocket();
+                dynamic response = qlikWebSocket.OpenDoc(appId);
+                if (response.ToString().Contains("App already open"))
+                    response = qlikWebSocket.GetActiveDoc();
+                var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
+                response = qlikWebSocket.GetConnections(handle);
+                JArray results = response.result.qConnections;
+                return results.ToList();
+            }
+            catch(Exception ex)
+            {
+                logger.Error(ex, "Could not read the lib connections.");
+                return new List<JToken>();
+            }
         }
 
         private List<string> GetLibraryContentInternal(QlikWebSocket qlikWebSocket, string handle, string qName)
@@ -781,7 +841,7 @@ namespace Ser.ConAai
             return resultBundle;
         }
 
-        private void CheckStatus(string currentWorkingDir, UserParameter parameter, ActiveTask task)
+        private void CheckStatus(UserParameter parameter, ActiveTask task)
         {
             var status = 0;
             while (status != 2)
@@ -792,7 +852,7 @@ namespace Ser.ConAai
                     status = task.Status;
                     break;
                 }
-                status = Status(currentWorkingDir, task.Status);
+                status = Status(Path.Combine(parameter.WorkDir, task.Id), task.Status);
                 if (status == -1 || status == 0)
                     break;
 
@@ -814,25 +874,25 @@ namespace Ser.ConAai
                 return;
 
             //Delivery
-            status = StartDeliveryTool(currentWorkingDir, task, parameter.OnDemand, parameter.PrivateKeyPath);
+            status = StartDeliveryTool(task, parameter);
             task.Status = status;
 
             //Cleanup
             if (!parameter.OnDemand)
-                FinishTask(currentWorkingDir, parameter.CleanupTimeout, task);
+                FinishTask(parameter, task);
         }
 
-        private void FinishTask(string workDir, int cleanupTimeout, ActiveTask task)
+        private void FinishTask(UserParameter parameter, ActiveTask task)
         {
             try
             {
                 var finTask = Task
-                .Delay(cleanupTimeout)
+                .Delay(parameter.CleanupTimeout)
                 .ContinueWith((_) =>
                 {
                     logger.Debug($"Cleanup Process, Folder and Task");
                     KillProcess(task.ProcessId);
-                    SoftDelete($"{workDir}\\{task.Id}");
+                    SoftDelete($"{parameter.WorkDir}\\{task.Id}");
                     taskManager.RemoveTask(task.Id);
                     logger.Debug($"Cleanup complete");
                 });
@@ -898,14 +958,14 @@ namespace Ser.ConAai
             }
         }
 
-        private int StartDeliveryTool(string workdir, ActiveTask task, bool ondemand = false, string privateKeyPath = null)
+        private int StartDeliveryTool(ActiveTask task, UserParameter parameter)
         {
             try
             {
-                var jobResultPath = Path.Combine(workdir, "JobResults");
+                var jobResultPath = Path.Combine(parameter.WorkDir, task.Id, "JobResults");
                 var distribute = new Distribute();
-                var privateKeyFullname = PathUtils.GetFullPathFromApp(privateKeyPath);
-                var result = distribute.Run(jobResultPath, ondemand, privateKeyFullname);
+                var privateKeyFullname = PathUtils.GetFullPathFromApp(parameter.PrivateKeyPath);
+                var result = distribute.Run(jobResultPath, parameter.OnDemand, privateKeyFullname);
                 if (result != null)
                 {
                     task.DownloadLink = result;

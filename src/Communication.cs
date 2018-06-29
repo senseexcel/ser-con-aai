@@ -28,7 +28,7 @@ namespace Ser.ConAai
     public class UserParameter
     {
         #region Properties
-        //public string TemplateFileName { get; set; }
+        public string WorkDir { get; set; }
         public string SaveFormats { get; set; }
         public SelectionMode UseUserSelesction { get; set; }
         public string AppId { get; set; }
@@ -40,39 +40,5 @@ namespace Ser.ConAai
         public string PrivateKeyPath { get; set; }
         public int CleanupTimeout { get; set; } = 20000;
         #endregion
-    }
-
-    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
-                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
-    public class ActiveTask
-    {
-        public int ProcessId { get; set; }
-        public string DownloadLink { get; set; }
-        public int Status { get; set; }
-        public string Id { get; set; }
-        public DateTime StartTime { get; set; }
-        //public string AppName { get; set; }
-        public string AppId { get; set; }
-        public DomainUser UserId { get; set; }
-        public SessionInfo Session { get; set; }
-    }
-
-    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
-                NamingStrategyType = typeof(CamelCaseNamingStrategy))]
-    public class OnDemandResult
-    {
-        #region Properties
-        public int Status { get; set; }
-        public string TaskId { get; set; }
-        public string Link { get; set; }
-        public string Log { get; set; }
-        public List<ActiveTask> Tasks { get; set; }
-        public List<VersionInfo> Versions { get; set; }
-        #endregion
-
-        public override string ToString()
-        {
-            return $"{Status}";
-        }
     }
 }

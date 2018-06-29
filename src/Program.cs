@@ -32,6 +32,8 @@ namespace Ser.ConAai
         private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
+        public static SSEtoSER Service { get; private set; }
+
         static void Main(string[] args)
         {
             try
@@ -46,7 +48,8 @@ namespace Ser.ConAai
                     {
                         serviceConfig.ServiceFactory((extraArguments, controller) =>
                         {
-                            return new SSEtoSER();
+                            Service = new SSEtoSER();
+                            return Service;
                         });
                         serviceConfig.OnStart((service, extraParams) =>
                         {

@@ -27,17 +27,8 @@ namespace Ser.ConAai
     using Newtonsoft.Json;
     using Q2g.HelperQrs;
     using Newtonsoft.Json.Linq;
+    using Ser.Distribute;
     #endregion
-
-    public class SessionInfo
-    {
-        #region Properties
-        public Cookie Cookie { get; set; }
-        public Uri ConnectUri { get; set; }
-        public string AppId { get; set; }
-        public DomainUser UserId { get; set; }
-        #endregion
-    }
 
     public class TaskManager
     {
@@ -100,6 +91,16 @@ namespace Ser.ConAai
                 var result = qrsHub.SendRequestAsync("about", HttpMethod.Get).Result;
                 if (String.IsNullOrEmpty(result))
                     return false;
+                try
+                {
+                    var qlikWebSocket = new QlikWebSocket(serverUri, cookie);
+                    var isOpen = qlikWebSocket.OpenSocket();
+                    qlikWebSocket.CloseSocket();
+                }
+                catch
+                {
+                    return false;
+                }
                 return true;
             }
             catch

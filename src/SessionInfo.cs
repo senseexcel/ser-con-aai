@@ -10,34 +10,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace Ser.ConAai
 {
     #region Usings
-    using Newtonsoft.Json.Linq;
     using System;
     using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
+    using System.Net;
+    using Ser.Api;
     #endregion
 
-    public static class JsonExtended
+    public class SessionInfo
     {
-        public static JToken RemoveFields(this JToken token, string[] fields)
-        {
-            if (!(token is JContainer container)) return token;
-            List<JToken> removeList = new List<JToken>();
-            foreach (JToken el in container.Children())
-            {
-                if (el is JProperty p && fields.Contains(p.Name))
-                {
-                    removeList.Add(el);
-                }
-                el.RemoveFields(fields);
-            }
-
-            foreach (JToken el in removeList)
-            {
-                el.Remove();
-            }
-
-            return token;
-        }
+        #region Properties
+        public Cookie Cookie { get; set; }
+        public Uri ConnectUri { get; set; }
+        public string AppId { get; set; }
+        public DomainUser UserId { get; set; }
+        #endregion
     }
 }
