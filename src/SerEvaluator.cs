@@ -359,11 +359,15 @@ namespace Ser.ConAai
             return false;
         }
 
-        private string FindAppId(string appId, SerConfig config)
+        private int? GetTimeOut(string appId, SerConfig config)
         {
             foreach (var task in config.Tasks)
                 foreach (var report in task.Reports)
-                    return report?.Connections?.FirstOrDefault(c => c.App == appId)?.App ?? null;
+                {
+                    var connection = report?.Connections?.FirstOrDefault(c => c.App == appId) ?? null;
+                    if (connection != null)
+                        return report.General.Timeout;
+                }
             return null;
         }
 
@@ -429,9 +433,13 @@ namespace Ser.ConAai
                 var serConfig = JsonConvert.SerializeObject(newEngineConfig, Formatting.Indented);
                 File.WriteAllText(savePath, serConfig);
 
-                //Use the connector in the same App
-                if (FindAppId(parameter.AppId, newEngineConfig) != null)
-                    Task.Run(() => WaitForDataLoad(activeTask, parameter));
+                //Use the connector in the same App, than wait for reload
+                var timeOut = GetTimeOut(parameter.AppId, newEngineConfig);
+                if (timeOut != null)
+                {
+                    var ct = new CancellationTokenSource(timeOut.Value * 1000).Token;
+                    Task.Run(() => WaitForDataLoad(activeTask, parameter, ct), ct);
+                }
                 else
                     StartProcess(activeTask, parameter);
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
@@ -472,7 +480,7 @@ namespace Ser.ConAai
             statusThread.Start();
         }
 
-        private void WaitForDataLoad(ActiveTask task, UserParameter parameter)
+        private void WaitForDataLoad(ActiveTask task, UserParameter parameter, CancellationToken token)
         {
             var reloadTime = GetLastReloadTime(task, parameter.AppId);
             if (reloadTime != null)
@@ -480,6 +488,8 @@ namespace Ser.ConAai
                 while (true)
                 {
                     Thread.Sleep(500);
+                    if (token.IsCancellationRequested)
+                        return;
                     var tempLoad = GetLastReloadTime(task, parameter.AppId);
                     if (reloadTime.Value.Ticks < tempLoad.Value.Ticks)
                         break;
