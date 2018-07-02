@@ -364,7 +364,7 @@ namespace Ser.ConAai
             foreach (var task in config.Tasks)
                 foreach (var report in task.Reports)
                 {
-                    var connection = report?.Connections?.FirstOrDefault(c => c.App == appId) ?? null;
+                    var connection = report?.Connections?.FirstOrDefault(c => c.App == appId && c.Credentials.Type != QlikCredentialType.HEADER) ?? null;
                     if (connection != null)
                         return report.General.Timeout;
                 }
