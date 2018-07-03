@@ -359,12 +359,17 @@ namespace Ser.ConAai
             return false;
         }
 
-        private int? GetTimeOut(string appId, SerConfig config)
+        private int? GetTimeOut(UserParameter parameter, SerConfig config)
         {
+            if (parameter.OnDemand)
+                return null;
+
             foreach (var task in config.Tasks)
                 foreach (var report in task.Reports)
                 {
-                    var connection = report?.Connections?.FirstOrDefault(c => c.App == appId) ?? null;
+                    //Ignore the last connection, this is a internal connection.
+                    var vaildConnections = report.Connections.Take(report.Connections.Count - 1);
+                    var connection = vaildConnections?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
                     if (connection != null)
                         return report.General.Timeout;
                 }
@@ -434,7 +439,7 @@ namespace Ser.ConAai
                 File.WriteAllText(savePath, serConfig);
 
                 //Use the connector in the same App, than wait for reload
-                var timeOut = GetTimeOut(parameter.AppId, newEngineConfig);
+                var timeOut = GetTimeOut(parameter, newEngineConfig);
                 if (timeOut != null)
                 {
                     var ct = new CancellationTokenSource(timeOut.Value * 1000).Token;
@@ -667,12 +672,10 @@ namespace Ser.ConAai
                 {
                     Type = QlikCredentialType.HEADER,
                     Key = "Authorization",
-                    Value = $"Bearer { token }"
-                }
+                    Value = $"Bearer { token }",
+                },
             };
-
             var bearerConnection = JToken.Parse(JsonConvert.SerializeObject(bearerSerConnection, Formatting.Indented));
-
             logger.Debug("serialize config connection.");
             if (mainConnection.Credentials != null)
             {
@@ -725,9 +728,10 @@ namespace Ser.ConAai
                         var currentConnection = JObject.Parse(cvalue);
                         //merge connections / config <> script
                         currentConnection.Merge(configConnection);
-                        newUserConnections.Add(currentConnection);
-                        newUserConnections.Add(bearerConnection);
+                        newUserConnections.Add(currentConnection);   
                     }
+                    //Important: The bearer connection must be added as last.
+                    newUserConnections.Add(bearerConnection);
 
                     report["connections"] = new JArray(newUserConnections);
                     var distribute = report["distribute"];
