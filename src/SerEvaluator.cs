@@ -730,6 +730,7 @@ namespace Ser.ConAai
                         currentConnection.Merge(configConnection);
                         newUserConnections.Add(currentConnection);   
                     }
+                    //Important: The bearer connection must be added as last.
                     newUserConnections.Add(bearerConnection);
 
                     report["connections"] = new JArray(newUserConnections);
