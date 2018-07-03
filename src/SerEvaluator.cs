@@ -364,7 +364,8 @@ namespace Ser.ConAai
             foreach (var task in config.Tasks)
                 foreach (var report in task.Reports)
                 {
-                    var connection = report?.Connections?.FirstOrDefault(c => c.App == appId && c.Credentials.Type != QlikCredentialType.HEADER) ?? null;
+                    var vaildConnections = report.Connections.Take(report.Connections.Count - 1);
+                    var connection = vaildConnections?.FirstOrDefault(c => c.App == appId) ?? null;
                     if (connection != null)
                         return report.General.Timeout;
                 }
@@ -667,12 +668,10 @@ namespace Ser.ConAai
                 {
                     Type = QlikCredentialType.HEADER,
                     Key = "Authorization",
-                    Value = $"Bearer { token }"
-                }
+                    Value = $"Bearer { token }",
+                },
             };
-
             var bearerConnection = JToken.Parse(JsonConvert.SerializeObject(bearerSerConnection, Formatting.Indented));
-
             logger.Debug("serialize config connection.");
             if (mainConnection.Credentials != null)
             {
@@ -725,9 +724,9 @@ namespace Ser.ConAai
                         var currentConnection = JObject.Parse(cvalue);
                         //merge connections / config <> script
                         currentConnection.Merge(configConnection);
-                        newUserConnections.Add(currentConnection);
-                        newUserConnections.Add(bearerConnection);
+                        newUserConnections.Add(currentConnection);   
                     }
+                    newUserConnections.Add(bearerConnection);
 
                     report["connections"] = new JArray(newUserConnections);
                     var distribute = report["distribute"];
