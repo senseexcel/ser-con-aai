@@ -367,6 +367,7 @@ namespace Ser.ConAai
             foreach (var task in config.Tasks)
                 foreach (var report in task.Reports)
                 {
+                    //Ignore the last connection, this is a internal connection.
                     var vaildConnections = report.Connections.Take(report.Connections.Count - 1);
                     var connection = vaildConnections?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
                     if (connection != null)
