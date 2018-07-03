@@ -359,13 +359,16 @@ namespace Ser.ConAai
             return false;
         }
 
-        private int? GetTimeOut(string appId, SerConfig config)
+        private int? GetTimeOut(UserParameter parameter, SerConfig config)
         {
+            if (parameter.OnDemand)
+                return null;
+
             foreach (var task in config.Tasks)
                 foreach (var report in task.Reports)
                 {
                     var vaildConnections = report.Connections.Take(report.Connections.Count - 1);
-                    var connection = vaildConnections?.FirstOrDefault(c => c.App == appId) ?? null;
+                    var connection = vaildConnections?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
                     if (connection != null)
                         return report.General.Timeout;
                 }
@@ -435,7 +438,7 @@ namespace Ser.ConAai
                 File.WriteAllText(savePath, serConfig);
 
                 //Use the connector in the same App, than wait for reload
-                var timeOut = GetTimeOut(parameter.AppId, newEngineConfig);
+                var timeOut = GetTimeOut(parameter, newEngineConfig);
                 if (timeOut != null)
                 {
                     var ct = new CancellationTokenSource(timeOut.Value * 1000).Token;
