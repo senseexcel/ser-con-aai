@@ -91,8 +91,7 @@ namespace Ser.ConAai
 
             try
             {
-                var appPath = PlatformServices.Default.Application.ApplicationBasePath;
-                var files = Directory.GetFiles(appPath, "*.*", SearchOption.TopDirectoryOnly)
+                var files = Directory.GetFiles(AppContext.BaseDirectory, "*.*", SearchOption.TopDirectoryOnly)
                                      .Where(f => f.ToLowerInvariant().EndsWith("\\app.config") || 
                                                  f.ToLowerInvariant().EndsWith("\\app.json")).ToList();
                 if (files != null && files.Count > 0)

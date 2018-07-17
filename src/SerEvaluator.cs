@@ -32,6 +32,7 @@ namespace Ser.ConAai
     using System.Security.Cryptography.X509Certificates;
     using System.Net.Security;
     using static Qlik.Sse.Connector;
+    using System.Text;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -436,7 +437,7 @@ namespace Ser.ConAai
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
                 var serConfig = JsonConvert.SerializeObject(newEngineConfig, Formatting.Indented);
-                File.WriteAllText(savePath, serConfig);
+                File.WriteAllText(savePath, serConfig, Encoding.UTF8);
 
                 //Use the connector in the same App, than wait for reload
                 var timeOut = GetTimeOut(parameter, newEngineConfig);

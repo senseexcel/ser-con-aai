@@ -82,7 +82,7 @@
     <PackageReference Include="NLog" Version="4.5.6" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.8" />
     <PackageReference Include="qlik-sseapi" Version="1.1.1" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.2.2" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.2.4" />
     <PackageReference Include="WebSocket4Net" Version="0.15.2" />
   </ItemGroup>  
   
