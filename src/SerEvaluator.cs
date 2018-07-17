@@ -883,7 +883,7 @@ namespace Ser.ConAai
                 }
             }
 
-            //Reports Generated
+            //Generate Reports
             task.Status = status;
             if (task.Status != 2)
                 return;
