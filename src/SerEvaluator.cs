@@ -346,9 +346,9 @@ namespace Ser.ConAai
                             Uri uri = null;
                             if (!String.IsNullOrEmpty(item.Url))
                                 uri = new Uri(item.Url);
-                            var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "");
-                            if ((thumbprint == cert.GetCertHashString() && uri == null) ||
-                                (thumbprint == cert.GetCertHashString()) &&
+                            var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "").ToLowerInvariant();
+                            if ((thumbprint == cert.GetCertHashString().ToLowerInvariant() && uri == null) ||
+                                (thumbprint == cert.GetCertHashString().ToLowerInvariant()) &&
                                 (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant()))
                                 return true;
                         }
