@@ -318,46 +318,54 @@ namespace Ser.ConAai
         private static bool ValidateRemoteCertificate(object sender, X509Certificate cert, X509Chain chain,
                                                       SslPolicyErrors error)
         {
-            if (error == SslPolicyErrors.None)
-                return true;
-
-            if (!onDemandConfig.Connection.SslVerify)
-                return true;
-
-            logger.Debug("Validate Server Certificate...");
-            Uri requestUri = null;
-            if (sender is HttpRequestMessage hrm)
-                requestUri = hrm.RequestUri;
-            if (sender is HttpClient hc)
-                requestUri = hc.BaseAddress;
-            if (sender is HttpWebRequest hwr)
-                requestUri = hwr.Address;
-
-            if (requestUri != null)
+            try
             {
-                logger.Debug("Validate Thumbprints...");
-                var thumbprints = onDemandConfig.Connection.SslValidThumbprints;
-                foreach (var item in thumbprints)
+                if (error == SslPolicyErrors.None)
+                    return true;
+
+                if (!onDemandConfig.Connection.SslVerify)
+                    return true;
+
+                logger.Debug("Validate Server Certificate...");
+                Uri requestUri = null;
+                if (sender is HttpRequestMessage hrm)
+                    requestUri = hrm.RequestUri;
+                if (sender is HttpClient hc)
+                    requestUri = hc.BaseAddress;
+                if (sender is HttpWebRequest hwr)
+                    requestUri = hwr.Address;
+
+                if (requestUri != null)
                 {
-                    try
+                    logger.Debug("Validate Thumbprints...");
+                    var thumbprints = onDemandConfig?.Connection?.SslValidThumbprints ?? new List<SerThumbprint>();
+                    foreach (var item in thumbprints)
                     {
-                        Uri uri = null;
-                        if (!String.IsNullOrEmpty(item.Url))
-                            uri = new Uri(item.Url);
-                        var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "");
-                        if ((thumbprint == cert.GetCertHashString() && uri == null) ||
-                            (thumbprint == cert.GetCertHashString()) &&
-                            (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant()))
-                            return true;
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error(ex, "Thumbprint could not be validated.");
+                        try
+                        {
+                            Uri uri = null;
+                            if (!String.IsNullOrEmpty(item.Url))
+                                uri = new Uri(item.Url);
+                            var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "");
+                            if ((thumbprint == cert.GetCertHashString() && uri == null) ||
+                                (thumbprint == cert.GetCertHashString()) &&
+                                (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant()))
+                                return true;
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Error(ex, "Thumbprint could not be validated.");
+                        }
                     }
                 }
-            }
 
-            return false;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The SSL-Validation was faild.");
+                return false;
+            }
         }
 
         private int? GetTimeOut(UserParameter parameter, SerConfig config)
