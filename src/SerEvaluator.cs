@@ -78,6 +78,7 @@ namespace Ser.ConAai
         {
             onDemandConfig = config;
             taskManager = new TaskManager();
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
             ServicePointManager.ServerCertificateValidationCallback += ValidateRemoteCertificate;
             //RestoreTasks();
         }
