@@ -80,7 +80,7 @@ namespace Ser.ConAai
             taskManager = new TaskManager();
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
             ServicePointManager.ServerCertificateValidationCallback += ValidateRemoteCertificate;
-            //RestoreTasks();
+            ////RestoreTasks();
         }
 
         public void Dispose() { }
