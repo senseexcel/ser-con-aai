@@ -78,6 +78,7 @@
       <PrivateAssets>All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Hjson" Version="3.0.0" />
+    <PackageReference Include="Markdig" Version="0.15.1" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
     <PackageReference Include="NLog" Version="4.5.7" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.8" />
