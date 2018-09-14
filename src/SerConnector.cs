@@ -165,7 +165,6 @@ namespace Ser.ConAai
 
                 logger.Debug($"Check qlik connection...");
                 CheckQlikConnection();
-
                 using (serEvaluator = new SerEvaluator(config))
                 {
                     server = new Server()

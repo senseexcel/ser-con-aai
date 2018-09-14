@@ -690,6 +690,7 @@ namespace Ser.ConAai
             if (mainConnection.Credentials != null)
             {
                 var cred = mainConnection.Credentials;
+                cred.Type = QlikCredentialType.SESSION;
                 cred.Value = parameter.ConnectCookie.Value;
                 parameter.PrivateKeyPath = cred.PrivateKey;
             }
