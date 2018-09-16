@@ -10,29 +10,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace Ser.ConAai
 {
     #region Usings
-    using Grpc.Core;
-    using Qlik.Sse;
-    using Google.Protobuf;
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Linq;
     using System.Net;
+    using System.Net.Http;
+    using System.Net.Security;
+    using System.Security.Cryptography.X509Certificates;
+    using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
-    using NLog;
     using System.IO;
+    using Grpc.Core;
+    using Qlik.Sse;
+    using Google.Protobuf;
+    using NLog;    
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using Q2g.HelperQrs;
     using Ser.Api;
     using Hjson;
-    using System.Net.Http;
     using Ser.Distribute;
-    using System.Security.Cryptography.X509Certificates;
-    using System.Net.Security;
-    using static Qlik.Sse.Connector;
-    using System.Text;
+    using static Qlik.Sse.Connector;    
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -348,9 +348,10 @@ namespace Ser.ConAai
                             if (!String.IsNullOrEmpty(item.Url))
                                 uri = new Uri(item.Url);
                             var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "").ToLowerInvariant();
-                            if ((thumbprint == cert.GetCertHashString().ToLowerInvariant() && uri == null) ||
-                                (thumbprint == cert.GetCertHashString().ToLowerInvariant()) &&
-                                (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant()))
+                            var certThumbprint = cert.GetCertHashString().ToLowerInvariant();
+                            if ((thumbprint == certThumbprint) 
+                                && 
+                                ((uri == null) || (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())))
                                 return true;
                         }
                         catch (Exception ex)
