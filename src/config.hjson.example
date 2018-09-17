@@ -8,7 +8,7 @@
   workingDir: %temp%\senseexelreporting
   
   # Path to the Sense Excel Reporting engine
-  serEnginePath: ..\Engine\ser-engine.exe
+  serEnginePath: ..\Engine\SenseExcelReporting.exe
 
   # Host binding on gRPC Server
   bindingHost: localhost
