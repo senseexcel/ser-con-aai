@@ -32,7 +32,12 @@ namespace Ser.ConAai
     using Ser.Api;
     using Hjson;
     using Ser.Distribute;
-    using static Qlik.Sse.Connector;    
+    using static Qlik.Sse.Connector;
+    using System.Net.WebSockets;
+    using Q2g.HelperPem;
+    using Qlik.EngineAPI;
+    using enigma;
+    using ImpromptuInterface;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -78,8 +83,9 @@ namespace Ser.ConAai
         {
             onDemandConfig = config;
             taskManager = new TaskManager();
+            ValidationCallback.Connection = config.Connection;
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-            ServicePointManager.ServerCertificateValidationCallback += ValidateRemoteCertificate;
+            ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
             ////RestoreTasks();
         }
 
@@ -316,60 +322,6 @@ namespace Ser.ConAai
         #endregion
 
         #region Private Functions
-        private static bool ValidateRemoteCertificate(object sender, X509Certificate cert, X509Chain chain,
-                                                      SslPolicyErrors error)
-        {
-            try
-            {
-                if (error == SslPolicyErrors.None)
-                    return true;
-
-                if (!onDemandConfig.Connection.SslVerify)
-                    return true;
-
-                logger.Debug("Validate Server Certificate...");
-                Uri requestUri = null;
-                if (sender is HttpRequestMessage hrm)
-                    requestUri = hrm.RequestUri;
-                if (sender is HttpClient hc)
-                    requestUri = hc.BaseAddress;
-                if (sender is HttpWebRequest hwr)
-                    requestUri = hwr.Address;
-
-                if (requestUri != null)
-                {
-                    logger.Debug("Validate Thumbprints...");
-                    var thumbprints = onDemandConfig?.Connection?.SslValidThumbprints ?? new List<SerThumbprint>();
-                    foreach (var item in thumbprints)
-                    {
-                        try
-                        {
-                            Uri uri = null;
-                            if (!String.IsNullOrEmpty(item.Url))
-                                uri = new Uri(item.Url);
-                            var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "").ToLowerInvariant();
-                            var certThumbprint = cert.GetCertHashString().ToLowerInvariant();
-                            if ((thumbprint == certThumbprint) 
-                                && 
-                                ((uri == null) || (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())))
-                                return true;
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.Error(ex, "Thumbprint could not be validated.");
-                        }
-                    }
-                }
-
-                return false;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "The SSL-Validation was faild.");
-                return false;
-            }
-        }
-
         private int? GetTimeOut(UserParameter parameter, SerConfig config)
         {
             if (parameter.OnDemand)
@@ -433,6 +385,9 @@ namespace Ser.ConAai
                     throw new Exception("No session cookie generated.");
                 }
                 parameter.ConnectCookie = session?.Cookie;
+                parameter.SocketConnection = session?.SocketConnection;
+                if (session.SocketConnection == null)
+                    throw new Exception(">>>No Websocket connection to Qlik<<<");
                 activeTask.Status = 1;
 
                 //get engine config
@@ -479,7 +434,7 @@ namespace Ser.ConAai
             logger.Debug($"Start Engine \"{onDemandConfig.SerEnginePath}\"...");
             var serProcess = new Process();
             serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
-            serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkDir}\" --privatekeypath \"{parameter.PrivateKeyPath}\"";
+            serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkDir}\"";
             serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
             serProcess.Start();
             task.ProcessId = serProcess.Id;
@@ -628,7 +583,7 @@ namespace Ser.ConAai
                 var templateUri = result.Item1;
                 if (templateUri.Scheme.ToLowerInvariant() == "content")
                 {
-                    var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, parameter.AppId, cookie, result.Item2);
+                    var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, parameter.AppId, parameter.SocketConnection, result.Item2);
                     logger.Debug($"File count in content library: {contentFiles?.Count}");
                     var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(templateUri.AbsolutePath));
                     if (filterFile != null)
@@ -641,8 +596,8 @@ namespace Ser.ConAai
                 }
                 else if (templateUri.Scheme.ToLowerInvariant() == "lib")
                 {
-                    var connections = GetConnections(onDemandConfig.Connection.ServerUri, parameter.AppId, cookie);
-                    dynamic libResult = connections?.FirstOrDefault(n => n["qName"]?.ToString()?.ToLowerInvariant() == result.Item2) ?? null;
+                    var connections = parameter.SocketConnection.GetConnectionsAsync().Result;
+                    var libResult = connections.FirstOrDefault(n => n.qName.ToLowerInvariant() == result.Item2) ?? null;
                     if (libResult != null)
                     {
                         var libPath = libResult.qConnectionString.ToString();
@@ -740,7 +695,7 @@ namespace Ser.ConAai
                         var currentConnection = JObject.Parse(cvalue);
                         //merge connections / config <> script
                         currentConnection.Merge(configConnection);
-                        newUserConnections.Add(currentConnection);   
+                        newUserConnections.Add(currentConnection);
                     }
                     //Important: The bearer connection must be added as last.
                     newUserConnections.Add(bearerConnection);
@@ -752,8 +707,7 @@ namespace Ser.ConAai
                     {
                         var connection = child["connections"] ?? null;
                         if (connection?.ToString() == "@CONFIGCONNECTION@")
-                            child["connections"] = configConnection;
-
+                            child["connections"] = newUserConnections.FirstOrDefault();
                         var childProp = child.Parent as JProperty;
                         if (childProp?.Name == "hub")
                         {
@@ -762,6 +716,15 @@ namespace Ser.ConAai
                                 child["owner"] = parameter.DomainUser.ToString();
                         }
                     }
+
+                    if (!String.IsNullOrEmpty(parameter.PrivateKeyPath))
+                    {
+                        var path = PathUtils.GetFullPathFromApp(parameter.PrivateKeyPath);
+                        var crypter = new TextCrypter(path);
+                        var value = report["template"]["outputPassword"] ?? null;
+                        if (value != null)
+                            report["template"]["outputPassword"] = crypter.DecryptText(value.Value<string>());
+                    }
                 }
             }
 
@@ -769,62 +732,30 @@ namespace Ser.ConAai
             return result;
         }
 
-        private List<JToken> GetConnections(Uri host, string appId, Cookie cookie)
+        private List<string> GetLibraryContentInternal(IDoc app, string qName)
         {
-            try
-            {
-                var qlikWebSocket = new QlikWebSocket(host, cookie);
-                var isOpen = qlikWebSocket.OpenSocket();
-                dynamic response = qlikWebSocket.OpenDoc(appId);
-                if (response.ToString().Contains("App already open"))
-                    response = qlikWebSocket.GetActiveDoc();
-                var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
-                response = qlikWebSocket.GetConnections(handle);
-                JArray results = response.result.qConnections;
-                return results.ToList();
-            }
-            catch(Exception ex)
-            {
-                logger.Error(ex, "Could not read the lib connections.");
-                return new List<JToken>();
-            }
+            var libContent = app.GetLibraryContentAsync(qName).Result;
+            return libContent.qItems.Select(u => u.qUrl).ToList();
         }
 
-        private List<string> GetLibraryContentInternal(QlikWebSocket qlikWebSocket, string handle, string qName)
-        {
-            dynamic response = qlikWebSocket.GetLibraryContent(handle, qName);
-            JArray qItems = response?.result?.qList?.qItems;
-            var qUrls = qItems.Select(j => j["qUrl"].ToString()).ToList();
-            return qUrls;
-        }
-
-        private List<string> GetLibraryContent(Uri serverUri, string appId, Cookie cookie, string contentName = "")
+        private List<string> GetLibraryContent(Uri serverUri, string appId, IDoc app, string contentName = "")
         {            
             try
             {
                 var results = new List<string>();
-                var qlikWebSocket = new QlikWebSocket(serverUri, cookie);
-                var isOpen = qlikWebSocket.OpenSocket();
-                dynamic response = qlikWebSocket.OpenDoc(appId);
-                if (response.ToString().Contains("App already open"))
-                    response = qlikWebSocket.GetActiveDoc();
-                var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
-
                 var readItems = new List<string>() { contentName };
                 if (String.IsNullOrEmpty(contentName))
                 {
                     // search for all App Specific ContentLibraries                    
-                    response = qlikWebSocket.GetContentLibraries(handle);
-                    JArray qItems = response?.result?.qList?.qItems.ToObject<JArray>();
-                    readItems = qItems.Where(s => s["qAppSpecific"]?.Value<bool>() == true).Select(s => s["qName"].ToString()).ToList();
+                    var libs = app.GetContentLibrariesAsync().Result;
+                    readItems = libs.qItems.Where(s => s.qAppSpecific == true).Select(s => s.qName).ToList();
                 }
                     
                 foreach (var item in readItems)
-                {                    
-                    var qUrls = GetLibraryContentInternal(qlikWebSocket, handle, item);
+                {
+                    var qUrls = GetLibraryContentInternal(app, item);
                     results.AddRange(qUrls);
                 }
-
                 return results;
             }
             catch (Exception ex)

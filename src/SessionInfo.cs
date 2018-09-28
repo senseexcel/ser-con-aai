@@ -13,6 +13,7 @@ namespace Ser.ConAai
     using System;
     using System.Collections.Generic;
     using System.Net;
+    using Qlik.EngineAPI;
     using Ser.Api;
     #endregion
 
@@ -23,6 +24,7 @@ namespace Ser.ConAai
         public Uri ConnectUri { get; set; }
         public string AppId { get; set; }
         public DomainUser UserId { get; set; }
+        public IDoc SocketConnection { get; set; }
         #endregion
     }
 }
