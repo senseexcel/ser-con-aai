@@ -651,12 +651,6 @@ namespace Ser.ConAai
                 parameter.PrivateKeyPath = cred.PrivateKey;
             }
 
-            var configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
-            configConnection["credentials"]["cert"] = null;
-            configConnection["credentials"]["privateKey"] = null;
-
-            logger.Debug("parse user json.");
-
             if (!userJson.ToLowerInvariant().Contains("reports:") && 
                 !userJson.ToLowerInvariant().Contains("\"reports\":"))
                 userJson = $"reports:[{{{userJson}}}]";
@@ -670,6 +664,7 @@ namespace Ser.ConAai
             if (!userJson.Trim().EndsWith("}"))
                 userJson = $"{userJson}}}";
 
+            logger.Trace($"Parse user json: {userJson}");
             var jsonConfig = GetNormalizeJson(userJson);
             var serConfig = JObject.Parse(jsonConfig);
 
@@ -677,6 +672,10 @@ namespace Ser.ConAai
             var ondemandObject = serConfig["onDemand"] ?? null;
             if (ondemandObject != null)
                 parameter.OnDemand = serConfig["onDemand"]?.ToObject<bool>() ?? false;
+
+            var configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
+            configConnection["credentials"]["cert"] = null;
+            configConnection["credentials"]["privateKey"] = null;
 
             logger.Debug("search for connections.");
             var tasks = serConfig["tasks"]?.ToList() ?? null;
