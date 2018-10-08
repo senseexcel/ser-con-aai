@@ -113,9 +113,9 @@ namespace Ser.ConAai
                 var globalTask = session.OpenAsync();
                 globalTask.Wait();
                 IGlobal global = Impromptu.ActLike<IGlobal>(globalTask.Result);
-                var doc = global.OpenDocAsync(appId).Result;
+                var app = global.OpenDocAsync(appId).Result;
                 logger.Debug("websocket - success");
-                return doc;
+                return app;
             }
             catch (Exception ex)
             {
@@ -270,6 +270,8 @@ namespace Ser.ConAai
                         var result = ValidateSession(oldSession.ConnectUri, oldSession.Cookie);
                         if (result)
                         {
+                            //Debug notfall da enigma stehen bleibt.
+                            oldSession.App = GetSessionAppConnection(connection.ServerUri, oldSession.Cookie, task.AppId);
                             task.Session = oldSession;
                             return oldSession;
                         }
@@ -292,7 +294,7 @@ namespace Ser.ConAai
                     };
 
                     if (!String.IsNullOrEmpty(sessionInfo.AppId))
-                        sessionInfo.SocketConnection = GetSessionAppConnection(connection.ServerUri, cookie, task.AppId);
+                        sessionInfo.App = GetSessionAppConnection(connection.ServerUri, cookie, task.AppId);
 
                     Sessions.Add(sessionInfo);
                     task.Session = sessionInfo;

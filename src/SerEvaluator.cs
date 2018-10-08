@@ -38,6 +38,7 @@ namespace Ser.ConAai
     using Qlik.EngineAPI;
     using enigma;
     using ImpromptuInterface;
+    using System.Reflection;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -155,6 +156,7 @@ namespace Ser.ConAai
         {
             try
             {
+                Console.Title = Assembly.GetExecutingAssembly().GetName().Name;
                 logger.Debug("ExecuteFunction was called");
                 Thread.Sleep(200);
                 var functionRequestHeaderStream = context.RequestHeaders.SingleOrDefault(header => header.Key == "qlik-functionrequestheader-bin");
@@ -196,6 +198,7 @@ namespace Ser.ConAai
                         //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
                         userParameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
                         activeTask = taskManager.CreateTask(userParameter);
+                        logger.Debug($"scheduler task: {activeTask.Id}");
                         var tmpsession = taskManager.GetSession(onDemandConfig.Connection, activeTask);
                         var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
                         var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
@@ -210,7 +213,11 @@ namespace Ser.ConAai
                             userParameter.DomainUser = new DomainUser($"{userDirectory}\\{userId}");
                             logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
                         }
-                        taskManager.RemoveTask(activeTask.Id);
+
+                        lock (this)
+                        {
+                            taskManager.RemoveTask(activeTask.Id);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -385,9 +392,9 @@ namespace Ser.ConAai
                     throw new Exception("No session cookie generated.");
                 }
                 parameter.ConnectCookie = session?.Cookie;
-                parameter.SocketConnection = session?.SocketConnection;
-                if (session.SocketConnection == null)
+                if (session?.App == null)
                     throw new Exception(">>>No Websocket connection to Qlik<<<");
+                parameter.SocketConnection = session?.App;
                 activeTask.Status = 1;
 
                 //get engine config
@@ -431,10 +438,11 @@ namespace Ser.ConAai
         {
             //Start SER Engine as Process
             var currentWorkDir = Path.Combine(parameter.WorkDir, task.Id);
-            logger.Debug($"Start Engine \"{onDemandConfig.SerEnginePath}\"...");
+            var enginePath = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
+            logger.Debug($"Start Engine \"{enginePath}\"...");
             var serProcess = new Process();
-            serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
-            serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkDir}\"";
+            serProcess.StartInfo.FileName = "dotnet";
+            serProcess.StartInfo.Arguments = $"{enginePath} --workdir \"{currentWorkDir}\"";
             serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
             serProcess.Start();
             task.ProcessId = serProcess.Id;
@@ -848,8 +856,8 @@ namespace Ser.ConAai
                 {
                     logger.Debug($"Cleanup Process, Folder and Task");
                     KillProcess(task.ProcessId);
-                    SoftDelete($"{parameter.WorkDir}\\{task.Id}");
                     taskManager.RemoveTask(task.Id);
+                    SoftDelete($"{parameter.WorkDir}\\{task.Id}");
                     logger.Debug($"Cleanup complete");
                 });
             }
@@ -903,13 +911,13 @@ namespace Ser.ConAai
                 if (Directory.Exists(folder))
                 {
                     Directory.Delete(folder, true);
-                    logger.Debug($"work dir {folder} deleted.");
+                    logger.Debug($"The temp dir {folder} was deleted.");
                 }
                 return true;
             }
             catch (Exception ex)
             {
-                logger.Warn(ex, $"The Folder {folder} could not deleted.");
+                logger.Warn(ex, $"The temp dir {folder} could not deleted.");
                 return false;
             }
         }

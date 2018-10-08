@@ -10,20 +10,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace Ser.ConAai
 {
     #region Usings
-    using Microsoft.Extensions.PlatformAbstractions;
     using Newtonsoft.Json;
     using NLog;
     using NLog.Config;
     using PeterKottas.DotNetCore.WindowsService;
-    using Q2g.HelperPem;
     using System;
     using System.IO;
     using System.Linq;
     using System.Net;
-    using System.Security.Cryptography.X509Certificates;
+    using System.Reflection;
     using System.Text;
     using System.Xml;
-    using System.Xml.Linq;
     #endregion
 
     class Program
@@ -38,6 +35,7 @@ namespace Ser.ConAai
         {
             try
             {
+                Console.Title = Assembly.GetExecutingAssembly().GetName().Name;
                 SetLoggerSettings();
                 ServiceRunner<SSEtoSER>.Run(config =>
                 {
