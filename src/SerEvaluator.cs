@@ -156,7 +156,6 @@ namespace Ser.ConAai
         {
             try
             {
-                Console.Title = Assembly.GetExecutingAssembly().GetName().Name;
                 logger.Debug("ExecuteFunction was called");
                 Thread.Sleep(200);
                 var functionRequestHeaderStream = context.RequestHeaders.SingleOrDefault(header => header.Key == "qlik-functionrequestheader-bin");
@@ -176,7 +175,7 @@ namespace Ser.ConAai
                     AppId = commonHeader.AppId,
                     DomainUser = domainUser,
                     WorkDir = PathUtils.GetFullPathFromApp(onDemandConfig.WorkingDir),
-            };
+                };
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
 
@@ -391,10 +390,13 @@ namespace Ser.ConAai
                     Program.Service?.CheckQlikConnection();
                     throw new Exception("No session cookie generated.");
                 }
+
+                //create websocket
                 parameter.ConnectCookie = session?.Cookie;
-                if (session?.App == null)
+                parameter.SocketConnection = taskManager.GetSessionAppConnection(session?.ConnectUri, session?.Cookie, task.AppId);
+                if (parameter.SocketConnection == null)
                     throw new Exception(">>>No Websocket connection to Qlik<<<");
-                parameter.SocketConnection = session?.App;
+
                 activeTask.Status = 1;
 
                 //get engine config

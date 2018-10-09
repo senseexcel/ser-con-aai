@@ -35,7 +35,6 @@ namespace Ser.ConAai
         {
             try
             {
-                Console.Title = Assembly.GetExecutingAssembly().GetName().Name;
                 SetLoggerSettings();
                 ServiceRunner<SSEtoSER>.Run(config =>
                 {

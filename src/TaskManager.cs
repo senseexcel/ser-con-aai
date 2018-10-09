@@ -88,7 +88,7 @@ namespace Ser.ConAai
             }
         }
 
-        private IDoc GetSessionAppConnection(Uri uri, Cookie cookie, string appId)
+        public IDoc GetSessionAppConnection(Uri uri, Cookie cookie, string appId)
         {
             try
             {
@@ -243,7 +243,10 @@ namespace Ser.ConAai
                     UserId = parameter.DomainUser,
                 };
 
-                Tasks.Add(newTask);
+                lock (this)
+                {
+                    Tasks.Add(newTask);
+                }
                 return newTask;
             }
             catch (Exception ex)
@@ -270,8 +273,6 @@ namespace Ser.ConAai
                         var result = ValidateSession(oldSession.ConnectUri, oldSession.Cookie);
                         if (result)
                         {
-                            //Debug notfall da enigma stehen bleibt.
-                            oldSession.App = GetSessionAppConnection(connection.ServerUri, oldSession.Cookie, task.AppId);
                             task.Session = oldSession;
                             return oldSession;
                         }
@@ -292,10 +293,6 @@ namespace Ser.ConAai
                         AppId = task.AppId,
                         UserId = task.UserId,
                     };
-
-                    if (!String.IsNullOrEmpty(sessionInfo.AppId))
-                        sessionInfo.App = GetSessionAppConnection(connection.ServerUri, cookie, task.AppId);
-
                     Sessions.Add(sessionInfo);
                     task.Session = sessionInfo;
                     return sessionInfo;

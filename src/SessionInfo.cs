@@ -25,7 +25,6 @@ namespace Ser.ConAai
         public Uri ConnectUri { get; set; }
         public string AppId { get; set; }
         public DomainUser UserId { get; set; }
-        public IDoc App { get; set; }
         #endregion
     }
 }
