@@ -88,42 +88,6 @@ namespace Ser.ConAai
             }
         }
 
-        public IDoc GetSessionAppConnection(Uri uri, Cookie cookie, string appId)
-        {
-            try
-            {
-                var url = ServerUtils.MakeWebSocketFromHttp(uri);
-                var connId = Guid.NewGuid().ToString();
-                url = $"{url}/app/engineData/identity/{connId}";
-                var config = new EnigmaConfigurations()
-                {
-                    Url = url,
-                    CreateSocket = async (Url) =>
-                    {
-                        var webSocket = new ClientWebSocket();
-                        webSocket.Options.RemoteCertificateValidationCallback = ValidationCallback.ValidateRemoteCertificate;
-                        webSocket.Options.Cookies = new CookieContainer();
-                        cookie.HttpOnly = false;
-                        webSocket.Options.Cookies.Add(cookie);
-                        await webSocket.ConnectAsync(new Uri(Url), CancellationToken.None);
-                        return webSocket;
-                    },
-                };
-                var session = Enigma.Create(config);
-                var globalTask = session.OpenAsync();
-                globalTask.Wait();
-                IGlobal global = Impromptu.ActLike<IGlobal>(globalTask.Result);
-                var app = global.OpenDocAsync(appId).Result;
-                logger.Debug("websocket - success");
-                return app;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "create websocket connection was failed.");
-                return null;
-            }
-        }
-
         private bool ValidateSession(Uri serverUri, Cookie cookie)
         {
             try
@@ -252,6 +216,43 @@ namespace Ser.ConAai
             catch (Exception ex)
             {
                 logger.Error(ex);
+                return null;
+            }
+        }
+
+        public IDoc GetSessionAppConnection(Uri uri, Cookie cookie, string appId)
+        {
+            try
+            {
+                var url = ServerUtils.MakeWebSocketFromHttp(uri);
+                var connId = Guid.NewGuid().ToString();
+                url = $"{url}/app/engineData/identity/{connId}";
+                var config = new EnigmaConfigurations()
+                {
+                    Url = url,
+                    CreateSocket = async (Url) =>
+                    {
+                        var webSocket = new ClientWebSocket();
+                        webSocket.Options.RemoteCertificateValidationCallback = ValidationCallback.ValidateRemoteCertificate;
+                        webSocket.Options.Cookies = new CookieContainer();
+                        cookie.HttpOnly = false;
+                        webSocket.Options.Cookies.Add(cookie);
+                        await webSocket.ConnectAsync(new Uri(Url), CancellationToken.None);
+                        return webSocket;
+                    },
+                };
+                var session = Enigma.Create(config);
+                var globalTask = session.OpenAsync();
+                globalTask.Wait();
+                IGlobal global = Impromptu.ActLike<IGlobal>(globalTask.Result);
+                global.IsDesktopModeAsync().Wait(2500);
+                var app = global.OpenDocAsync(appId).Result;
+                logger.Debug("websocket - success");
+                return app;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "create websocket connection was failed.");
                 return null;
             }
         }

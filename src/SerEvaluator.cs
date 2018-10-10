@@ -348,11 +348,11 @@ namespace Ser.ConAai
         private OnDemandResult CreateReport(UserParameter parameter, string json)
         {
             ActiveTask activeTask = null;
+            var currentWorkingDir = String.Empty;
 
             try
             {
                 var id = new DirectoryInfo(parameter.WorkDir).Name;
-                var currentWorkingDir = String.Empty;
                 if (!Guid.TryParse(id, out var result))
                 {
                     if (activeTask == null)
@@ -370,9 +370,10 @@ namespace Ser.ConAai
                 }
 
                 logger.Debug($"TempFolder: {currentWorkingDir}");
+                activeTask.WorkingDir = currentWorkingDir;
 
-                //check for task is already running
-                var task = taskManager.GetRunningTask(activeTask.Id);
+               //check for task is already running
+               var task = taskManager.GetRunningTask(activeTask.Id);
                 if (task != null)
                 {
                     if (task.Status == 1 || task.Status == 2)
@@ -395,7 +396,7 @@ namespace Ser.ConAai
                 parameter.ConnectCookie = session?.Cookie;
                 parameter.SocketConnection = taskManager.GetSessionAppConnection(session?.ConnectUri, session?.Cookie, task.AppId);
                 if (parameter.SocketConnection == null)
-                    throw new Exception(">>>No Websocket connection to Qlik<<<");
+                    throw new Exception("No Websocket connection to Qlik.");
 
                 activeTask.Status = 1;
 
@@ -432,6 +433,7 @@ namespace Ser.ConAai
                 if (task.Session == null)
                     task.Status = -2;
                 logger.Error(ex, "The report could not create.");
+                FinishTask(parameter, task);
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = ex.Message };
             }
         }
@@ -809,43 +811,55 @@ namespace Ser.ConAai
 
         private void CheckStatus(UserParameter parameter, ActiveTask task)
         {
-            var status = 0;
-            while (status != 2)
+            try
             {
-                Thread.Sleep(250);
-                if (task.Status == -1 || task.Status == 0)
+                var status = 0;
+                while (status != 2)
                 {
-                    status = task.Status;
-                    break;
-                }
-                status = Status(Path.Combine(parameter.WorkDir, task.Id), task.Status);
-                if (status == -1 || status == 0)
-                    break;
-
-                if (status == 1)
-                {
-                    var serProcess = GetProcess(task.ProcessId);
-                    if (serProcess == null)
+                    Thread.Sleep(250);
+                    if (task.Status == -1 || task.Status == 0)
                     {
-                        status = -1;
-                        logger.Error("The engine process was terminated.");
+                        status = task.Status;
                         break;
                     }
+                    status = Status(Path.Combine(parameter.WorkDir, task.Id), task.Status);
+                    if (status == -1 || status == 0)
+                        break;
+
+                    if (status == 1)
+                    {
+                        //Caution: dotnet process never stopps
+                        var serProcess = GetProcess(task.ProcessId);
+                        if (serProcess == null)
+                        {
+                            status = -1;
+                            logger.Error("The engine process was terminated.");
+                            break;
+                        }
+                    }
                 }
+
+                //Generate Reports
+                task.Status = status;
+                if (status != 2)
+                    throw new Exception("The report could not be created successfully.");
+
+                //Delivery
+                status = StartDeliveryTool(task, parameter);
+                task.Status = status;
+                if (status != 3)
+                    throw new Exception("The delivery process failed.");
             }
-
-            //Generate Reports
-            task.Status = status;
-            if (task.Status != 2)
-                return;
-
-            //Delivery
-            status = StartDeliveryTool(task, parameter);
-            task.Status = status;
-
-            //Cleanup
-            if (!parameter.OnDemand)
-                FinishTask(parameter, task);
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The status check has detected a processing error.");
+            }
+            finally
+            {
+                //Cleanup
+                if (!parameter.OnDemand)
+                    FinishTask(parameter, task);
+            }
         }
 
         private void FinishTask(UserParameter parameter, ActiveTask task)

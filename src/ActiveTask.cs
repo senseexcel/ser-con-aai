@@ -29,5 +29,6 @@ namespace Ser.ConAai
         public string AppId { get; set; }
         public DomainUser UserId { get; set; }
         public SessionInfo Session { get; set; }
+        public string WorkingDir { get; set; }
     }
 }
