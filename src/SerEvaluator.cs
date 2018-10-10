@@ -70,6 +70,7 @@ namespace Ser.ConAai
             SUCCESS,
             ERROR,
             ABORT,
+            WARNING,
             UNKOWN
         }
         #endregion
@@ -642,19 +643,7 @@ namespace Ser.ConAai
             logger.Debug("Create Bearer Connection");
             var token = taskManager.GetToken(parameter.DomainUser, mainConnection, TimeSpan.FromMinutes(30));
             logger.Debug($"Token: {token}");
-            var bearerSerConnection = new SerConnection()
-            {
-                App = parameter.AppId,
-                ServerUri = onDemandConfig.Connection.ServerUri,
-                Credentials = new SerCredentials()
-                {
-                    Type = QlikCredentialType.HEADER,
-                    Key = "Authorization",
-                    Value = $"Bearer { token }",
-                },
-            };
-            var bearerConnection = JToken.Parse(JsonConvert.SerializeObject(bearerSerConnection, Formatting.Indented));
-            logger.Debug("serialize config connection.");
+            
             if (mainConnection.Credentials != null)
             {
                 var cred = mainConnection.Credentials;
@@ -698,6 +687,7 @@ namespace Ser.ConAai
                 {
                     var userConnections = report["connections"].ToList();
                     var newUserConnections = new List<JToken>();
+                    var currentApp = String.Empty;
                     foreach (var userConnection in userConnections)
                     {
                         var cvalue = userConnection.ToString();
@@ -707,8 +697,22 @@ namespace Ser.ConAai
                         //merge connections / config <> script
                         currentConnection.Merge(configConnection);
                         newUserConnections.Add(currentConnection);
+                        currentApp = (currentConnection as dynamic)?.app ?? null;
                     }
                     //Important: The bearer connection must be added as last.
+                    var bearerSerConnection = new SerConnection()
+                    {
+                        App = currentApp,
+                        ServerUri = onDemandConfig.Connection.ServerUri,
+                        Credentials = new SerCredentials()
+                        {
+                            Type = QlikCredentialType.HEADER,
+                            Key = "Authorization",
+                            Value = $"Bearer { token }",
+                        },
+                    };
+                    var bearerConnection = JToken.Parse(JsonConvert.SerializeObject(bearerSerConnection, Formatting.Indented));
+                    logger.Debug("serialize config connection.");
                     newUserConnections.Add(bearerConnection);
 
                     report["connections"] = new JArray(newUserConnections);
@@ -972,7 +976,10 @@ namespace Ser.ConAai
                 case EngineResult.ABORT:
                     return 1;
                 case EngineResult.ERROR:
-                    logger.Error("No Report created.");
+                    logger.Error("No Report created (ERROR).");
+                    return -1;
+                case EngineResult.WARNING:
+                    logger.Warn("No Report created (WARNING).");
                     return -1;
                 default:
                     return sessionStatus;
