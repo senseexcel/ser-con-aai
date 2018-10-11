@@ -412,7 +412,12 @@ namespace Ser.ConAai
                 //Save config for SER engine
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
-                var serConfig = JsonConvert.SerializeObject(newEngineConfig, Formatting.Indented);
+                var settings = new JsonSerializerSettings()
+                {
+                    DefaultValueHandling = DefaultValueHandling.Ignore,
+                    Formatting = Formatting.Indented,
+                };
+                var serConfig = JsonConvert.SerializeObject(newEngineConfig, settings);
                 File.WriteAllText(savePath, serConfig, Encoding.UTF8);
 
                 //Use the connector in the same App, than wait for reload
@@ -433,9 +438,10 @@ namespace Ser.ConAai
                     task.Status = -1;
                 if (task.Session == null)
                     task.Status = -2;
+                task.Message = ex.Message;
                 logger.Error(ex, "The report could not create.");
                 FinishTask(parameter, task);
-                return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = ex.Message };
+                return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = task.Message };
             }
         }
 
@@ -846,7 +852,7 @@ namespace Ser.ConAai
                 //Generate Reports
                 task.Status = status;
                 if (status != 2)
-                    throw new Exception("The report could not be created successfully.");
+                    throw new Exception("The report build process failed.");
                 task.Message = "Delivery Report, Please wait...";
 
                 //Delivery
