@@ -818,7 +818,7 @@ namespace Ser.ConAai
             try
             {
                 var status = 0;
-                task.Message = "Build Report";
+                task.Message = "Build Report, Bitte warten...";
                 while (status != 2)
                 {
                     Thread.Sleep(250);
@@ -848,7 +848,7 @@ namespace Ser.ConAai
                 task.Status = status;
                 if (status != 2)
                     throw new Exception("The report could not be created successfully.");
-                task.Message = "Delivery Report";
+                task.Message = "Delivery Report, Bitte warten...";
 
                 //Delivery
                 status = StartDeliveryTool(task, parameter);
