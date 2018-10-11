@@ -477,7 +477,7 @@ namespace Ser.ConAai
             {
                 while (true)
                 {
-                    Thread.Sleep(500);
+                    Thread.Sleep(1000);
                     if (token.IsCancellationRequested)
                         return;
                     var tempLoad = GetLastReloadTime(task, parameter.AppId);
