@@ -879,7 +879,7 @@ namespace Ser.ConAai
                 .ContinueWith((_) =>
                 {
                     logger.Debug($"Cleanup Process, Folder and Task");
-                    KillProcess(task.ProcessId);
+                    //KillProcess(task.ProcessId);
                     taskManager.RemoveTask(task.Id);
                     SoftDelete($"{parameter.WorkDir}\\{task.Id}");
                     logger.Debug($"Cleanup complete");
