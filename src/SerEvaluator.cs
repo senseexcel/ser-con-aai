@@ -833,7 +833,6 @@ namespace Ser.ConAai
 
                     if (status == 1)
                     {
-                        //Caution: dotnet process never stopps
                         var serProcess = GetProcess(task.ProcessId);
                         if (serProcess == null)
                         {
@@ -879,7 +878,7 @@ namespace Ser.ConAai
                 .ContinueWith((_) =>
                 {
                     logger.Debug($"Cleanup Process, Folder and Task");
-                    //KillProcess(task.ProcessId);
+                    KillProcess(task.ProcessId);
                     taskManager.RemoveTask(task.Id);
                     SoftDelete($"{parameter.WorkDir}\\{task.Id}");
                     logger.Debug($"Cleanup complete");
