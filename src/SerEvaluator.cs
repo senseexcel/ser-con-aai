@@ -292,10 +292,6 @@ namespace Ser.ConAai
                         {
                             //Alle Prozesse zur AppId beenden
                             logger.Debug($"Stop all processes for app id {userParameter.AppId}");
-                            //var results = taskManager.GetAllTaskForAppId(userParameter.AppId);
-                            //foreach (var task in results)
-                            //    if(KillProcess(activeTask.ProcessId))
-                            //        taskManager.RemoveTask(task.t);
                         }
                         else
                         {
@@ -315,7 +311,6 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
-                CreateNewCookie = true;
                 logger.Error(ex, "ExecuteFunction has errors");
                 await responseStream.WriteAsync(GetResult(new OnDemandResult()
                 {
@@ -442,6 +437,7 @@ namespace Ser.ConAai
                 if (task.Session == null)
                     task.Status = -2;
                 task.Message = ex.Message;
+                CreateNewCookie = true;
                 logger.Error(ex, "The report could not create.");
                 FinishTask(parameter, task);
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = task.Message };
