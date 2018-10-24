@@ -257,7 +257,7 @@ namespace Ser.ConAai
             }
         }
 
-        public SessionInfo GetSession(SerConnection connection, ActiveTask task)
+        public SessionInfo GetSession(SerConnection connection, ActiveTask task, bool createNewCookie = false)
         {
             try
             {
@@ -269,7 +269,7 @@ namespace Ser.ConAai
                     var oldSession = Sessions?.FirstOrDefault(u => u.ConnectUri.OriginalString == uri.OriginalString
                                                           && u.UserId.ToString() == domainUser.ToString()
                                                           && u.AppId == task.AppId) ?? null;
-                    if (oldSession != null)
+                    if (oldSession != null && !createNewCookie)
                     {
                         var result = ValidateSession(oldSession.ConnectUri, oldSession.Cookie);
                         if (result)
@@ -279,6 +279,8 @@ namespace Ser.ConAai
                         }
                         Sessions.Remove(oldSession);
                     }
+                    else if (oldSession != null && createNewCookie)
+                        Sessions.Remove(oldSession);
                 }
 
                 var token = GetToken(domainUser, connection, TimeSpan.FromMinutes(20));

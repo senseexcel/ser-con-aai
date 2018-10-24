@@ -76,6 +76,7 @@ namespace Ser.ConAai
         #endregion
 
         #region Properties & Variables
+        private static bool CreateNewCookie = false;
         private static SerOnDemandConfig onDemandConfig;
         private TaskManager taskManager;
         #endregion
@@ -314,6 +315,7 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
+                CreateNewCookie = true;
                 logger.Error(ex, "ExecuteFunction has errors");
                 await responseStream.WriteAsync(GetResult(new OnDemandResult()
                 {
@@ -385,7 +387,7 @@ namespace Ser.ConAai
                 }
 
                 //get a session
-                var session = taskManager.GetSession(onDemandConfig.Connection, activeTask);
+                var session = taskManager.GetSession(onDemandConfig.Connection, activeTask, CreateNewCookie);
                 if (session == null)
                 {
                     SoftDelete(currentWorkingDir);
@@ -399,6 +401,7 @@ namespace Ser.ConAai
                 if (parameter.SocketConnection == null)
                     throw new Exception("No Websocket connection to Qlik.");
 
+                CreateNewCookie = false;
                 activeTask.Status = 1;
 
                 //get engine config
@@ -454,7 +457,7 @@ namespace Ser.ConAai
             var serProcess = new Process();
             serProcess.StartInfo.FileName = "dotnet";
             serProcess.StartInfo.Arguments = $"{enginePath} --workdir \"{currentWorkDir}\"";
-            serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+            serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
             serProcess.Start();
             task.ProcessId = serProcess.Id;
 
