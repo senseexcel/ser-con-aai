@@ -226,7 +226,8 @@ namespace Ser.ConAai
             {
                 var url = ServerUtils.MakeWebSocketFromHttp(uri);
                 var connId = Guid.NewGuid().ToString();
-                url = $"{url}/app/engineData/identity/{connId}";
+                url = $"{url}/app/{appId}/identity/{connId}";
+                logger.Info($"Connect to: {url}");
                 var config = new EnigmaConfigurations()
                 {
                     Url = url,

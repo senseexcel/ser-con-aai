@@ -614,16 +614,23 @@ namespace Ser.ConAai
                 }
                 else if (templateUri.Scheme.ToLowerInvariant() == "lib")
                 {
-                    var connections = parameter.SocketConnection.GetConnectionsAsync().Result;
-                    var libResult = connections.FirstOrDefault(n => n.qName.ToLowerInvariant() == result.Item2) ?? null;
-                    if (libResult != null)
-                    {
-                        var libPath = libResult.qConnectionString.ToString();
-                        var relPath = templateUri.LocalPath.TrimStart(new char[] { '\\', '/' }).Replace("/", "\\");
-                        report.Template.Input = $"{libPath}{relPath}";
-                    }
-                    else
+                    var connUrl = parameter.SocketConnection.GetConnectionsAsync()
+                        .ContinueWith<string>((connections) =>
+                        {
+                            var libResult = connections.Result.FirstOrDefault(n => n.qName.ToLowerInvariant() == result.Item2) ?? null;
+                            if (libResult == null)
+                                return null;
+                            var libPath = libResult?.qConnectionString?.ToString();
+                            var relPath = templateUri?.LocalPath?.TrimStart(new char[] { '\\', '/' })?.Replace("/", "\\");
+                            if (relPath == null)
+                                return null;
+                            return $"{libPath}{relPath}";
+                        }).Result;
+
+                    if (connUrl == null)
                         throw new Exception($"No path in connection library found.");
+                    else
+                        report.Template.Input = connUrl; 
                 }
                 else
                 {
@@ -679,9 +686,9 @@ namespace Ser.ConAai
             if (ondemandObject != null)
                 parameter.OnDemand = serConfig["onDemand"]?.ToObject<bool>() ?? false;
 
-            var configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
-            configConnection["credentials"]["cert"] = null;
-            configConnection["credentials"]["privateKey"] = null;
+            dynamic configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
+            configConnection.credentials.cert = null;
+            configConnection.credentials.privateKey = null;
 
             logger.Debug("search for connections.");
             var tasks = serConfig["tasks"]?.ToList() ?? null;

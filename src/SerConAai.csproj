@@ -8,7 +8,7 @@
     <Copyright>Copyright (c) 2018</Copyright>
     <Company>senseexcel</Company>
     <Configuration>Release</Configuration>
-    <Version>$(GitVersion_NuGetVersion)</Version>    
+    <Version>$(GitVersion_NuGetVersion)</Version>
     <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
     <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
     <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
