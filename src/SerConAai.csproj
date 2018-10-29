@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
     <RootNamespace>Ser.ConAai</RootNamespace>
     <Authors>Konrad Mattheis und Martin Berthold</Authors>
     <Copyright>Copyright (c) 2018</Copyright>
@@ -20,10 +20,10 @@
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
       </PropertyGroup>
       <ItemGroup>
-        <PackageReference Include="SerApi" Version="3.1.6" />
-        <PackageReference Include="SerDistribute" Version="2.1.0" />
-        <PackageReference Include="Q2gHelperPem" Version="1.0.6" />
-        <PackageReference Include="Q2gHelperQrs" Version="1.2.1" />
+        <PackageReference Include="SerApi" Version="3.3.0" />
+        <PackageReference Include="SerDistribute" Version="2.3.0" />
+        <PackageReference Include="Q2gHelperPem" Version="1.2.0" />
+        <PackageReference Include="Q2gHelperQrs" Version="1.3.0" />
       </ItemGroup>
     </When>
     <Otherwise>
@@ -31,21 +31,27 @@
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
       </PropertyGroup>
       <ItemGroup>
-        <Reference Include="SerApi">
-          <HintPath>..\..\ser-api-nuget\src\bin\Debug\netcoreapp2.0\SerApi.dll</HintPath>
+        <Reference Include="SerApi" Version="3.2.3">
+          <HintPath>..\..\ser-api-nuget\src\bin\Debug\$(TargetFramework)\SerApi.dll</HintPath>
         </Reference>      
         <Reference Include="Q2gHelperPem">
-          <HintPath>..\..\q2g-helper-pem-nuget\src\bin\Debug\netcoreapp2.0\Q2gHelperPem.dll</HintPath>
+          <HintPath>..\..\q2g-helper-pem-nuget\src\bin\Debug\$(TargetFramework)\Q2gHelperPem.dll</HintPath>
         </Reference>
         <Reference Include="Q2gHelperQrs">
-          <HintPath>..\..\q2g-helper-qrs-nuget\src\bin\Debug\netcoreapp2.0\Q2gHelperQrs.dll</HintPath>
+          <HintPath>..\..\q2g-helper-qrs-nuget\src\bin\Debug\$(TargetFramework)\Q2gHelperQrs.dll</HintPath>
         </Reference>
         <Reference Include="SerDistribute">
-          <HintPath>..\..\ser-distribute-nuget\src\bin\Debug\netcoreapp2.0\SerDistribute.dll</HintPath>
+          <HintPath>..\..\ser-distribute-nuget\src\bin\Debug\$(TargetFramework)\SerDistribute.dll</HintPath>
         </Reference>
       </ItemGroup>
     </Otherwise>
-  </Choose>  
+  </Choose>
+
+  <ItemGroup>
+    <Compile Remove="Properties\PublishProfiles\**" />
+    <EmbeddedResource Remove="Properties\PublishProfiles\**" />
+    <None Remove="Properties\PublishProfiles\**" />
+  </ItemGroup>  
  
   <ItemGroup>
     <None Update="App.config">
@@ -55,37 +61,21 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
-
-  <Target Name="WriteVersion" AfterTargets="GetVersion">
-    <WriteLinesToFile File="$(SolutionDir)\obj\version.txt" Lines="$(GitVersion_NuGetVersion)" Overwrite="true" />
-  </Target>
-  <Target Name="SetPackageVersionFromFile" BeforeTargets="GenerateNuspec">
-    <ReadLinesFromFile File="$(SolutionDir)\obj\version.txt">
-      <Output TaskParameter="Lines" PropertyName="PackageVersion" />
-    </ReadLinesFromFile>
-  </Target>
-
-  <Target Name="PublishToNugetWithAPIKey" AfterTargets="GenerateNuspec">
-    <ReadLinesFromFile File="$(SolutionDir)\..\..\nugetapikey.txt">
-      <Output TaskParameter="Lines" PropertyName="NugetAPIKey" />
-    </ReadLinesFromFile>
-    <Exec WorkingDirectory="$(BaseDir)" Command="dotnet nuget push $(PackageOutputAbsolutePath)$(PackageId).$(PackageVersion).nupkg -k $(NugetAPIKey) -s https://api.nuget.org/v3/index.json" />
-  </Target>  
-  
+ 
   <ItemGroup>
-    <PackageReference Include="BouncyCastle.NetCore" Version="1.8.1.3" />
-    <PackageReference Include="GitVersionTask" Version="4.0.0-beta0008">
-      <PrivateAssets>All</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="BouncyCastle.NetCore" Version="1.8.3" />
+    <PackageReference Include="enigma.net" Version="0.14.0-alpha0008" />
+    <PackageReference Include="GitVersionTask" Version="4.0.0" PrivateAssets="All" />
     <PackageReference Include="Hjson" Version="3.0.0" />
+    <PackageReference Include="Markdig" Version="0.15.4" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
-    <PackageReference Include="NLog" Version="4.5.6" />
-    <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.8" />
+    <PackageReference Include="NLog" Version="4.5.10" />
+    <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.9" />
+    <PackageReference Include="qlik-engineapi" Version="0.3.0-alpha0003" />
     <PackageReference Include="qlik-sseapi" Version="1.1.1" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.2.2" />
-    <PackageReference Include="WebSocket4Net" Version="0.15.2" />
-  </ItemGroup>  
-  
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.3.0" />
+  </ItemGroup>
+
   <ItemGroup>
     <Folder Include="Properties\PublishProfiles\" />
   </ItemGroup>

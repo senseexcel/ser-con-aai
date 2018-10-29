@@ -10,20 +10,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace Ser.ConAai
 {
     #region Usings
-    using Microsoft.Extensions.PlatformAbstractions;
     using Newtonsoft.Json;
     using NLog;
     using NLog.Config;
     using PeterKottas.DotNetCore.WindowsService;
-    using Q2g.HelperPem;
     using System;
     using System.IO;
     using System.Linq;
     using System.Net;
-    using System.Security.Cryptography.X509Certificates;
+    using System.Reflection;
     using System.Text;
     using System.Xml;
-    using System.Xml.Linq;
     #endregion
 
     class Program
@@ -91,8 +88,7 @@ namespace Ser.ConAai
 
             try
             {
-                var appPath = PlatformServices.Default.Application.ApplicationBasePath;
-                var files = Directory.GetFiles(appPath, "*.*", SearchOption.TopDirectoryOnly)
+                var files = Directory.GetFiles(AppContext.BaseDirectory, "*.*", SearchOption.TopDirectoryOnly)
                                      .Where(f => f.ToLowerInvariant().EndsWith("\\app.config") || 
                                                  f.ToLowerInvariant().EndsWith("\\app.json")).ToList();
                 if (files != null && files.Count > 0)

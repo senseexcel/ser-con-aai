@@ -10,28 +10,35 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace Ser.ConAai
 {
     #region Usings
-    using Grpc.Core;
-    using Qlik.Sse;
-    using Google.Protobuf;
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Linq;
     using System.Net;
+    using System.Net.Http;
+    using System.Net.Security;
+    using System.Security.Cryptography.X509Certificates;
+    using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
-    using NLog;
     using System.IO;
+    using Grpc.Core;
+    using Qlik.Sse;
+    using Google.Protobuf;
+    using NLog;    
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using Q2g.HelperQrs;
     using Ser.Api;
     using Hjson;
-    using System.Net.Http;
     using Ser.Distribute;
-    using System.Security.Cryptography.X509Certificates;
-    using System.Net.Security;
     using static Qlik.Sse.Connector;
+    using System.Net.WebSockets;
+    using Q2g.HelperPem;
+    using Qlik.EngineAPI;
+    using enigma;
+    using ImpromptuInterface;
+    using System.Reflection;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -63,11 +70,13 @@ namespace Ser.ConAai
             SUCCESS,
             ERROR,
             ABORT,
+            WARNING,
             UNKOWN
         }
         #endregion
 
         #region Properties & Variables
+        private static bool CreateNewCookie = false;
         private static SerOnDemandConfig onDemandConfig;
         private TaskManager taskManager;
         #endregion
@@ -77,8 +86,10 @@ namespace Ser.ConAai
         {
             onDemandConfig = config;
             taskManager = new TaskManager();
-            ServicePointManager.ServerCertificateValidationCallback += ValidateRemoteCertificate;
-            //RestoreTasks();
+            ValidationCallback.Connection = config.Connection;
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+            ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
+            ////RestoreTasks();
         }
 
         public void Dispose() { }
@@ -166,7 +177,7 @@ namespace Ser.ConAai
                     AppId = commonHeader.AppId,
                     DomainUser = domainUser,
                     WorkDir = PathUtils.GetFullPathFromApp(onDemandConfig.WorkingDir),
-            };
+                };
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
 
@@ -188,6 +199,7 @@ namespace Ser.ConAai
                         //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
                         userParameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
                         activeTask = taskManager.CreateTask(userParameter);
+                        logger.Debug($"scheduler task: {activeTask.Id}");
                         var tmpsession = taskManager.GetSession(onDemandConfig.Connection, activeTask);
                         var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
                         var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
@@ -202,7 +214,11 @@ namespace Ser.ConAai
                             userParameter.DomainUser = new DomainUser($"{userDirectory}\\{userId}");
                             logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
                         }
-                        taskManager.RemoveTask(activeTask.Id);
+
+                        lock (this)
+                        {
+                            taskManager.RemoveTask(activeTask.Id);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -254,7 +270,7 @@ namespace Ser.ConAai
                                                                                         session?.Cookie, activeTask.UserId);
                                 }
                                 statusResult.Status = activeTask.Status;
-                                statusResult.Log = log;
+                                statusResult.Log = activeTask.Message;
                                 statusResult.Link = activeTask.DownloadLink;
                             }
                             else
@@ -276,10 +292,6 @@ namespace Ser.ConAai
                         {
                             //Alle Prozesse zur AppId beenden
                             logger.Debug($"Stop all processes for app id {userParameter.AppId}");
-                            //var results = taskManager.GetAllTaskForAppId(userParameter.AppId);
-                            //foreach (var task in results)
-                            //    if(KillProcess(activeTask.ProcessId))
-                            //        taskManager.RemoveTask(task.t);
                         }
                         else
                         {
@@ -314,51 +326,6 @@ namespace Ser.ConAai
         #endregion
 
         #region Private Functions
-        private static bool ValidateRemoteCertificate(object sender, X509Certificate cert, X509Chain chain,
-                                                      SslPolicyErrors error)
-        {
-            if (error == SslPolicyErrors.None)
-                return true;
-
-            if (!onDemandConfig.Connection.SslVerify)
-                return true;
-
-            logger.Debug("Validate Server Certificate...");
-            Uri requestUri = null;
-            if (sender is HttpRequestMessage hrm)
-                requestUri = hrm.RequestUri;
-            if (sender is HttpClient hc)
-                requestUri = hc.BaseAddress;
-            if (sender is HttpWebRequest hwr)
-                requestUri = hwr.Address;
-
-            if (requestUri != null)
-            {
-                logger.Debug("Validate Thumbprints...");
-                var thumbprints = onDemandConfig.Connection.SslValidThumbprints;
-                foreach (var item in thumbprints)
-                {
-                    try
-                    {
-                        Uri uri = null;
-                        if (!String.IsNullOrEmpty(item.Url))
-                            uri = new Uri(item.Url);
-                        var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "");
-                        if ((thumbprint == cert.GetCertHashString() && uri == null) ||
-                            (thumbprint == cert.GetCertHashString()) &&
-                            (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant()))
-                            return true;
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error(ex, "Thumbprint could not be validated.");
-                    }
-                }
-            }
-
-            return false;
-        }
-
         private int? GetTimeOut(UserParameter parameter, SerConfig config)
         {
             if (parameter.OnDemand)
@@ -379,11 +346,11 @@ namespace Ser.ConAai
         private OnDemandResult CreateReport(UserParameter parameter, string json)
         {
             ActiveTask activeTask = null;
+            var currentWorkingDir = String.Empty;
 
             try
             {
                 var id = new DirectoryInfo(parameter.WorkDir).Name;
-                var currentWorkingDir = String.Empty;
                 if (!Guid.TryParse(id, out var result))
                 {
                     if (activeTask == null)
@@ -401,9 +368,10 @@ namespace Ser.ConAai
                 }
 
                 logger.Debug($"TempFolder: {currentWorkingDir}");
+                activeTask.WorkingDir = currentWorkingDir;
 
-                //check for task is already running
-                var task = taskManager.GetRunningTask(activeTask.Id);
+               //check for task is already running
+               var task = taskManager.GetRunningTask(activeTask.Id);
                 if (task != null)
                 {
                     if (task.Status == 1 || task.Status == 2)
@@ -414,14 +382,21 @@ namespace Ser.ConAai
                 }
 
                 //get a session
-                var session = taskManager.GetSession(onDemandConfig.Connection, activeTask);
+                var session = taskManager.GetSession(onDemandConfig.Connection, activeTask, CreateNewCookie);
                 if (session == null)
                 {
                     SoftDelete(currentWorkingDir);
                     Program.Service?.CheckQlikConnection();
                     throw new Exception("No session cookie generated.");
                 }
+
+                //create websocket
                 parameter.ConnectCookie = session?.Cookie;
+                parameter.SocketConnection = taskManager.GetSessionAppConnection(session?.ConnectUri, session?.Cookie, task.AppId);
+                if (parameter.SocketConnection == null)
+                    throw new Exception("No Websocket connection to Qlik.");
+
+                CreateNewCookie = false;
                 activeTask.Status = 1;
 
                 //get engine config
@@ -435,8 +410,13 @@ namespace Ser.ConAai
                 //Save config for SER engine
                 var savePath = Path.Combine(currentWorkingDir, "job.json");
                 logger.Debug($"Save SER config file \"{savePath}\"");
-                var serConfig = JsonConvert.SerializeObject(newEngineConfig, Formatting.Indented);
-                File.WriteAllText(savePath, serConfig);
+                var settings = new JsonSerializerSettings()
+                {
+                    DefaultValueHandling = DefaultValueHandling.Ignore,
+                    Formatting = Formatting.Indented,
+                };
+                var serConfig = JsonConvert.SerializeObject(newEngineConfig, settings);
+                File.WriteAllText(savePath, serConfig, Encoding.UTF8);
 
                 //Use the connector in the same App, than wait for reload
                 var timeOut = GetTimeOut(parameter, newEngineConfig);
@@ -456,8 +436,11 @@ namespace Ser.ConAai
                     task.Status = -1;
                 if (task.Session == null)
                     task.Status = -2;
+                task.Message = ex.Message;
+                CreateNewCookie = true;
                 logger.Error(ex, "The report could not create.");
-                return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = ex.Message };
+                FinishTask(parameter, task);
+                return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = task.Message };
             }
         }
 
@@ -465,11 +448,12 @@ namespace Ser.ConAai
         {
             //Start SER Engine as Process
             var currentWorkDir = Path.Combine(parameter.WorkDir, task.Id);
-            logger.Debug($"Start Engine \"{onDemandConfig.SerEnginePath}\"...");
+            var enginePath = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
+            logger.Debug($"Start Engine \"{enginePath}\"...");
             var serProcess = new Process();
-            serProcess.StartInfo.FileName = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
-            serProcess.StartInfo.Arguments = $"--workdir \"{currentWorkDir}\" --privatekeypath \"{parameter.PrivateKeyPath}\"";
-            serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+            serProcess.StartInfo.FileName = "dotnet";
+            serProcess.StartInfo.Arguments = $"{enginePath} --workdir \"{currentWorkDir}\"";
+            serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
             serProcess.Start();
             task.ProcessId = serProcess.Id;
 
@@ -492,7 +476,8 @@ namespace Ser.ConAai
             {
                 while (true)
                 {
-                    Thread.Sleep(500);
+                    //Wait for qlik dataload, when i use one app
+                    Thread.Sleep(1000);
                     if (token.IsCancellationRequested)
                         return;
                     var tempLoad = GetLastReloadTime(task, parameter.AppId);
@@ -617,7 +602,7 @@ namespace Ser.ConAai
                 var templateUri = result.Item1;
                 if (templateUri.Scheme.ToLowerInvariant() == "content")
                 {
-                    var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, parameter.AppId, cookie, result.Item2);
+                    var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, parameter.AppId, parameter.SocketConnection, result.Item2);
                     logger.Debug($"File count in content library: {contentFiles?.Count}");
                     var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(templateUri.AbsolutePath));
                     if (filterFile != null)
@@ -630,16 +615,23 @@ namespace Ser.ConAai
                 }
                 else if (templateUri.Scheme.ToLowerInvariant() == "lib")
                 {
-                    var connections = GetConnections(onDemandConfig.Connection.ServerUri, parameter.AppId, cookie);
-                    dynamic libResult = connections?.FirstOrDefault(n => n["qName"]?.ToString()?.ToLowerInvariant() == result.Item2) ?? null;
-                    if (libResult != null)
-                    {
-                        var libPath = libResult.qConnectionString.ToString();
-                        var relPath = templateUri.LocalPath.TrimStart(new char[] { '\\', '/' }).Replace("/", "\\");
-                        report.Template.Input = $"{libPath}{relPath}";
-                    }
-                    else
+                    var connUrl = parameter.SocketConnection.GetConnectionsAsync()
+                        .ContinueWith<string>((connections) =>
+                        {
+                            var libResult = connections.Result.FirstOrDefault(n => n.qName.ToLowerInvariant() == result.Item2) ?? null;
+                            if (libResult == null)
+                                return null;
+                            var libPath = libResult?.qConnectionString?.ToString();
+                            var relPath = templateUri?.LocalPath?.TrimStart(new char[] { '\\', '/' })?.Replace("/", "\\");
+                            if (relPath == null)
+                                return null;
+                            return $"{libPath}{relPath}";
+                        }).Result;
+
+                    if (connUrl == null)
                         throw new Exception($"No path in connection library found.");
+                    else
+                        report.Template.Input = connUrl; 
                 }
                 else
                 {
@@ -664,31 +656,14 @@ namespace Ser.ConAai
             logger.Debug("Create Bearer Connection");
             var token = taskManager.GetToken(parameter.DomainUser, mainConnection, TimeSpan.FromMinutes(30));
             logger.Debug($"Token: {token}");
-            var bearerSerConnection = new SerConnection()
-            {
-                App = parameter.AppId,
-                ServerUri = onDemandConfig.Connection.ServerUri,
-                Credentials = new SerCredentials()
-                {
-                    Type = QlikCredentialType.HEADER,
-                    Key = "Authorization",
-                    Value = $"Bearer { token }",
-                },
-            };
-            var bearerConnection = JToken.Parse(JsonConvert.SerializeObject(bearerSerConnection, Formatting.Indented));
-            logger.Debug("serialize config connection.");
+            
             if (mainConnection.Credentials != null)
             {
                 var cred = mainConnection.Credentials;
+                cred.Type = QlikCredentialType.SESSION;
                 cred.Value = parameter.ConnectCookie.Value;
                 parameter.PrivateKeyPath = cred.PrivateKey;
             }
-
-            var configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
-            configConnection["credentials"]["cert"] = null;
-            configConnection["credentials"]["privateKey"] = null;
-
-            logger.Debug("parse user json.");
 
             if (!userJson.ToLowerInvariant().Contains("reports:") && 
                 !userJson.ToLowerInvariant().Contains("\"reports\":"))
@@ -703,6 +678,7 @@ namespace Ser.ConAai
             if (!userJson.Trim().EndsWith("}"))
                 userJson = $"{userJson}}}";
 
+            logger.Trace($"Parse user json: {userJson}");
             var jsonConfig = GetNormalizeJson(userJson);
             var serConfig = JObject.Parse(jsonConfig);
 
@@ -710,6 +686,10 @@ namespace Ser.ConAai
             var ondemandObject = serConfig["onDemand"] ?? null;
             if (ondemandObject != null)
                 parameter.OnDemand = serConfig["onDemand"]?.ToObject<bool>() ?? false;
+
+            dynamic configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
+            configConnection.credentials.cert = null;
+            configConnection.credentials.privateKey = null;
 
             logger.Debug("search for connections.");
             var tasks = serConfig["tasks"]?.ToList() ?? null;
@@ -720,6 +700,7 @@ namespace Ser.ConAai
                 {
                     var userConnections = report["connections"].ToList();
                     var newUserConnections = new List<JToken>();
+                    var currentApp = String.Empty;
                     foreach (var userConnection in userConnections)
                     {
                         var cvalue = userConnection.ToString();
@@ -728,9 +709,23 @@ namespace Ser.ConAai
                         var currentConnection = JObject.Parse(cvalue);
                         //merge connections / config <> script
                         currentConnection.Merge(configConnection);
-                        newUserConnections.Add(currentConnection);   
+                        newUserConnections.Add(currentConnection);
+                        currentApp = (currentConnection as dynamic)?.app ?? null;
                     }
                     //Important: The bearer connection must be added as last.
+                    var bearerSerConnection = new SerConnection()
+                    {
+                        App = currentApp,
+                        ServerUri = onDemandConfig.Connection.ServerUri,
+                        Credentials = new SerCredentials()
+                        {
+                            Type = QlikCredentialType.HEADER,
+                            Key = "Authorization",
+                            Value = $"Bearer { token }",
+                        },
+                    };
+                    var bearerConnection = JToken.Parse(JsonConvert.SerializeObject(bearerSerConnection, Formatting.Indented));
+                    logger.Debug("serialize config connection.");
                     newUserConnections.Add(bearerConnection);
 
                     report["connections"] = new JArray(newUserConnections);
@@ -740,8 +735,7 @@ namespace Ser.ConAai
                     {
                         var connection = child["connections"] ?? null;
                         if (connection?.ToString() == "@CONFIGCONNECTION@")
-                            child["connections"] = configConnection;
-
+                            child["connections"] = newUserConnections.FirstOrDefault();
                         var childProp = child.Parent as JProperty;
                         if (childProp?.Name == "hub")
                         {
@@ -750,6 +744,15 @@ namespace Ser.ConAai
                                 child["owner"] = parameter.DomainUser.ToString();
                         }
                     }
+
+                    if (!String.IsNullOrEmpty(parameter.PrivateKeyPath))
+                    {
+                        var path = PathUtils.GetFullPathFromApp(parameter.PrivateKeyPath);
+                        var crypter = new TextCrypter(path);
+                        var value = report["template"]["outputPassword"] ?? null;
+                        if (value != null)
+                            report["template"]["outputPassword"] = crypter.DecryptText(value.Value<string>());
+                    }
                 }
             }
 
@@ -757,62 +760,30 @@ namespace Ser.ConAai
             return result;
         }
 
-        private List<JToken> GetConnections(Uri host, string appId, Cookie cookie)
+        private List<string> GetLibraryContentInternal(IDoc app, string qName)
         {
-            try
-            {
-                var qlikWebSocket = new QlikWebSocket(host, cookie);
-                var isOpen = qlikWebSocket.OpenSocket();
-                dynamic response = qlikWebSocket.OpenDoc(appId);
-                if (response.ToString().Contains("App already open"))
-                    response = qlikWebSocket.GetActiveDoc();
-                var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
-                response = qlikWebSocket.GetConnections(handle);
-                JArray results = response.result.qConnections;
-                return results.ToList();
-            }
-            catch(Exception ex)
-            {
-                logger.Error(ex, "Could not read the lib connections.");
-                return new List<JToken>();
-            }
+            var libContent = app.GetLibraryContentAsync(qName).Result;
+            return libContent.qItems.Select(u => u.qUrl).ToList();
         }
 
-        private List<string> GetLibraryContentInternal(QlikWebSocket qlikWebSocket, string handle, string qName)
-        {
-            dynamic response = qlikWebSocket.GetLibraryContent(handle, qName);
-            JArray qItems = response?.result?.qList?.qItems;
-            var qUrls = qItems.Select(j => j["qUrl"].ToString()).ToList();
-            return qUrls;
-        }
-
-        private List<string> GetLibraryContent(Uri serverUri, string appId, Cookie cookie, string contentName = "")
+        private List<string> GetLibraryContent(Uri serverUri, string appId, IDoc app, string contentName = "")
         {            
             try
             {
                 var results = new List<string>();
-                var qlikWebSocket = new QlikWebSocket(serverUri, cookie);
-                var isOpen = qlikWebSocket.OpenSocket();
-                dynamic response = qlikWebSocket.OpenDoc(appId);
-                if (response.ToString().Contains("App already open"))
-                    response = qlikWebSocket.GetActiveDoc();
-                var handle = response?.result?.qReturn?.qHandle?.ToString() ?? null;
-
                 var readItems = new List<string>() { contentName };
                 if (String.IsNullOrEmpty(contentName))
                 {
                     // search for all App Specific ContentLibraries                    
-                    response = qlikWebSocket.GetContentLibraries(handle);
-                    JArray qItems = response?.result?.qList?.qItems.ToObject<JArray>();
-                    readItems = qItems.Where(s => s["qAppSpecific"]?.Value<bool>() == true).Select(s => s["qName"].ToString()).ToList();
+                    var libs = app.GetContentLibrariesAsync().Result;
+                    readItems = libs.qItems.Where(s => s.qAppSpecific == true).Select(s => s.qName).ToList();
                 }
                     
                 foreach (var item in readItems)
-                {                    
-                    var qUrls = GetLibraryContentInternal(qlikWebSocket, handle, item);
+                {
+                    var qUrls = GetLibraryContentInternal(app, item);
                     results.AddRange(qUrls);
                 }
-
                 return results;
             }
             catch (Exception ex)
@@ -857,43 +828,58 @@ namespace Ser.ConAai
 
         private void CheckStatus(UserParameter parameter, ActiveTask task)
         {
-            var status = 0;
-            while (status != 2)
+            try
             {
-                Thread.Sleep(250);
-                if (task.Status == -1 || task.Status == 0)
+                var status = 0;
+                task.Message = "Build Report, Please wait...";
+                while (status != 2)
                 {
-                    status = task.Status;
-                    break;
-                }
-                status = Status(Path.Combine(parameter.WorkDir, task.Id), task.Status);
-                if (status == -1 || status == 0)
-                    break;
-
-                if (status == 1)
-                {
-                    var serProcess = GetProcess(task.ProcessId);
-                    if (serProcess == null)
+                    Thread.Sleep(250);
+                    if (task.Status == -1 || task.Status == 0)
                     {
-                        status = -1;
-                        logger.Error("The engine process was terminated.");
+                        status = task.Status;
                         break;
                     }
+                    status = Status(Path.Combine(parameter.WorkDir, task.Id), task.Status);
+                    if (status == -1 || status == 0)
+                        break;
+
+                    if (status == 1)
+                    {
+                        var serProcess = GetProcess(task.ProcessId);
+                        if (serProcess == null)
+                        {
+                            status = -1;
+                            logger.Error("The engine process was terminated.");
+                            break;
+                        }
+                    }
                 }
+
+                //Generate Reports
+                task.Status = status;
+                if (status != 2)
+                    throw new Exception("The report build process failed.");
+                task.Message = "Delivery Report, Please wait...";
+
+                //Delivery
+                status = StartDeliveryTool(task, parameter);
+                task.Status = status;
+                if (status != 3)
+                    throw new Exception("The delivery process failed.");
+                task.Message = "Finish";
             }
-
-            //Reports Generated
-            task.Status = status;
-            if (task.Status != 2)
-                return;
-
-            //Delivery
-            status = StartDeliveryTool(task, parameter);
-            task.Status = status;
-
-            //Cleanup
-            if (!parameter.OnDemand)
-                FinishTask(parameter, task);
+            catch (Exception ex)
+            {
+                task.Message = ex.Message;
+                logger.Error(ex, "The status check has detected a processing error.");
+            }
+            finally
+            {
+                //Cleanup
+                if (!parameter.OnDemand)
+                    FinishTask(parameter, task);
+            }
         }
 
         private void FinishTask(UserParameter parameter, ActiveTask task)
@@ -906,8 +892,8 @@ namespace Ser.ConAai
                 {
                     logger.Debug($"Cleanup Process, Folder and Task");
                     KillProcess(task.ProcessId);
-                    SoftDelete($"{parameter.WorkDir}\\{task.Id}");
                     taskManager.RemoveTask(task.Id);
+                    SoftDelete($"{parameter.WorkDir}\\{task.Id}");
                     logger.Debug($"Cleanup complete");
                 });
             }
@@ -961,13 +947,13 @@ namespace Ser.ConAai
                 if (Directory.Exists(folder))
                 {
                     Directory.Delete(folder, true);
-                    logger.Debug($"work dir {folder} deleted.");
+                    logger.Debug($"The temp dir {folder} was deleted.");
                 }
                 return true;
             }
             catch (Exception ex)
             {
-                logger.Warn(ex, $"The Folder {folder} could not deleted.");
+                logger.Warn(ex, $"The temp dir {folder} could not deleted.");
                 return false;
             }
         }
@@ -1006,7 +992,10 @@ namespace Ser.ConAai
                 case EngineResult.ABORT:
                     return 1;
                 case EngineResult.ERROR:
-                    logger.Error("No Report created.");
+                    logger.Error("No Report created (ERROR).");
+                    return -1;
+                case EngineResult.WARNING:
+                    logger.Warn("No Report created (WARNING).");
                     return -1;
                 default:
                     return sessionStatus;

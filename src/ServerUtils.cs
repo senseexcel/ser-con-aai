@@ -24,6 +24,23 @@ namespace Ser.ConAai
         private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
+        public static string MakeWebSocketFromHttp(Uri uri)
+        {
+            try
+            {
+                var result = uri.AbsoluteUri;
+                result = result.Replace("http://", "ws://");
+                result = result.Replace("https://", "wss://");
+                result = result.TrimEnd('/');
+                return result;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Make web socket from http was failed.");
+                return null;
+            }
+        }
+
         public static string GetFullQualifiedHostname(int timeout)
         {
             try

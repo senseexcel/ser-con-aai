@@ -21,6 +21,7 @@ namespace Ser.ConAai
     using Q2g.HelperQrs;
     using Q2g.HelperPem;
     using Newtonsoft.Json.Serialization;
+    using Qlik.EngineAPI;
     #endregion
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
@@ -39,6 +40,7 @@ namespace Ser.ConAai
         public bool OnDemand { get; set; }
         public string PrivateKeyPath { get; set; }
         public int CleanupTimeout { get; set; } = 20000;
+        public IDoc SocketConnection { get; set; }
         #endregion
     }
 }

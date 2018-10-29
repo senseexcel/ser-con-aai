@@ -13,6 +13,8 @@ namespace Ser.ConAai
     using System;
     using System.Collections.Generic;
     using System.Net;
+    using enigma;
+    using Qlik.EngineAPI;
     using Ser.Api;
     #endregion
 
