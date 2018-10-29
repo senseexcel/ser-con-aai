@@ -476,6 +476,7 @@ namespace Ser.ConAai
             {
                 while (true)
                 {
+                    //Wait for qlik dataload, when i use one app
                     Thread.Sleep(1000);
                     if (token.IsCancellationRequested)
                         return;
