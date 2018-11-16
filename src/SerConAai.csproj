@@ -20,7 +20,7 @@
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
       </PropertyGroup>
       <ItemGroup>
-        <PackageReference Include="SerApi" Version="3.3.0" />
+        <PackageReference Include="SerApi" Version="3.4.0" />
         <PackageReference Include="SerDistribute" Version="2.3.0" />
         <PackageReference Include="Q2gHelperPem" Version="1.2.0" />
         <PackageReference Include="Q2gHelperQrs" Version="1.3.0" />
