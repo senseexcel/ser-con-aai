@@ -31,7 +31,6 @@ namespace Ser.ConAai
         #region Properties
         public string WorkDir { get; set; }
         public string SaveFormats { get; set; }
-        public SelectionMode UseUserSelesction { get; set; }
         public string AppId { get; set; }
         public DomainUser DomainUser { get; set; }
         public Cookie ConnectCookie { get; set; }
