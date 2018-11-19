@@ -751,7 +751,13 @@ namespace Ser.ConAai
                         var crypter = new TextCrypter(path);
                         var value = report["template"]["outputPassword"] ?? null;
                         if (value != null)
-                            report["template"]["outputPassword"] = crypter.DecryptText(value.Value<string>());
+                        {
+                            var password = value.Value<string>();
+                            if (Convert.TryFromBase64String(password, new Span<byte>(), out var base64Result))
+                                report["template"]["outputPassword"] = crypter.DecryptText(password);
+                            else
+                                report["template"]["outputPassword"] = password;
+                        }
                     }
                 }
             }
@@ -867,7 +873,6 @@ namespace Ser.ConAai
                 task.Status = status;
                 if (status != 3)
                     throw new Exception("The delivery process failed.");
-                task.Message = "Finish";
             }
             catch (Exception ex)
             {
@@ -969,6 +974,10 @@ namespace Ser.ConAai
                 if (result != null)
                 {
                     task.DownloadLink = result;
+                    if (result == "OK")
+                        task.Message = "Finish";
+                    else
+                        task.Message = result;
                     return 3;
                 }
                 else
