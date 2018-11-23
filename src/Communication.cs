@@ -36,7 +36,6 @@ namespace Ser.ConAai
         public Cookie ConnectCookie { get; set; }
         public bool SharedMode { get; set; }
         public string BookmarkId { get; set; }
-        public bool OnDemand { get; set; }
         public string PrivateKeyPath { get; set; }
         public int CleanupTimeout { get; set; } = 20000;
         public IDoc SocketConnection { get; set; }

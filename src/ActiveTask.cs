@@ -22,7 +22,7 @@ namespace Ser.ConAai
     public class ActiveTask
     {
         public int ProcessId { get; set; }
-        public string DownloadLink { get; set; }
+        public string Distribute { get; set; }
         public int Status { get; set; }
         public string Id { get; set; }
         public DateTime StartTime { get; set; }

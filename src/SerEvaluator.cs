@@ -271,7 +271,7 @@ namespace Ser.ConAai
                                 }
                                 statusResult.Status = activeTask.Status;
                                 statusResult.Log = activeTask.Message;
-                                statusResult.Link = activeTask.DownloadLink;
+                                statusResult.Distribute = activeTask.Distribute;
                             }
                             else
                                 logger.Debug($"No existing task id {taskId} found.");
@@ -328,9 +328,6 @@ namespace Ser.ConAai
         #region Private Functions
         private int? GetTimeOut(UserParameter parameter, SerConfig config)
         {
-            if (parameter.OnDemand)
-                return null;
-
             foreach (var task in config.Tasks)
                 foreach (var report in task.Reports)
                 {
@@ -381,7 +378,7 @@ namespace Ser.ConAai
                     }
                 }
 
-                //get a session
+                //get a session and websocket connection
                 var session = taskManager.GetSession(onDemandConfig.Connection, activeTask, CreateNewCookie);
                 if (session == null)
                 {
@@ -390,9 +387,8 @@ namespace Ser.ConAai
                     throw new Exception("No session cookie generated.");
                 }
 
-                //create websocket
                 parameter.ConnectCookie = session?.Cookie;
-                parameter.SocketConnection = taskManager.GetSessionAppConnection(session?.ConnectUri, session?.Cookie, task.AppId);
+                parameter.SocketConnection = session?.App;
                 if (parameter.SocketConnection == null)
                     throw new Exception("No Websocket connection to Qlik.");
 
@@ -438,6 +434,7 @@ namespace Ser.ConAai
                     task.Status = -2;
                 task.Message = ex.Message;
                 CreateNewCookie = true;
+                task.Session.SocketSession?.CloseAsync()?.Wait();
                 logger.Error(ex, "The report could not create.");
                 FinishTask(parameter, task);
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = task.Message };
@@ -682,11 +679,6 @@ namespace Ser.ConAai
             var jsonConfig = GetNormalizeJson(userJson);
             var serConfig = JObject.Parse(jsonConfig);
 
-            //check for ondemand mode
-            var ondemandObject = serConfig["onDemand"] ?? null;
-            if (ondemandObject != null)
-                parameter.OnDemand = serConfig["onDemand"]?.ToObject<bool>() ?? false;
-
             dynamic configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
             configConnection.credentials.cert = null;
             configConnection.credentials.privateKey = null;
@@ -866,6 +858,8 @@ namespace Ser.ConAai
                 task.Status = status;
                 if (status != 2)
                     throw new Exception("The report build process failed.");
+                task.Session.SocketSession?.CloseAsync()?.Wait();
+                task.Session.SocketSession = null;
                 task.Message = "Delivery Report, Please wait...";
 
                 //Delivery
@@ -882,8 +876,7 @@ namespace Ser.ConAai
             finally
             {
                 //Cleanup
-                if (!parameter.OnDemand)
-                    FinishTask(parameter, task);
+                FinishTask(parameter, task);
             }
         }
 
@@ -896,6 +889,11 @@ namespace Ser.ConAai
                 .ContinueWith((_) =>
                 {
                     logger.Debug($"Cleanup Process, Folder and Task");
+                    if (task.Session.SocketSession != null)
+                    {
+                        task.Session.SocketSession?.CloseAsync()?.Wait();
+                        task.Session.SocketSession = null;
+                    }
                     KillProcess(task.ProcessId);
                     taskManager.RemoveTask(task.Id);
                     SoftDelete($"{parameter.WorkDir}\\{task.Id}");
@@ -970,18 +968,9 @@ namespace Ser.ConAai
                 var jobResultPath = Path.Combine(parameter.WorkDir, task.Id, "JobResults");
                 var distribute = new Distribute();
                 var privateKeyFullname = PathUtils.GetFullPathFromApp(parameter.PrivateKeyPath);
-                var result = distribute.Run(jobResultPath, parameter.OnDemand, privateKeyFullname);
-                if (result != null)
-                {
-                    task.DownloadLink = result;
-                    if (result == "OK")
-                        task.Message = "Finish";
-                    else
-                        task.Message = result;
-                    return 3;
-                }
-                else
-                    return -1;
+                var result = distribute.Run(jobResultPath, privateKeyFullname);
+                task.Distribute = result;
+                return 3;
             }
             catch (Exception ex)
             {
