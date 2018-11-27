@@ -335,7 +335,11 @@ namespace Ser.ConAai
                     var vaildConnections = report.Connections.Take(report.Connections.Count - 1);
                     var connection = vaildConnections?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
                     if (connection != null)
+                    {
+                        if (connection?.Identities?.Count == 1 && String.IsNullOrEmpty(connection?.Identities?.FirstOrDefault()))
+                            return null;
                         return report.General.Timeout;
+                    }
                 }
             return null;
         }
