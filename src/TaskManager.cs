@@ -127,6 +127,7 @@ namespace Ser.ConAai
                         var cookie = sessionInfo.Cookie;
                         cookie.HttpOnly = false;
                         webSocket.Options.Cookies.Add(cookie);
+                        webSocket.Options.KeepAliveInterval = TimeSpan.FromDays(48);
                         await webSocket.ConnectAsync(new Uri(Url), CancellationToken.None);
                         return webSocket;
                     },

@@ -858,7 +858,7 @@ namespace Ser.ConAai
                 task.Status = status;
                 if (status != 2)
                     throw new Exception("The report build process failed.");
-                task.Session.SocketSession?.CloseAsync()?.Wait();
+                task.Session.SocketSession?.CloseAsync()?.Wait(1000);
                 task.Session.SocketSession = null;
                 task.Message = "Delivery Report, Please wait...";
 
