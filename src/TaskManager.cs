@@ -88,11 +88,11 @@ namespace Ser.ConAai
             }
         }
 
-        private bool ValidateSession(Uri serverUri, Cookie cookie)
+        private bool ValidateSession(SessionInfo sessionInfo)
         {
             try
             {
-                var qrsHub = new QlikQrsHub(serverUri, cookie);
+                var qrsHub = new QlikQrsHub(sessionInfo.ConnectUri, sessionInfo.Cookie);
                 var result = qrsHub.SendRequestAsync("about", HttpMethod.Get).Result;
                 if (String.IsNullOrEmpty(result))
                     return false;
@@ -101,6 +101,52 @@ namespace Ser.ConAai
             catch
             {
                 return false;
+            }
+        }
+
+        private SessionInfo CreateSessionAppConnection(SessionInfo sessionInfo)
+        {
+            try
+            {
+                if (String.IsNullOrEmpty(sessionInfo.AppId))
+                    return sessionInfo;
+
+                var url = ServerUtils.MakeWebSocketFromHttp(sessionInfo.ConnectUri);
+                var connId = Guid.NewGuid().ToString();
+                //url = $"{url}/app/{sessionInfo.AppId}/identity/{connId}";
+                url = $"{url}/app/EngineData/identity/{connId}";
+                logger.Info($"Connect to: {url}");
+                var config = new EnigmaConfigurations()
+                {
+                    Url = url,
+                    CreateSocket = async (Url) =>
+                    {
+                        var webSocket = new ClientWebSocket();
+                        webSocket.Options.RemoteCertificateValidationCallback = ValidationCallback.ValidateRemoteCertificate;
+                        webSocket.Options.Cookies = new CookieContainer();
+                        var cookie = sessionInfo.Cookie;
+                        cookie.HttpOnly = false;
+                        webSocket.Options.Cookies.Add(cookie);
+                        webSocket.Options.KeepAliveInterval = TimeSpan.FromDays(48);
+                        await webSocket.ConnectAsync(new Uri(Url), CancellationToken.None);
+                        return webSocket;
+                    },
+                };
+                var session = Enigma.Create(config);
+                var globalTask = session.OpenAsync();
+                globalTask.Wait();
+                IGlobal global = Impromptu.ActLike<IGlobal>(globalTask.Result);
+                global.IsDesktopModeAsync().Wait(2500);
+                var app = global.OpenDocAsync(sessionInfo.AppId).Result;
+                logger.Debug("Open websocket to qlik.");
+                sessionInfo.App = app;
+                sessionInfo.SocketSession = session;
+                return sessionInfo;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "create websocket connection was failed.");
+                return null;
             }
         }
         #endregion
@@ -185,7 +231,8 @@ namespace Ser.ConAai
                 lock (this)
                 {
                     var task = Tasks.FirstOrDefault(t => t.Id == taskId);
-                    Tasks.Remove(task);
+                    if (task != null)
+                        Tasks.Remove(task);
                 }
             }
             catch (Exception ex)
@@ -220,44 +267,6 @@ namespace Ser.ConAai
             }
         }
 
-        public IDoc GetSessionAppConnection(Uri uri, Cookie cookie, string appId)
-        {
-            try
-            {
-                var url = ServerUtils.MakeWebSocketFromHttp(uri);
-                var connId = Guid.NewGuid().ToString();
-                url = $"{url}/app/{appId}/identity/{connId}";
-                logger.Info($"Connect to: {url}");
-                var config = new EnigmaConfigurations()
-                {
-                    Url = url,
-                    CreateSocket = async (Url) =>
-                    {
-                        var webSocket = new ClientWebSocket();
-                        webSocket.Options.RemoteCertificateValidationCallback = ValidationCallback.ValidateRemoteCertificate;
-                        webSocket.Options.Cookies = new CookieContainer();
-                        cookie.HttpOnly = false;
-                        webSocket.Options.Cookies.Add(cookie);
-                        await webSocket.ConnectAsync(new Uri(Url), CancellationToken.None);
-                        return webSocket;
-                    },
-                };
-                var session = Enigma.Create(config);
-                var globalTask = session.OpenAsync();
-                globalTask.Wait();
-                IGlobal global = Impromptu.ActLike<IGlobal>(globalTask.Result);
-                global.IsDesktopModeAsync().Wait(2500);
-                var app = global.OpenDocAsync(appId).Result;
-                logger.Debug("websocket - success");
-                return app;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "create websocket connection was failed.");
-                return null;
-            }
-        }
-
         public SessionInfo GetSession(SerConnection connection, ActiveTask task, bool createNewCookie = false)
         {
             try
@@ -272,16 +281,19 @@ namespace Ser.ConAai
                                                           && u.AppId == task.AppId) ?? null;
                     if (oldSession != null && !createNewCookie)
                     {
-                        var result = ValidateSession(oldSession.ConnectUri, oldSession.Cookie);
+                        var result = ValidateSession(oldSession);
                         if (result)
                         {
+                            oldSession = CreateSessionAppConnection(oldSession);
                             task.Session = oldSession;
                             return oldSession;
                         }
                         Sessions.Remove(oldSession);
                     }
                     else if (oldSession != null && createNewCookie)
+                    {
                         Sessions.Remove(oldSession);
+                    }
                 }
 
                 var token = GetToken(domainUser, connection, TimeSpan.FromMinutes(20));
@@ -297,6 +309,7 @@ namespace Ser.ConAai
                         AppId = task.AppId,
                         UserId = task.UserId,
                     };
+                    sessionInfo = CreateSessionAppConnection(sessionInfo);
                     Sessions.Add(sessionInfo);
                     task.Session = sessionInfo;
                     return sessionInfo;
