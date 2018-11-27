@@ -970,7 +970,7 @@ namespace Ser.ConAai
             try
             {
                 var jobResultPath = Path.Combine(parameter.WorkDir, task.Id, "JobResults");
-                var distribute = new Distribute();
+                var distribute = new Ser.Distribute.Distribute();
                 var privateKeyFullname = PathUtils.GetFullPathFromApp(parameter.PrivateKeyPath);
                 var result = distribute.Run(jobResultPath, privateKeyFullname);
                 task.Distribute = result;
