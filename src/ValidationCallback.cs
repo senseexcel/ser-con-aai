@@ -53,12 +53,22 @@
                             Uri uri = null;
                             if (!String.IsNullOrEmpty(item.Url))
                                 uri = new Uri(item.Url);
+
                             var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "").ToLowerInvariant();
                             var certThumbprint = cert.GetCertHashString().ToLowerInvariant();
-                            if ((thumbprint == certThumbprint)
-                                &&
-                                ((uri == null) || (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())))
-                                return true;
+                            if (thumbprint == certThumbprint)
+                            {
+                                // Use normal host
+                                if ((uri == null) || (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant()))
+                                    return true;
+                                else
+                                {
+                                    // Use fallback host from certifiacte
+                                    var certHost = cert.Subject.Remove(0, 3);
+                                    if (certHost.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())
+                                        return true;
+                                }
+                            }
                         }
                         catch (Exception ex)
                         {
