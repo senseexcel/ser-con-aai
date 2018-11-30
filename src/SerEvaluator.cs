@@ -383,7 +383,7 @@ namespace Ser.ConAai
                 }
 
                 //get a session and websocket connection
-                var session = taskManager.GetSession(onDemandConfig.Connection, activeTask, CreateNewCookie);
+                var session = taskManager.GetSession(onDemandConfig.Connection, activeTask, true, CreateNewCookie);
                 if (session == null)
                 {
                     SoftDelete(currentWorkingDir);
@@ -438,7 +438,8 @@ namespace Ser.ConAai
                     task.Status = -2;
                 task.Message = ex.Message;
                 CreateNewCookie = true;
-                task.Session.SocketSession?.CloseAsync()?.Wait();
+                task.Session.SocketSession?.CloseAsync()?.Wait(500);
+                task.Session.SocketSession = null;
                 logger.Error(ex, "The report could not create.");
                 FinishTask(parameter, task);
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = task.Message };
@@ -862,7 +863,7 @@ namespace Ser.ConAai
                 task.Status = status;
                 if (status != 2)
                     throw new Exception("The report build process failed.");
-                task.Session.SocketSession?.CloseAsync()?.Wait(1000);
+                task.Session.SocketSession?.CloseAsync()?.Wait(500);
                 task.Session.SocketSession = null;
                 task.Message = "Delivery Report, Please wait...";
 
@@ -895,7 +896,7 @@ namespace Ser.ConAai
                     logger.Debug($"Cleanup Process, Folder and Task");
                     if (task.Session.SocketSession != null)
                     {
-                        task.Session.SocketSession?.CloseAsync()?.Wait();
+                        task.Session.SocketSession?.CloseAsync()?.Wait(250);
                         task.Session.SocketSession = null;
                     }
                     KillProcess(task.ProcessId);
