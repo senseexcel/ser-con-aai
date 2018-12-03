@@ -152,6 +152,19 @@ namespace Ser.ConAai
         #endregion
 
         #region Public Methods
+        public List<ActiveTask> GetAllTasks()
+        {
+            try
+            {
+                return Tasks;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+                return null;
+            }
+        }
+
         public List<ActiveTask> GetAllTaskForAppId(string appId)
         {
             try
@@ -267,7 +280,7 @@ namespace Ser.ConAai
             }
         }
 
-        public SessionInfo GetSession(SerConnection connection, ActiveTask task, bool createNewCookie = false)
+        public SessionInfo GetSession(SerConnection connection, ActiveTask task, bool useWebSocket = false, bool createNewCookie = false)
         {
             try
             {
@@ -284,7 +297,8 @@ namespace Ser.ConAai
                         var result = ValidateSession(oldSession);
                         if (result)
                         {
-                            oldSession = CreateSessionAppConnection(oldSession);
+                            if (useWebSocket)
+                                oldSession = CreateSessionAppConnection(oldSession);
                             task.Session = oldSession;
                             return oldSession;
                         }
@@ -309,8 +323,13 @@ namespace Ser.ConAai
                         AppId = task.AppId,
                         UserId = task.UserId,
                     };
-                    sessionInfo = CreateSessionAppConnection(sessionInfo);
-                    Sessions.Add(sessionInfo);
+
+                    if (useWebSocket)
+                    {
+                        sessionInfo = CreateSessionAppConnection(sessionInfo);
+                        Sessions.Add(sessionInfo);
+                    }
+
                     task.Session = sessionInfo;
                     return sessionInfo;
                 }
