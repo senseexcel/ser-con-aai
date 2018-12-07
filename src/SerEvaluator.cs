@@ -326,24 +326,6 @@ namespace Ser.ConAai
         #endregion
 
         #region Private Functions
-        private int? GetTimeOut(UserParameter parameter, SerConfig config)
-        {
-            foreach (var task in config.Tasks)
-                foreach (var report in task.Reports)
-                {
-                    //Ignore the last connection, this is a internal connection.
-                    var vaildConnections = report.Connections.Take(report.Connections.Count - 1);
-                    var connection = vaildConnections?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
-                    if (connection != null)
-                    {
-                        if (connection?.Identities?.Count == 1 && String.IsNullOrEmpty(connection?.Identities?.FirstOrDefault()))
-                            return null;
-                        return report.General.Timeout;
-                    }
-                }
-            return null;
-        }
-
         private OnDemandResult CreateReport(UserParameter parameter, string json)
         {
             ActiveTask activeTask = null;
@@ -383,7 +365,7 @@ namespace Ser.ConAai
                 }
 
                 //get a session and websocket connection
-                var session = taskManager.GetSession(onDemandConfig.Connection, activeTask, true, CreateNewCookie);
+                var session = taskManager.GetSession(onDemandConfig.Connection, activeTask, CreateNewCookie);
                 if (session == null)
                 {
                     SoftDelete(currentWorkingDir);
@@ -392,7 +374,7 @@ namespace Ser.ConAai
                 }
 
                 parameter.ConnectCookie = session?.Cookie;
-                parameter.SocketConnection = session?.App;
+                parameter.SocketConnection = QlikWebsocket.CreateNewConnection(session);
                 if (parameter.SocketConnection == null)
                     throw new Exception("No Websocket connection to Qlik.");
 
@@ -418,15 +400,9 @@ namespace Ser.ConAai
                 var serConfig = JsonConvert.SerializeObject(newEngineConfig, settings);
                 File.WriteAllText(savePath, serConfig, Encoding.UTF8);
 
-                //Use the connector in the same App, than wait for reload
-                var timeOut = GetTimeOut(parameter, newEngineConfig);
-                if (timeOut != null)
-                {
-                    var ct = new CancellationTokenSource(timeOut.Value * 1000).Token;
-                    Task.Run(() => WaitForDataLoad(activeTask, parameter, ct), ct);
-                }
-                else
-                    StartProcess(activeTask, parameter);
+                //Use the connector in the same App, than wait for data reload
+                var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)?.SelectMany(r => r.Connections)?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
+                Task.Run(() => WaitForDataLoad(activeTask, parameter, session, scriptConnection?.App));
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
             }
             catch (Exception ex)
@@ -471,23 +447,16 @@ namespace Ser.ConAai
             statusThread.Start();
         }
 
-        private void WaitForDataLoad(ActiveTask task, UserParameter parameter, CancellationToken token)
+        private void WaitForDataLoad(ActiveTask task, UserParameter parameter, SessionInfo session, string scriptApp)
         {
-            var reloadTime = GetLastReloadTime(task, parameter.AppId);
-            if (reloadTime != null)
+            var dataloadCheck = ScriptCheck.DataLoadCheck(onDemandConfig.Connection.ServerUri, scriptApp, parameter, session, parameter.CleanupTimeout);
+            if (dataloadCheck)
             {
-                while (true)
-                {
-                    //Wait for qlik dataload, when i use one app
-                    Thread.Sleep(1000);
-                    if (token.IsCancellationRequested)
-                        return;
-                    var tempLoad = GetLastReloadTime(task, parameter.AppId);
-                    if (reloadTime.Value.Ticks < tempLoad.Value.Ticks)
-                        break;
-                }
+                logger.Debug("Start the engine.");
                 StartProcess(task, parameter);
             }
+            else
+                logger.Debug("Dataload failed.");
         }
 
         private bool KillProcess(int id)
@@ -508,24 +477,6 @@ namespace Ser.ConAai
             {
                 logger.Error(ex);
                 return false;
-            }
-        }
-
-        private DateTime? GetLastReloadTime(ActiveTask task, string appId)
-        {
-            try
-            {
-                var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, task.Session.Cookie);
-                var qrsResult = qrshub.SendRequestAsync($"app/{appId}", HttpMethod.Get).Result;
-                logger.Trace($"appResult:{qrsResult}");
-                dynamic jObject = JObject.Parse(qrsResult);
-                DateTime reloadTime = jObject?.lastReloadTime.ToObject<DateTime>() ?? null;
-                return reloadTime;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "The last reload time could not found.");
-                return null;
             }
         }
 
