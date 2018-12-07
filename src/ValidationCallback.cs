@@ -10,6 +10,7 @@
     using System.Net.Security;
     using System.Security.Cryptography.X509Certificates;
     using System.Text;
+    using System.Linq;
     #endregion
 
     public static class ValidationCallback
@@ -41,6 +42,16 @@
                     requestUri = hc.BaseAddress;
                 if (sender is HttpWebRequest hwr)
                     requestUri = hwr.Address;
+                if (sender is Uri wsuri)
+                    requestUri = wsuri;
+
+                var hostnames = new List<string>();
+                if (cert is X509Certificate2 cert2)
+                {
+                    var bytehosts = cert2?.Extensions["2.5.29.17"] ?? null;
+                    if (bytehosts != null)
+                        hostnames.AddRange(bytehosts.Format(false).Split(',', StringSplitOptions.RemoveEmptyEntries));
+                }
 
                 if (requestUri != null)
                 {
@@ -55,10 +66,17 @@
                                 uri = new Uri(item.Url);
                             var thumbprint = item.Thumbprint.Replace(":", "").Replace(" ", "").ToLowerInvariant();
                             var certThumbprint = cert.GetCertHashString().ToLowerInvariant();
-                            if ((thumbprint == certThumbprint)
-                                &&
-                                ((uri == null) || (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant())))
-                                return true;
+                            if (thumbprint == certThumbprint)
+                            {
+                                if ((uri == null) || (uri.Host.ToLowerInvariant() == requestUri.Host.ToLowerInvariant()))
+                                    return true;
+                                if (hostnames.Count > 0)
+                                {
+                                    var resultHost = hostnames?.FirstOrDefault(h => h.Trim().ToLowerInvariant() == $"dns-name={requestUri.Host.ToLowerInvariant()}") ?? null;
+                                    if (resultHost != null)
+                                        return true;
+                                }
+                            }
                         }
                         catch (Exception ex)
                         {
