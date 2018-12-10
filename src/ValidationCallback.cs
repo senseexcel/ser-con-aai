@@ -23,6 +23,22 @@
         public static SerConnection Connection { get; set; }
         #endregion
 
+        #region Private Methods
+        private static Uri ConvertToUri(object sender)
+        {
+            Uri requestUri = null;
+            if (sender is HttpRequestMessage hrm)
+                requestUri = hrm.RequestUri;
+            if (sender is HttpClient hc)
+                requestUri = hc.BaseAddress;
+            if (sender is HttpWebRequest hwr)
+                requestUri = hwr.Address;
+            if (sender is Uri wsuri)
+                requestUri = wsuri;
+            return requestUri;
+        }
+        #endregion
+
         #region Public Methods
         public static bool ValidateRemoteCertificate(object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors error)
         {
@@ -35,16 +51,7 @@
                     return true;
 
                 logger.Debug("Validate Server Certificate...");
-                Uri requestUri = null;
-                if (sender is HttpRequestMessage hrm)
-                    requestUri = hrm.RequestUri;
-                if (sender is HttpClient hc)
-                    requestUri = hc.BaseAddress;
-                if (sender is HttpWebRequest hwr)
-                    requestUri = hwr.Address;
-                if (sender is Uri wsuri)
-                    requestUri = wsuri;
-
+                Uri requestUri = ConvertToUri(sender);
                 var hostnames = new List<string>();
                 if (cert is X509Certificate2 cert2)
                 {
