@@ -54,8 +54,8 @@ namespace Ser.ConAai
                 var newUri = new UriBuilder(connectUri);
                 newUri.Path +="/sense/app";
                 logger.Debug($"ConnectUri: {connectUri}");
-                connectUri = newUri.Uri;
-                logger.Debug($"Full ConnectUri: {connectUri}");
+                var fullConnectUri = newUri.Uri;
+                logger.Debug($"Full ConnectUri: {fullConnectUri}");
                 var cookieContainer = new CookieContainer();
                 var connectionHandler = new HttpClientHandler
                 {
@@ -67,16 +67,25 @@ namespace Ser.ConAai
                 {
                     var callback = ServicePointManager.ServerCertificateValidationCallback;
                     if (callback != null)
-                        return callback(sender, certificate, chain, sslPolicyErrors);
+                    {
+                        var result = callback(sender, certificate, chain, sslPolicyErrors);
+                        if (result)
+                            return true;
+                        else
+                        {
+                            ConnectionFallbackHelper.CertificateFallbackValidation(connectUri, certificate);
+                            return false;
+                        }
+                    }
                     return false;
                 };
 
                 var connection = new HttpClient(connectionHandler);
                 connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-                var message = connection.GetAsync(connectUri).Result;
-                logger.Debug($"Message: {message}");
+                var message = connection.GetAsync(fullConnectUri).Result;
+                logger.Trace($"Message: {message}");
 
-                var responseCookies = cookieContainer?.GetCookies(connectUri)?.Cast<Cookie>() ?? null;
+                var responseCookies = cookieContainer?.GetCookies(fullConnectUri)?.Cast<Cookie>() ?? null;
                 var cookie = responseCookies.FirstOrDefault(c => c.Name.Equals(cookieName)) ?? null;
                 logger.Debug($"The session cookie was found. {cookie?.Name} - {cookie?.Value}");
                 return cookie;
