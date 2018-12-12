@@ -29,11 +29,13 @@
 
                 AlternativeUris = new List<Uri>();
                 var dnsNames = new List<string>();
-                dnsNames.Add(cert.Subject.Split(',').FirstOrDefault().Replace("CN=", ""));
+                var cnName = cert.Subject?.Split(',')?.FirstOrDefault()?.Replace("CN=", "");
+                if (cnName != null)
+                    dnsNames.Add(cnName);
                 var bytehosts = cert?.Extensions["2.5.29.17"] ?? null;
                 if (bytehosts != null)
                 {
-                    var names = bytehosts.Format(false).Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    var names = bytehosts.Format(false)?.Split(',', StringSplitOptions.RemoveEmptyEntries);
                     foreach (var name in names)
                         dnsNames.Add(name.Replace("DNS-Name=", "").Trim());
                 }
