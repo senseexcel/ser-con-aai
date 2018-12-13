@@ -8,7 +8,9 @@
     using System;
     using System.Collections.Generic;
     using System.Net;
+    using System.Net.Security;
     using System.Net.WebSockets;
+    using System.Security.Cryptography.X509Certificates;
     using System.Text;
     using System.Threading;
     #endregion
@@ -41,7 +43,9 @@
                     CreateSocket = async (Url) =>
                     {
                         var webSocket = new ClientWebSocket();
-                        webSocket.Options.RemoteCertificateValidationCallback = ValidationCallback.ValidateRemoteCertificate;
+                        webSocket.Options.RemoteCertificateValidationCallback = (object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) => {
+                            return ValidationCallback.ValidateRemoteCertificate(new Uri(url), certificate, chain, sslPolicyErrors);
+                        };
                         webSocket.Options.Cookies = new CookieContainer();
                         var cookie = sessionInfo.Cookie;
                         cookie.HttpOnly = false;

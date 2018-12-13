@@ -10,6 +10,7 @@
     using System.Net.Security;
     using System.Security.Cryptography.X509Certificates;
     using System.Text;
+    using System.Linq;
     #endregion
 
     public static class ValidationCallback
@@ -41,6 +42,8 @@
                     requestUri = hc.BaseAddress;
                 if (sender is HttpWebRequest hwr)
                     requestUri = hwr.Address;
+                if (sender is Uri wsuri)
+                    requestUri = wsuri;
 
                 if (requestUri != null)
                 {
