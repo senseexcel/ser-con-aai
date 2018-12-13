@@ -65,13 +65,16 @@ namespace Ser.ConAai
         #endregion
 
         #region Public Methods
-        public void CheckQlikConnection()
+        public void CheckQlikConnection(Uri fallbackUri = null)
         {
             var newTask = Task<bool>.Factory.StartNew(() =>
             {
                 try
                 {
                     var connection = config.Connection;
+                    if (fallbackUri != null)
+                        connection.ServerUri = fallbackUri;
+
                     var task = new ActiveTask()
                     {
                         AppId = connection.App,
@@ -83,11 +86,23 @@ namespace Ser.ConAai
                     if (session?.Cookie != null)
                     {
                         logger.Info("The connection to Qlik Sense was successful.");
+                        if (fallbackUri != null)
+                            logger.Warn($"Run in alternative mode with Uri \"{fallbackUri.AbsoluteUri}\".");
                         return true;
                     }
-                    
+
                     logger.Error("NO PROXY CONNECTION TO QLIK SENSE!!!");
-                    return false;
+                    if (fallbackUri == null)
+                    {
+                        logger.Warn("The right configuration is missing.");
+                        var alternativeUris = ConnectionFallbackHelper.AlternativeUris;
+                        foreach (var alternativeUri in alternativeUris)
+                        {
+                            logger.Warn($"Test uri \"{alternativeUri.AbsoluteUri}\" for alternative mode.");
+                            CheckQlikConnection(alternativeUri);
+                        }
+                    }
+                    return true;
                 }
                 catch (Exception ex)
                 {
