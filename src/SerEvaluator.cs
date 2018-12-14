@@ -402,7 +402,7 @@ namespace Ser.ConAai
 
                 //Use the connector in the same App, than wait for data reload
                 var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)?.SelectMany(r => r.Connections)?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
-                Task.Run(() => WaitForDataLoad(activeTask, parameter, session, scriptConnection?.App));
+                Task.Run(() => WaitForDataLoad(activeTask, parameter, session, scriptConnection?.App, scriptConnection?.ReloadTimeout ?? 0));
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
             }
             catch (Exception ex)
@@ -447,9 +447,9 @@ namespace Ser.ConAai
             statusThread.Start();
         }
 
-        private void WaitForDataLoad(ActiveTask task, UserParameter parameter, SessionInfo session, string scriptApp)
+        private void WaitForDataLoad(ActiveTask task, UserParameter parameter, SessionInfo session, string scriptApp, int timeout)
         {
-            var dataloadCheck = ScriptCheck.DataLoadCheck(onDemandConfig.Connection.ServerUri, scriptApp, parameter, session, parameter.CleanupTimeout);
+            var dataloadCheck = ScriptCheck.DataLoadCheck(onDemandConfig.Connection.ServerUri, scriptApp, parameter, session, timeout);
             if (dataloadCheck)
             {
                 logger.Debug("Start the engine.");
