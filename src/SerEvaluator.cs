@@ -402,7 +402,7 @@ namespace Ser.ConAai
 
                 //Use the connector in the same App, than wait for data reload
                 var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)?.SelectMany(r => r.Connections)?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
-                Task.Run(() => WaitForDataLoad(activeTask, parameter, session, scriptConnection?.App, scriptConnection?.ReloadTimeout ?? 0));
+                Task.Run(() => WaitForDataLoad(activeTask, parameter, session, scriptConnection?.App, scriptConnection?.RetryTimeout ?? 0));
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
             }
             catch (Exception ex)
