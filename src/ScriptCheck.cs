@@ -27,11 +27,8 @@
                 if (scriptAppId == null)
                     return true;
 
-                if (scriptAppId != parameter.AppId)
-                {
-                    logger.Debug("Reload - Normal mode");
+                if (timeout <= 0)
                     return true;
-                }
 
                 var reloadTime = GetLastReloadTime(serverUri, parameter.ConnectCookie, scriptAppId);
                 var tsConn = new CancellationTokenSource(timeout);
@@ -54,6 +51,9 @@
                         Thread.Sleep(1000);
                         if (ts.Token.IsCancellationRequested)
                             return false;
+                        var taskStatus = GetTaskStatus(serverUri, parameter.ConnectCookie, scriptAppId);
+                        if (taskStatus != 2)
+                            return true;
                         var tempLoad = GetLastReloadTime(serverUri, parameter.ConnectCookie, scriptAppId);
                         if (tempLoad == null)
                             return false;
@@ -72,6 +72,26 @@
         #endregion
 
         #region private method
+        private static int GetTaskStatus(Uri serverUri, Cookie cookie, string appId)
+        {
+            try
+            {
+                var qrshub = new QlikQrsHub(serverUri, cookie);
+                var qrsResult = qrshub.SendRequestAsync($"task/full", HttpMethod.Get).Result;
+                logger.Trace($"taskResult:{qrsResult}");
+                dynamic tasks = JArray.Parse(qrsResult);
+                foreach (var task in tasks)
+                    if (task.app.id == appId)
+                        return task.operational.lastExecutionResult.status;
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The last reload time could not found.");
+                return 0;
+            }
+        }
+
         private static DateTime? GetLastReloadTime(Uri serverUri, Cookie cookie, string appId)
         {
             try
