@@ -710,6 +710,8 @@ namespace Ser.ConAai
                 }
             }
 
+            var qlikResolver = new QlikResolver(parameter.SocketConnection);
+            serConfig = qlikResolver.Resolve(serConfig);
             var result = JsonConvert.DeserializeObject<SerConfig>(serConfig.ToString());
             return result;
         }
