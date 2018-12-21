@@ -271,7 +271,7 @@ namespace Ser.ConAai
                                 }
                                 statusResult.Status = activeTask.Status;
                                 statusResult.Log = activeTask.Message;
-                                statusResult.Link = activeTask.DownloadLink;
+                                statusResult.Distribute = activeTask.Distribute;
                             }
                             else
                                 logger.Debug($"No existing task id {taskId} found.");
@@ -326,23 +326,6 @@ namespace Ser.ConAai
         #endregion
 
         #region Private Functions
-        private int? GetTimeOut(UserParameter parameter, SerConfig config)
-        {
-            if (parameter.OnDemand)
-                return null;
-
-            foreach (var task in config.Tasks)
-                foreach (var report in task.Reports)
-                {
-                    //Ignore the last connection, this is a internal connection.
-                    var vaildConnections = report.Connections.Take(report.Connections.Count - 1);
-                    var connection = vaildConnections?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
-                    if (connection != null)
-                        return report.General.Timeout;
-                }
-            return null;
-        }
-
         private OnDemandResult CreateReport(UserParameter parameter, string json)
         {
             ActiveTask activeTask = null;
@@ -381,7 +364,7 @@ namespace Ser.ConAai
                     }
                 }
 
-                //get a session
+                //get a session and websocket connection
                 var session = taskManager.GetSession(onDemandConfig.Connection, activeTask, CreateNewCookie);
                 if (session == null)
                 {
@@ -390,9 +373,8 @@ namespace Ser.ConAai
                     throw new Exception("No session cookie generated.");
                 }
 
-                //create websocket
                 parameter.ConnectCookie = session?.Cookie;
-                parameter.SocketConnection = taskManager.GetSessionAppConnection(session?.ConnectUri, session?.Cookie, task.AppId);
+                parameter.SocketConnection = QlikWebsocket.CreateNewConnection(session);
                 if (parameter.SocketConnection == null)
                     throw new Exception("No Websocket connection to Qlik.");
 
@@ -418,15 +400,9 @@ namespace Ser.ConAai
                 var serConfig = JsonConvert.SerializeObject(newEngineConfig, settings);
                 File.WriteAllText(savePath, serConfig, Encoding.UTF8);
 
-                //Use the connector in the same App, than wait for reload
-                var timeOut = GetTimeOut(parameter, newEngineConfig);
-                if (timeOut != null)
-                {
-                    var ct = new CancellationTokenSource(timeOut.Value * 1000).Token;
-                    Task.Run(() => WaitForDataLoad(activeTask, parameter, ct), ct);
-                }
-                else
-                    StartProcess(activeTask, parameter);
+                //Use the connector in the same App, than wait for data reload
+                var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)?.SelectMany(r => r.Connections)?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
+                Task.Run(() => WaitForDataLoad(activeTask, parameter, session, scriptConnection?.App, scriptConnection?.RetryTimeout ?? 0));
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
             }
             catch (Exception ex)
@@ -438,6 +414,8 @@ namespace Ser.ConAai
                     task.Status = -2;
                 task.Message = ex.Message;
                 CreateNewCookie = true;
+                task.Session.SocketSession?.CloseAsync()?.Wait(500);
+                task.Session.SocketSession = null;
                 logger.Error(ex, "The report could not create.");
                 FinishTask(parameter, task);
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = task.Message };
@@ -469,23 +447,16 @@ namespace Ser.ConAai
             statusThread.Start();
         }
 
-        private void WaitForDataLoad(ActiveTask task, UserParameter parameter, CancellationToken token)
+        private void WaitForDataLoad(ActiveTask task, UserParameter parameter, SessionInfo session, string scriptApp, int timeout)
         {
-            var reloadTime = GetLastReloadTime(task, parameter.AppId);
-            if (reloadTime != null)
+            var dataloadCheck = ScriptCheck.DataLoadCheck(onDemandConfig.Connection.ServerUri, scriptApp, parameter, session, timeout);
+            if (dataloadCheck)
             {
-                while (true)
-                {
-                    //Wait for qlik dataload, when i use one app
-                    Thread.Sleep(1000);
-                    if (token.IsCancellationRequested)
-                        return;
-                    var tempLoad = GetLastReloadTime(task, parameter.AppId);
-                    if (reloadTime.Value.Ticks < tempLoad.Value.Ticks)
-                        break;
-                }
+                logger.Debug("Start the engine.");
                 StartProcess(task, parameter);
             }
+            else
+                logger.Debug("Dataload failed.");
         }
 
         private bool KillProcess(int id)
@@ -506,24 +477,6 @@ namespace Ser.ConAai
             {
                 logger.Error(ex);
                 return false;
-            }
-        }
-
-        private DateTime? GetLastReloadTime(ActiveTask task, string appId)
-        {
-            try
-            {
-                var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, task.Session.Cookie);
-                var qrsResult = qrshub.SendRequestAsync($"app/{appId}", HttpMethod.Get).Result;
-                logger.Trace($"appResult:{qrsResult}");
-                dynamic jObject = JObject.Parse(qrsResult);
-                DateTime reloadTime = jObject?.lastReloadTime.ToObject<DateTime>() ?? null;
-                return reloadTime;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "The last reload time could not found.");
-                return null;
             }
         }
 
@@ -682,11 +635,6 @@ namespace Ser.ConAai
             var jsonConfig = GetNormalizeJson(userJson);
             var serConfig = JObject.Parse(jsonConfig);
 
-            //check for ondemand mode
-            var ondemandObject = serConfig["onDemand"] ?? null;
-            if (ondemandObject != null)
-                parameter.OnDemand = serConfig["onDemand"]?.ToObject<bool>() ?? false;
-
             dynamic configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
             configConnection.credentials.cert = null;
             configConnection.credentials.privateKey = null;
@@ -751,11 +699,19 @@ namespace Ser.ConAai
                         var crypter = new TextCrypter(path);
                         var value = report["template"]["outputPassword"] ?? null;
                         if (value != null)
-                            report["template"]["outputPassword"] = crypter.DecryptText(value.Value<string>());
+                        {
+                            var password = value.Value<string>();
+                            if (Convert.TryFromBase64String(password, new Span<byte>(), out var base64Result))
+                                report["template"]["outputPassword"] = crypter.DecryptText(password);
+                            else
+                                report["template"]["outputPassword"] = password;
+                        }
                     }
                 }
             }
 
+            var qlikResolver = new QlikResolver(parameter.SocketConnection);
+            serConfig = qlikResolver.Resolve(serConfig);
             var result = JsonConvert.DeserializeObject<SerConfig>(serConfig.ToString());
             return result;
         }
@@ -860,6 +816,8 @@ namespace Ser.ConAai
                 task.Status = status;
                 if (status != 2)
                     throw new Exception("The report build process failed.");
+                task.Session.SocketSession?.CloseAsync()?.Wait(500);
+                task.Session.SocketSession = null;
                 task.Message = "Delivery Report, Please wait...";
 
                 //Delivery
@@ -867,7 +825,6 @@ namespace Ser.ConAai
                 task.Status = status;
                 if (status != 3)
                     throw new Exception("The delivery process failed.");
-                task.Message = "Finish";
             }
             catch (Exception ex)
             {
@@ -877,8 +834,7 @@ namespace Ser.ConAai
             finally
             {
                 //Cleanup
-                if (!parameter.OnDemand)
-                    FinishTask(parameter, task);
+                FinishTask(parameter, task);
             }
         }
 
@@ -891,6 +847,11 @@ namespace Ser.ConAai
                 .ContinueWith((_) =>
                 {
                     logger.Debug($"Cleanup Process, Folder and Task");
+                    if (task.Session.SocketSession != null)
+                    {
+                        task.Session.SocketSession?.CloseAsync()?.Wait(250);
+                        task.Session.SocketSession = null;
+                    }
                     KillProcess(task.ProcessId);
                     taskManager.RemoveTask(task.Id);
                     SoftDelete($"{parameter.WorkDir}\\{task.Id}");
@@ -963,16 +924,11 @@ namespace Ser.ConAai
             try
             {
                 var jobResultPath = Path.Combine(parameter.WorkDir, task.Id, "JobResults");
-                var distribute = new Distribute();
+                var distribute = new Ser.Distribute.Distribute();
                 var privateKeyFullname = PathUtils.GetFullPathFromApp(parameter.PrivateKeyPath);
-                var result = distribute.Run(jobResultPath, parameter.OnDemand, privateKeyFullname);
-                if (result != null)
-                {
-                    task.DownloadLink = result;
-                    return 3;
-                }
-                else
-                    return -1;
+                var result = distribute.Run(jobResultPath, privateKeyFullname);
+                task.Distribute = result;
+                return 3;
             }
             catch (Exception ex)
             {

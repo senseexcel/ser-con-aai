@@ -31,13 +31,11 @@ namespace Ser.ConAai
         #region Properties
         public string WorkDir { get; set; }
         public string SaveFormats { get; set; }
-        public SelectionMode UseUserSelesction { get; set; }
         public string AppId { get; set; }
         public DomainUser DomainUser { get; set; }
         public Cookie ConnectCookie { get; set; }
         public bool SharedMode { get; set; }
         public string BookmarkId { get; set; }
-        public bool OnDemand { get; set; }
         public string PrivateKeyPath { get; set; }
         public int CleanupTimeout { get; set; } = 20000;
         public IDoc SocketConnection { get; set; }

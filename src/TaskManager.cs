@@ -54,8 +54,8 @@ namespace Ser.ConAai
                 var newUri = new UriBuilder(connectUri);
                 newUri.Path +="/sense/app";
                 logger.Debug($"ConnectUri: {connectUri}");
-                connectUri = newUri.Uri;
-                logger.Debug($"Full ConnectUri: {connectUri}");
+                var fullConnectUri = newUri.Uri;
+                logger.Debug($"Full ConnectUri: {fullConnectUri}");
                 var cookieContainer = new CookieContainer();
                 var connectionHandler = new HttpClientHandler
                 {
@@ -67,16 +67,25 @@ namespace Ser.ConAai
                 {
                     var callback = ServicePointManager.ServerCertificateValidationCallback;
                     if (callback != null)
-                        return callback(sender, certificate, chain, sslPolicyErrors);
+                    {
+                        var result = callback(sender, certificate, chain, sslPolicyErrors);
+                        if (result)
+                            return true;
+                        else
+                        {
+                            ConnectionFallbackHelper.CertificateFallbackValidation(connectUri, certificate);
+                            return false;
+                        }
+                    }
                     return false;
                 };
 
                 var connection = new HttpClient(connectionHandler);
                 connection.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-                var message = connection.GetAsync(connectUri).Result;
-                logger.Debug($"Message: {message}");
+                var message = connection.GetAsync(fullConnectUri).Result;
+                logger.Trace($"Message: {message}");
 
-                var responseCookies = cookieContainer?.GetCookies(connectUri)?.Cast<Cookie>() ?? null;
+                var responseCookies = cookieContainer?.GetCookies(fullConnectUri)?.Cast<Cookie>() ?? null;
                 var cookie = responseCookies.FirstOrDefault(c => c.Name.Equals(cookieName)) ?? null;
                 logger.Debug($"The session cookie was found. {cookie?.Name} - {cookie?.Value}");
                 return cookie;
@@ -88,11 +97,11 @@ namespace Ser.ConAai
             }
         }
 
-        private bool ValidateSession(Uri serverUri, Cookie cookie)
+        private bool ValidateSession(SessionInfo sessionInfo)
         {
             try
             {
-                var qrsHub = new QlikQrsHub(serverUri, cookie);
+                var qrsHub = new QlikQrsHub(sessionInfo.ConnectUri, sessionInfo.Cookie);
                 var result = qrsHub.SendRequestAsync("about", HttpMethod.Get).Result;
                 if (String.IsNullOrEmpty(result))
                     return false;
@@ -106,6 +115,19 @@ namespace Ser.ConAai
         #endregion
 
         #region Public Methods
+        public List<ActiveTask> GetAllTasks()
+        {
+            try
+            {
+                return Tasks;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+                return null;
+            }
+        }
+
         public List<ActiveTask> GetAllTaskForAppId(string appId)
         {
             try
@@ -185,7 +207,8 @@ namespace Ser.ConAai
                 lock (this)
                 {
                     var task = Tasks.FirstOrDefault(t => t.Id == taskId);
-                    Tasks.Remove(task);
+                    if (task != null)
+                        Tasks.Remove(task);
                 }
             }
             catch (Exception ex)
@@ -220,44 +243,6 @@ namespace Ser.ConAai
             }
         }
 
-        public IDoc GetSessionAppConnection(Uri uri, Cookie cookie, string appId)
-        {
-            try
-            {
-                var url = ServerUtils.MakeWebSocketFromHttp(uri);
-                var connId = Guid.NewGuid().ToString();
-                url = $"{url}/app/{appId}/identity/{connId}";
-                logger.Info($"Connect to: {url}");
-                var config = new EnigmaConfigurations()
-                {
-                    Url = url,
-                    CreateSocket = async (Url) =>
-                    {
-                        var webSocket = new ClientWebSocket();
-                        webSocket.Options.RemoteCertificateValidationCallback = ValidationCallback.ValidateRemoteCertificate;
-                        webSocket.Options.Cookies = new CookieContainer();
-                        cookie.HttpOnly = false;
-                        webSocket.Options.Cookies.Add(cookie);
-                        await webSocket.ConnectAsync(new Uri(Url), CancellationToken.None);
-                        return webSocket;
-                    },
-                };
-                var session = Enigma.Create(config);
-                var globalTask = session.OpenAsync();
-                globalTask.Wait();
-                IGlobal global = Impromptu.ActLike<IGlobal>(globalTask.Result);
-                global.IsDesktopModeAsync().Wait(2500);
-                var app = global.OpenDocAsync(appId).Result;
-                logger.Debug("websocket - success");
-                return app;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "create websocket connection was failed.");
-                return null;
-            }
-        }
-
         public SessionInfo GetSession(SerConnection connection, ActiveTask task, bool createNewCookie = false)
         {
             try
@@ -272,7 +257,7 @@ namespace Ser.ConAai
                                                           && u.AppId == task.AppId) ?? null;
                     if (oldSession != null && !createNewCookie)
                     {
-                        var result = ValidateSession(oldSession.ConnectUri, oldSession.Cookie);
+                        var result = ValidateSession(oldSession);
                         if (result)
                         {
                             task.Session = oldSession;
@@ -281,7 +266,9 @@ namespace Ser.ConAai
                         Sessions.Remove(oldSession);
                     }
                     else if (oldSession != null && createNewCookie)
+                    {
                         Sessions.Remove(oldSession);
+                    }
                 }
 
                 var token = GetToken(domainUser, connection, TimeSpan.FromMinutes(20));
