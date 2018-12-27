@@ -69,7 +69,7 @@
     <PackageReference Include="NLog" Version="4.5.11" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.10" />
     <PackageReference Include="qlik-engineapi" Version="0.3.0-alpha0003" />
-    <PackageReference Include="qlik-sseapi" Version="1.1.1" />
+    <PackageReference Include="qlik-sseapi" Version="1.2.1" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.3.0" />
   </ItemGroup>
 
