@@ -52,7 +52,7 @@ namespace Ser.ConAai
             try
             {
                 var newUri = new UriBuilder(connectUri);
-                newUri.Path +="/sense/app";
+                newUri.Path += "/sense/app";
                 logger.Debug($"ConnectUri: {connectUri}");
                 var fullConnectUri = newUri.Uri;
                 logger.Debug($"Full ConnectUri: {fullConnectUri}");
@@ -62,7 +62,7 @@ namespace Ser.ConAai
                     UseDefaultCredentials = true,
                     CookieContainer = cookieContainer,
                 };
-                                
+
                 connectionHandler.ServerCertificateCustomValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
                 {
                     var callback = ServicePointManager.ServerCertificateValidationCallback;
