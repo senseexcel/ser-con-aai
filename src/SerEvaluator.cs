@@ -25,7 +25,7 @@ namespace Ser.ConAai
     using Grpc.Core;
     using Qlik.Sse;
     using Google.Protobuf;
-    using NLog;    
+    using NLog;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using Q2g.HelperQrs;
@@ -278,7 +278,7 @@ namespace Ser.ConAai
                         }
                         result = statusResult;
                         break;
-                        #endregion
+                    #endregion
                     case SerFunction.STOP:
                         #region Stop
                         json = GetNormalizeJson(json);
@@ -301,7 +301,7 @@ namespace Ser.ConAai
 
                         result = new OnDemandResult() { Status = activeTask.Status };
                         break;
-                         #endregion
+                    #endregion
                     default:
                         throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
                 }
@@ -316,7 +316,7 @@ namespace Ser.ConAai
                 {
                     Log = ex.ToString(),
                     Status = -1
-                })); 
+                }));
             }
             finally
             {
@@ -353,8 +353,8 @@ namespace Ser.ConAai
                 logger.Debug($"TempFolder: {currentWorkingDir}");
                 activeTask.WorkingDir = currentWorkingDir;
 
-               //check for task is already running
-               var task = taskManager.GetRunningTask(activeTask.Id);
+                //check for task is already running
+                var task = taskManager.GetRunningTask(activeTask.Id);
                 if (task != null)
                 {
                     if (task.Status == 1 || task.Status == 2)
@@ -584,7 +584,7 @@ namespace Ser.ConAai
                     if (connUrl == null)
                         throw new Exception($"No path in connection library found.");
                     else
-                        report.Template.Input = connUrl; 
+                        report.Template.Input = connUrl;
                 }
                 else
                 {
@@ -609,7 +609,7 @@ namespace Ser.ConAai
             logger.Debug("Create Bearer Connection");
             var token = taskManager.GetToken(parameter.DomainUser, mainConnection, TimeSpan.FromMinutes(30));
             logger.Debug($"Token: {token}");
-            
+
             if (mainConnection.Credentials != null)
             {
                 var cred = mainConnection.Credentials;
@@ -618,11 +618,11 @@ namespace Ser.ConAai
                 parameter.PrivateKeyPath = cred.PrivateKey;
             }
 
-            if (!userJson.ToLowerInvariant().Contains("reports:") && 
+            if (!userJson.ToLowerInvariant().Contains("reports:") &&
                 !userJson.ToLowerInvariant().Contains("\"reports\":"))
                 userJson = $"reports:[{{{userJson}}}]";
 
-            if (!userJson.ToLowerInvariant().Contains("tasks:") && 
+            if (!userJson.ToLowerInvariant().Contains("tasks:") &&
                 !userJson.ToLowerInvariant().Contains("\"tasks\":"))
                 userJson = $"tasks:[{{{userJson}}}]";
 
@@ -723,7 +723,7 @@ namespace Ser.ConAai
         }
 
         private List<string> GetLibraryContent(Uri serverUri, string appId, IDoc app, string contentName = "")
-        {            
+        {
             try
             {
                 var results = new List<string>();
@@ -734,7 +734,7 @@ namespace Ser.ConAai
                     var libs = app.GetContentLibrariesAsync().Result;
                     readItems = libs.qItems.Where(s => s.qAppSpecific == true).Select(s => s.qName).ToList();
                 }
-                    
+
                 foreach (var item in readItems)
                 {
                     var qUrls = GetLibraryContentInternal(app, item);
@@ -983,7 +983,7 @@ namespace Ser.ConAai
                     {
                         var json = sr.ReadToEnd();
                         return JsonConvert.DeserializeObject<JObject>(json);
-                    } 
+                    }
                 }
             }
 

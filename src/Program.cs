@@ -89,7 +89,7 @@ namespace Ser.ConAai
             try
             {
                 var files = Directory.GetFiles(AppContext.BaseDirectory, "*.*", SearchOption.TopDirectoryOnly)
-                                     .Where(f => f.ToLowerInvariant().EndsWith("\\app.config") || 
+                                     .Where(f => f.ToLowerInvariant().EndsWith("\\app.config") ||
                                                  f.ToLowerInvariant().EndsWith("\\app.json")).ToList();
                 if (files != null && files.Count > 0)
                 {
@@ -136,7 +136,7 @@ namespace Ser.ConAai
                     PrivateKey = privateKey,
                     Key = "X-Qlik-Session-ser",
                 }
-            }, new ActiveTask() { AppId = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd", UserId = domainUser});
+            }, new ActiveTask() { AppId = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd", UserId = domainUser });
 
             var test = manager.GetAllTaskForAppId("dfacdb29-6cee-4cc6-b8b1-7a89014394dd");
 

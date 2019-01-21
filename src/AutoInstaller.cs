@@ -74,8 +74,8 @@ namespace Ser.ConAai
         private VirtualProxy GetVirtualProxy(QlikVirtualProxySettings settings, string headerName, string prefix, bool isDefaultProxy = false)
         {
             foreach (var proxy in settings.Settings.VirtualProxies)
-                if (proxy.SessionCookieHeaderName == headerName && 
-                    proxy.Prefix == prefix && 
+                if (proxy.SessionCookieHeaderName == headerName &&
+                    proxy.Prefix == prefix &&
                     proxy.DefaultVirtualProxy == isDefaultProxy)
                     return proxy;
             return null;
@@ -85,13 +85,13 @@ namespace Ser.ConAai
         {
             try
             {
-                if(!File.Exists(parameter.CertificatePath))
+                if (!File.Exists(parameter.CertificatePath))
                     throw new Exception($"The certificate {parameter.CertificatePath} was not exists.");
 
-                if(String.IsNullOrEmpty(parameter.CookieHeaderName))
-                  throw new Exception("The cookie header name was empty.");
- 
-                if(nodes == null || nodes?.Count == 0)
+                if (String.IsNullOrEmpty(parameter.CookieHeaderName))
+                    throw new Exception("The cookie header name was empty.");
+
+                if (nodes == null || nodes?.Count == 0)
                     throw new Exception("The load balancing server node is null.");
 
                 var jwtCertificate = File.ReadAllText(parameter.CertificatePath).Trim();
@@ -188,7 +188,7 @@ namespace Ser.ConAai
                     throw new Exception("No security rules found.");
 
                 var securityRules = JsonConvert.DeserializeObject<List<QlikSecurityRule>>(result);
-                if(securityRules.Count == 0)
+                if (securityRules.Count == 0)
                     throw new Exception("The count of security rules is 0.");
 
                 logger.Debug($"The security rules was successfull found.");
