@@ -43,7 +43,8 @@
                     CreateSocket = async (Url) =>
                     {
                         var webSocket = new ClientWebSocket();
-                        webSocket.Options.RemoteCertificateValidationCallback = (object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) => {
+                        webSocket.Options.RemoteCertificateValidationCallback = (object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) =>
+                        {
                             return ValidationCallback.ValidateRemoteCertificate(new Uri(url), certificate, chain, sslPolicyErrors);
                         };
                         webSocket.Options.Cookies = new CookieContainer();
