@@ -41,7 +41,9 @@
             }
             else
             {
-                var value = jtoken?.Value<string>() ?? String.Empty;
+                if (jtoken.Type == JTokenType.Object)
+                    return;
+                var value = jtoken?.ToObject<string>() ?? String.Empty;
                 if (value.StartsWith("="))
                 {
                     var parent = jtoken.Parent;
