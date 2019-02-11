@@ -20,7 +20,7 @@
         #endregion
 
         #region public methods
-        public static bool DataLoadCheck(Uri serverUri, string scriptAppId, UserParameter parameter, SessionInfo info, int timeout)
+        public static bool DataLoadCheck(Uri serverUri, string scriptAppId, SessionInfo info, int timeout)
         {
             try
             {
@@ -30,7 +30,7 @@
                 if (timeout <= 0)
                     return true;
 
-                var reloadTime = GetLastReloadTime(serverUri, parameter.ConnectCookie, scriptAppId);
+                var reloadTime = GetLastReloadTime(serverUri, info.Cookie, scriptAppId);
                 var tsConn = new CancellationTokenSource(timeout);
                 var app = GetConnection(info, tsConn.Token);
                 var ts = new CancellationTokenSource(timeout);
@@ -42,7 +42,6 @@
                 }
                 if (reloadTime == null)
                     return false;
-                app = parameter.SocketConnection;
                 if (reloadTime != null)
                 {
                     logger.Debug("Reload - Wait for finish scripts.");
@@ -51,10 +50,10 @@
                         Thread.Sleep(1000);
                         if (ts.Token.IsCancellationRequested)
                             return false;
-                        var taskStatus = GetTaskStatus(serverUri, parameter.ConnectCookie, scriptAppId);
+                        var taskStatus = GetTaskStatus(serverUri, info.Cookie, scriptAppId);
                         if (taskStatus != 2)
                             return true;
-                        var tempLoad = GetLastReloadTime(serverUri, parameter.ConnectCookie, scriptAppId);
+                        var tempLoad = GetLastReloadTime(serverUri, info.Cookie, scriptAppId);
                         if (tempLoad == null)
                             return false;
                         if (reloadTime.Value.Ticks < tempLoad.Value.Ticks)

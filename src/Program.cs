@@ -120,35 +120,6 @@ namespace Ser.ConAai
                 Console.WriteLine($"The logger setting are invalid!!!\nPlease check the {path} in the app folder.");
             }
         }
-
-        //NUR ZUM DEBUGGEN DES INSTALL-PROZESSES
-        private static void InstallTest(string certPath, string privateKey)
-        {
-            var manager = new TaskManager();
-            var domainUser = new Ser.Api.DomainUser("nb-fc-208000\\mberthold");
-            var task = manager.GetSession(new Api.SerConnection()
-            {
-                ServerUri = new Uri("http://nb-fc-208000/ser"),
-                App = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd",
-                Credentials = new Api.SerCredentials()
-                {
-                    Cert = certPath,
-                    PrivateKey = privateKey,
-                    Key = "X-Qlik-Session-ser",
-                }
-            }, new ActiveTask() { AppId = "dfacdb29-6cee-4cc6-b8b1-7a89014394dd", UserId = domainUser });
-
-            var test = manager.GetAllTaskForAppId("dfacdb29-6cee-4cc6-b8b1-7a89014394dd");
-
-            var installer = new AutoInstaller(task.ConnectUri, task.Cookie);
-            installer.Run(new InstallParameter()
-            {
-                Prefix = "demo",
-                CookieHeaderName = "X-Qlik-Session-demo",
-                CertificatePath = certPath,
-                ExtentionPath = @"C:\Users\MBerthold\Downloads\ser-ext-ondemand.zip"
-            });
-        }
         #endregion
     }
 }
