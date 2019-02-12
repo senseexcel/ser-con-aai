@@ -6,16 +6,13 @@
 
   # Creating a temporary directory for the report process
   workingDir: %temp%\senseexelreporting
-  
-  # Path to the Sense Excel Reporting engine
-  serEnginePath: ..\Engine\ser-engine.dll
 
   # Host binding on gRPC Server
   bindingHost: localhost
-  
+
   # Port binding on gRPC Server
   bindingPort: 50059
-  
+
   # Connection settings to Qlik
   connection:
   {
@@ -24,16 +21,16 @@
 	 # serverUri: https://localhost/ser
 
 	 # Qlik jwt connection infos
-	 credentials: 
+	 credentials:
 	 {
 		 # the defined HTTP header for the virtual proxy
 		 key: X-Qlik-Session-ser
-		 
+
 		 # the authentification mode of the proxy
 		 # in the standard use JWT, if you want to use other
 		 # authentification methods please look into the documentation
 		 type: JWT
-		 
+
 		 # filename of the JWT certificate, you can define
 		 # relative paths or absolute paths
 		 cert: %appdata%\senseexcel\reporting\serconnector.pem
