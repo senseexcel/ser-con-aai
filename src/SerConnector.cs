@@ -161,7 +161,7 @@ namespace Ser.ConAai
                 var restTask = StartRestServer(arguments.ToArray());
 
                 //Read Assembly versions
-                var enginePath = SerUtilities.GetFullPathFromApp(config.SerEnginePath);
+                var enginePath = SerUtilities.GetFullPathFromApp(Path.Combine(AppContext.BaseDirectory, "ser-engine.dll"));
                 if (!File.Exists(enginePath))
                     logger.Warn($"The engine path \"{enginePath}\" does not exists.");
 

@@ -32,7 +32,6 @@ namespace Ser.ConAai
 
         #region Properties
         public string WorkingDir { get; set; }
-        public string SerEnginePath { get; set; }
         public int BindingPort { get; set; } = 50059;
         public string BindingHost { get; set; } = "localhost";
         public string RestServiceUrl { get; set; } = "http://localhost:40263";
