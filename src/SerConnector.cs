@@ -41,8 +41,9 @@ namespace Ser.ConAai
         #region Properties & Variables
         private Server server;
         private SerEvaluator serEvaluator;
+        private CancellationTokenSource cts;
         private delegate IPHostEntry GetHostEntryHandler(string name);
-        private static SerOnDemandConfig config;
+        private SerOnDemandConfig config;
         #endregion
 
         #region Private Methods
@@ -119,13 +120,14 @@ namespace Ser.ConAai
             return Task.Run(() =>
             {
                 Ser.Engine.Rest.Program.Main(arguments);
-            });
+            }, cts.Token);
         }
 
         public void Start()
         {
             try
             {
+                cts = new CancellationTokenSource();
                 var configPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, "config.hjson");
                 if (!File.Exists(configPath))
                 {
@@ -154,8 +156,9 @@ namespace Ser.ConAai
                 logger.Debug($"ServerUri: {config.Connection.ServerUri}");
 
                 //Start Rest Service
-                var arguments = new List<string>() { $"--Urls=\"{config.RestServiceUrl}" };
-                StartRestServer(arguments.ToArray());
+                var rootContentFolder = SerUtilities.GetFullPathFromApp(config.WorkingDir);
+                var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
+                var restTask = StartRestServer(arguments.ToArray());
 
                 //Read Assembly versions
                 var enginePath = SerUtilities.GetFullPathFromApp(config.SerEnginePath);
@@ -212,6 +215,7 @@ namespace Ser.ConAai
             try
             {
                 logger.Info("Shutdown SSEtoSER...");
+                cts.Cancel();
                 server?.ShutdownAsync().Wait();
                 serEvaluator.Dispose();
             }

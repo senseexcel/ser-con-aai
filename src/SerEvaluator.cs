@@ -174,11 +174,18 @@ namespace Ser.ConAai
                 var commonHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<CommonRequestHeader>();
 
                 //check rest service health
-                var healthResult = restClient.HealthStatusAsync().Result;
-                if (healthResult.Success.Value)
-                    logger.Debug($"The status of rest service is {healthResult.Success} and the health is {healthResult.Health}.");
-                else
-                    throw new Exception("The rest service is not available.");
+                try
+                {
+                    var healthResult = restClient.HealthStatusAsync().Result;
+                    if (healthResult.Success.Value)
+                        logger.Debug($"The status of rest service is {healthResult.Success} and the health is {healthResult.Health}.");
+                    else
+                        throw new Exception("The rest service is not available.");
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"No connection to rest service {onDemandConfig.RestServiceUrl}.", ex);
+                }
 
                 //Set appid
                 logger.Info($"Qlik AppId from header: {commonHeader?.AppId}");
@@ -332,10 +339,10 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "ExecuteFunction has errors");
+                logger.Error(ex, $"ExecuteFunction - {ex.Message}");
                 await responseStream.WriteAsync(GetResult(new OnDemandResult()
                 {
-                    Log = ex.ToString(),
+                    Log = ex.Message,
                     Status = -1
                 }));
             }
