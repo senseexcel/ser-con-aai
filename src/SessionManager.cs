@@ -178,6 +178,15 @@ namespace Ser.ConAai
                 return null;
             }
         }
+
+        public void MakeSocketFree(SessionInfo session)
+        {
+            if (session?.SocketSession != null)
+            {
+                session.SocketSession?.CloseAsync()?.Wait(500);
+                session.SocketSession = null;
+            }
+        }
         #endregion
     }
 

@@ -89,7 +89,10 @@ namespace Ser.ConAai
         public SerEvaluator(SerOnDemandConfig config)
         {
             onDemandConfig = config;
-            restClient = new Ser.Engine.Rest.Client.SerApiClient(new HttpClient()) { BaseUrl = config.RestServiceUrl };
+            restClient = new Ser.Engine.Rest.Client.SerApiClient(new HttpClient());
+            var baseUri = new Uri(restClient.BaseUrl);
+            var baseUrl = $"{config.RestServiceUrl}{baseUri.PathAndQuery}";
+            restClient.BaseUrl = baseUrl;
             sessionManager = new SessionManager();
             runingTasks = new ConcurrentBag<ActiveTask>();
             ValidationCallback.Connection = config.Connection;
@@ -184,7 +187,7 @@ namespace Ser.ConAai
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception($"No connection to rest service {onDemandConfig.RestServiceUrl}.", ex);
+                    throw new Exception($"No connection to rest service {onDemandConfig.RestServiceUrl} Details: {ex.Message}.'", ex);
                 }
 
                 //Set appid
@@ -291,7 +294,7 @@ namespace Ser.ConAai
                         }
                         else
                         {
-                            logger.Warn("Status - No task id found.");
+                            logger.Trace("Status - No task with \"all\" or \"id\" found.");
                         }
                         break;
                     #endregion
@@ -317,15 +320,15 @@ namespace Ser.ConAai
                         else if (taskId.HasValue)
                         {
                             var currentTask = runingTasks.ToArray().FirstOrDefault(t => t.Id == taskId.Value);
-                            if (currentTask == null)
+                            if (currentTask != null)
                             {
                                 var stopResult = restClient.StopTasksAsync(currentTask.Id).Result;
                                 if (stopResult.Success.Value)
                                     logger.Debug($"The task {currentTask.Id} was stopped.");
                                 else
                                     logger.Debug($"The task {currentTask.Id} could not stopped.");
-                                currentTask.Status = 0;
                                 FinishTask(currentTask);
+                                currentTask.Status = 0;
                             }
                         }
                         break;
@@ -378,9 +381,10 @@ namespace Ser.ConAai
                 CreateNewCookie = false;
                 activeTask = new ActiveTask()
                 {
+                    Id = Guid.NewGuid(),
                     Status = 1,
                     Session = qlikSession,
-                    StartTime = DateTime.Now,
+                    StartTime = DateTime.Now
                 };
                 runingTasks.Add(activeTask);
                 //create full engine config
@@ -395,7 +399,7 @@ namespace Ser.ConAai
                         var uploadsteam = FindTemplatePath(qlikSession, qlikApp, configReport.Template);
                         logger.Debug("Upload template data to rest service.");
                         var serfilename = Path.GetFileName(configReport.Template.Input);
-                        var uploadResult = restClient.UploadWithIdAsync(activeTask.Id, serfilename, false, uploadsteam).Result;
+                        var uploadResult = restClient.UploadAsync(serfilename, false, uploadsteam).Result;
                         if (uploadResult.Success.Value)
                         {
                             logger.Debug($"Upload {uploadResult.OperationId.ToString()} successfully.");
@@ -455,11 +459,10 @@ namespace Ser.ConAai
             if (dataloadCheck)
             {
                 logger.Debug("Start task on rest service.");
-                var createTaskResult = restClient.CreateTaskAsync(task.JobJson.ToString()).Result;
+                var createTaskResult = restClient.CreateTaskWithIdAsync(task.Id, task.JobJson.ToString()).Result;
                 if (createTaskResult.Success.Value)
                 {
                     logger.Debug($"Task was started {createTaskResult?.OperationId}.");
-                    task.Id = createTaskResult.OperationId.Value;
                     var statusThread = new Thread(() => CheckStatus(task))
                     {
                         IsBackground = true
@@ -728,14 +731,14 @@ namespace Ser.ConAai
             try
             {
                 var status = task.Status;
-                var jobresults = new List<Ser.Engine.Rest.Client.JobResult>();
+                var jobResults = new List<Ser.Engine.Rest.Client.JobResult>();
                 task.Message = "Build Report, Please wait...";
                 while (status != 2)
                 {
                     logger.Trace("CheckStatus - Wait for finished tasks.");
 
                     Thread.Sleep(1000);
-                    if (task.Status == -1 || task.Status == 0)
+                    if (task.Status == -1 || task.Status == 0 || status == -1)
                         break;
 
                     if (status == 1)
@@ -743,13 +746,21 @@ namespace Ser.ConAai
                         var operationResult = restClient.TaskWithIdAsync(task.Id).Result;
                         if (operationResult.Success.Value)
                         {
-                            jobresults = operationResult?.Results?.ToList() ?? new List<Ser.Engine.Rest.Client.JobResult>();
-                            var finishedResults = jobresults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.ABORT).ToList();
+                            jobResults = operationResult?.Results?.ToList() ?? new List<Ser.Engine.Rest.Client.JobResult>();
+                            var finishedResults = jobResults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.ABORT).ToList();
                             if (finishedResults.Count == task.TaksCount)
-                                status = 2;
+                            {
+                                var successResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
+                                if (successResults.Count == task.TaksCount)
+                                    status = 2;
+                                else
+                                    status = -1;
+                            }
                         }
                         else
+                        {
                             logger.Warn("CheckStatus - The operation result of task response was false.");
+                        }
                     }
                 }
 
@@ -757,13 +768,13 @@ namespace Ser.ConAai
                 task.Status = status;
                 if (status != 2)
                     throw new Exception("The report build process failed.");
-                task.Session.SocketSession?.CloseAsync()?.Wait(500);
-                task.Session.SocketSession = null;
+                sessionManager.MakeSocketFree(task?.Session ?? null);
                 task.Message = "Delivery Report, Please wait...";
 
                 //Delivery
                 //ODER wenn das nicht geht - Als json serialisieren und deserialisieren!!!
-                var serJobresults = (List<JobResult>)Convert.ChangeType(jobresults, typeof(List<JobResult>));
+                var serJobresults = ConvertApiType<List<JobResult>>(jobResults);
+                //var serJobresults = (List<JobResult>)Convert.ChangeType(jobResults, typeof(List<JobResult>));
                 status = StartDeliveryTool(task, serJobresults);
                 task.Status = status;
                 if (status != 3)
@@ -771,18 +782,29 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
-                if (task?.Session?.SocketSession != null)
-                {
-                    task.Session.SocketSession?.CloseAsync()?.Wait(500);
-                    task.Session.SocketSession = null;
-                }
+                sessionManager.MakeSocketFree(task?.Session ?? null);
                 task.Message = ex.Message;
+                task.Status = -1;
                 logger.Error(ex, "The status check has detected a processing error.");
             }
             finally
             {
                 //Cleanup
                 FinishTask(task);
+            }
+        }
+
+        private T ConvertApiType<T>(object value)
+        {
+            try
+            {
+                var json = JsonConvert.SerializeObject(value);
+                return JsonConvert.DeserializeObject<T>(json);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Convert type failed.");
+                return default(T);
             }
         }
 
@@ -795,12 +817,20 @@ namespace Ser.ConAai
                 .ContinueWith((_) =>
                 {
                     logger.Debug($"Cleanup Process, Folder and Socket connection.");
-                    if (task.Session.SocketSession != null)
+                    sessionManager.MakeSocketFree(task?.Session ?? null);
+                    var deleteResult = restClient.DeleteFilesAsync(task.Id).Result;
+                    if (deleteResult.Success.Value)
+                        logger.Debug($"Delete task folder {task.Id} - Successfully.");
+                    else
+                        logger.Warn($"Delete task folder {task.Id} - Failed.");
+                    foreach (var guidItem in task.FileUploadIds)
                     {
-                        task.Session.SocketSession?.CloseAsync()?.Wait(250);
-                        task.Session.SocketSession = null;
+                        deleteResult = restClient.DeleteFilesAsync(guidItem).Result;
+                        if (deleteResult.Success.Value)
+                            logger.Debug($"Delete file folder {guidItem} - Successfully.");
+                        else
+                            logger.Warn($"Delete file folder {guidItem} - Failed.");
                     }
-                    restClient.DeleteFilesAsync(task.Id);
                     logger.Debug($"Cleanup complete.");
                 });
             }
@@ -833,6 +863,7 @@ namespace Ser.ConAai
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
                 var result = distribute.Run(jobResults, privateKeyFullname);
+                logger.Debug($"Distibute result: {result}");
                 task.Distribute = result;
                 return 3;
             }
