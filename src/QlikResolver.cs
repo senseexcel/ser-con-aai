@@ -11,10 +11,6 @@
 
     public class QlikResolver
     {
-        #region Logger
-        private static Logger logger = LogManager.GetCurrentClassLogger();
-        #endregion
-
         #region Variables & Properties
         private IDoc App { get; set; }
         private JObject Json { get; set; }
