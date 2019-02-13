@@ -464,9 +464,6 @@ namespace Ser.ConAai
                 var createTaskResult = restClient.CreateTaskWithIdAsync(task.Id, task.JobJson.ToString()).Result;
                 if (createTaskResult.Success.Value)
                 {
-                    //DEBUG!!!
-                    File.WriteAllText(Path.Combine(SerUtilities.GetFullPathFromApp(onDemandConfig.WorkingDir), task.Id.ToString(), "job.json"), task.JobJson.ToString());
-
                     logger.Debug($"Task was started {createTaskResult?.OperationId}.");
                     var statusThread = new Thread(() => CheckStatus(task))
                     {
