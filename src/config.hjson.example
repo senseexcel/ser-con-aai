@@ -13,6 +13,9 @@
   # Port binding on gRPC Server
   bindingPort: 50059
 
+  # Connection to rest service
+  # RestServiceUrl: http://localhost:40263
+
   # Connection settings to Qlik
   connection:
   {

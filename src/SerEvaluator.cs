@@ -425,7 +425,11 @@ namespace Ser.ConAai
             catch (Exception ex)
             {
                 if (activeTask != null)
+                {
                     activeTask.Status = -1;
+                    activeTask.Message = ex.Message;
+                    FinishTask(activeTask);
+                }
                 if (qlikSession == null)
                     activeTask.Status = -2;
                 else
@@ -433,10 +437,8 @@ namespace Ser.ConAai
                     qlikSession.SocketSession?.CloseAsync()?.Wait(500);
                     qlikSession.SocketSession = null;
                 }
-                activeTask.Message = ex.Message;
                 CreateNewCookie = true;
                 logger.Error(ex, "The report could not create.");
-                FinishTask(activeTask);
                 return new OnDemandResult() { TaskId = activeTask?.Id, Status = activeTask.Status, Log = activeTask?.Message };
             }
         }
@@ -462,6 +464,9 @@ namespace Ser.ConAai
                 var createTaskResult = restClient.CreateTaskWithIdAsync(task.Id, task.JobJson.ToString()).Result;
                 if (createTaskResult.Success.Value)
                 {
+                    //DEBUG!!!
+                    File.WriteAllText(Path.Combine(SerUtilities.GetFullPathFromApp(onDemandConfig.WorkingDir), task.Id.ToString(), "job.json"), task.JobJson.ToString());
+
                     logger.Debug($"Task was started {createTaskResult?.OperationId}.");
                     var statusThread = new Thread(() => CheckStatus(task))
                     {
