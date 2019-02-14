@@ -93,17 +93,38 @@ namespace Ser.ConAai
             var baseUri = new Uri(restClient.BaseUrl);
             var baseUrl = $"{config.RestServiceUrl}{baseUri.PathAndQuery}";
             restClient.BaseUrl = baseUrl;
+            CheckRestService();
             sessionManager = new SessionManager();
             runingTasks = new ConcurrentBag<ActiveTask>();
             ValidationCallback.Connection = config.Connection;
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
             ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
         }
-
-        public void Dispose() { }
         #endregion
 
-        #region Public functions
+        #region Private Methods
+        private void CheckRestService()
+        {
+            try
+            {
+                //Check rest service health
+                logger.Debug("Check rest service connection...");
+                var healthResult = restClient.HealthStatusAsync().Result;
+                if (healthResult.Success.Value)
+                    logger.Info("The communication with ser rest service was successfully.");
+                else
+                    throw new Exception("The rest service is not available.");
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, $"No connection to rest service \"{onDemandConfig.RestServiceUrl}\" Details: {ex.Message}.'");
+            }
+        }
+        #endregion
+
+        #region Public Methods
+        public void Dispose() { }
+
         public override Task<Capabilities> GetCapabilities(Empty request, ServerCallContext context)
         {
             try
@@ -175,20 +196,6 @@ namespace Ser.ConAai
                 var functionRequestHeader = new FunctionRequestHeader();
                 functionRequestHeader.MergeFrom(new CodedInputStream(functionRequestHeaderStream.ValueBytes));
                 var commonHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<CommonRequestHeader>();
-
-                //check rest service health
-                try
-                {
-                    var healthResult = restClient.HealthStatusAsync().Result;
-                    if (healthResult.Success.Value)
-                        logger.Debug($"The status of rest service is {healthResult.Success} and the health is {healthResult.Health}.");
-                    else
-                        throw new Exception("The rest service is not available.");
-                }
-                catch (Exception ex)
-                {
-                    throw new Exception($"No connection to rest service {onDemandConfig.RestServiceUrl} Details: {ex.Message}.'", ex);
-                }
 
                 //Set appid
                 logger.Info($"Qlik AppId from header: {commonHeader?.AppId}");

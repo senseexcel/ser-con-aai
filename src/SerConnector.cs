@@ -30,6 +30,7 @@ namespace Ser.ConAai
     using Q2g.HelperQrs;
     using System.Threading.Tasks;
     using System.Threading;
+    using System.Net.Http;
     #endregion
 
     public class SSEtoSER : MicroService, IMicroService
@@ -63,9 +64,7 @@ namespace Ser.ConAai
                 logger.Error(ex, $"The Method {nameof(CreateCertificate)} was failed.");
             }
         }
-        #endregion
 
-        #region Public Methods
         private void CheckQlikConnection(Uri fallbackUri = null)
         {
             var newTask = Task<bool>.Factory.StartNew(() =>
@@ -115,14 +114,16 @@ namespace Ser.ConAai
             });
         }
 
-        public Task StartRestServer(string[] arguments)
+        private Task StartRestServer(string[] arguments)
         {
             return Task.Run(() =>
             {
                 Ser.Engine.Rest.Program.Main(arguments);
             }, cts.Token);
         }
+        #endregion
 
+        #region Public Methods
         public void Start()
         {
             try
@@ -191,6 +192,7 @@ namespace Ser.ConAai
 
                 logger.Debug($"Check qlik connection...");
                 CheckQlikConnection();
+
                 using (serEvaluator = new SerEvaluator(config))
                 {
                     server = new Server()
