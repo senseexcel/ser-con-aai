@@ -342,7 +342,7 @@ namespace Ser.ConAai
                         throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
                 }
 
-                logger.Debug($"Qlik status result: {JsonConvert.SerializeObject(statusResult)}");
+                logger.Trace($"Qlik status result: {JsonConvert.SerializeObject(statusResult)}");
                 await responseStream.WriteAsync(GetResult(statusResult));
             }
             catch (Exception ex)

@@ -137,7 +137,6 @@ namespace Ser.ConAai
                 lock (this)
                 {
                     var uri = connection.ServerUri;
-
                     var oldSession = Sessions?.FirstOrDefault(u => u.ConnectUri.OriginalString == uri.OriginalString
                                                           && u.User.ToString() == qlikUser.ToString()
                                                           && u.AppId == appId) ?? null;
