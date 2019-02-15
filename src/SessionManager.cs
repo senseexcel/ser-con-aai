@@ -33,6 +33,7 @@ namespace Ser.ConAai
 
         #region Variables & Properties
         private List<SessionInfo> Sessions = new List<SessionInfo>();
+        private readonly object threadObject = new object();
         #endregion
 
         #region Private Methods
@@ -129,7 +130,7 @@ namespace Ser.ConAai
             }
         }
 
-        public SessionInfo GetSession(SerConnection connection, DomainUser qlikUser, string appId, bool createNewCookie = false)
+        public SessionInfo GetSession(SerConnection connection, DomainUser qlikUser, string appId)
         {
             try
             {
@@ -140,15 +141,11 @@ namespace Ser.ConAai
                     var oldSession = Sessions?.FirstOrDefault(u => u.ConnectUri.OriginalString == uri.OriginalString
                                                           && u.User.ToString() == qlikUser.ToString()
                                                           && u.AppId == appId) ?? null;
-                    if (oldSession != null && !createNewCookie)
+                    if (oldSession != null)
                     {
                         var result = ValidateSession(oldSession);
                         if (result)
                             return oldSession;
-                        Sessions.Remove(oldSession);
-                    }
-                    else if (oldSession != null && createNewCookie)
-                    {
                         Sessions.Remove(oldSession);
                     }
                 }
@@ -183,8 +180,11 @@ namespace Ser.ConAai
         {
             if (session?.SocketSession != null)
             {
-                session.SocketSession?.CloseAsync()?.Wait(500);
-                session.SocketSession = null;
+                lock (threadObject)
+                {
+                    session.SocketSession?.CloseAsync()?.Wait(500);
+                    session.SocketSession = null;
+                }
             }
         }
         #endregion

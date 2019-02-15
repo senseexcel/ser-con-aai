@@ -65,9 +65,9 @@ namespace Ser.ConAai
             }
         }
 
-        private void CheckQlikConnection(Uri fallbackUri = null)
+        private Task CheckQlikConnection(Uri fallbackUri = null)
         {
-            var newTask = Task<bool>.Factory.StartNew(() =>
+            return Task.Run(() =>
             {
                 try
                 {
@@ -90,7 +90,7 @@ namespace Ser.ConAai
                     if (fallbackUri == null)
                     {
                         logger.Warn("The right configuration is missing.");
-                        var alternativeUris = ConnectionFallbackHelper.AlternativeUris;
+                        var alternativeUris = ConnectionFallbackHelper.AlternativeUris ?? new List<Uri>();
                         foreach (var alternativeUri in alternativeUris)
                         {
                             logger.Warn($"Test uri \"{alternativeUri.AbsoluteUri}\" for alternative mode.");

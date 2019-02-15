@@ -16,9 +16,6 @@ namespace Ser.ConAai
     using System.Linq;
     using System.Net;
     using System.Net.Http;
-    using System.Net.Security;
-    using System.Security.Cryptography.X509Certificates;
-    using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
     using System.IO;
@@ -33,14 +30,11 @@ namespace Ser.ConAai
     using Hjson;
     using Ser.Distribute;
     using static Qlik.Sse.Connector;
-    using System.Net.WebSockets;
     using Q2g.HelperPem;
     using Qlik.EngineAPI;
-    using enigma;
-    using ImpromptuInterface;
-    using System.Reflection;
-    using Ser.Engine.Rest;
     using System.Collections.Concurrent;
+    using System.IO.Compression;
+    using System.Net.Sockets;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -78,27 +72,27 @@ namespace Ser.ConAai
         #endregion
 
         #region Properties & Variables
-        private static bool CreateNewCookie = false;
         private static SerOnDemandConfig onDemandConfig;
         private SessionManager sessionManager;
         private Ser.Engine.Rest.Client.SerApiClient restClient;
-        private ConcurrentBag<ActiveTask> runingTasks;
+        private ConcurrentDictionary<Guid, ActiveTask> runningTasks;
         #endregion
 
         #region Connstructor & Dispose
         public SerEvaluator(SerOnDemandConfig config)
         {
             onDemandConfig = config;
+            ValidationCallback.Connection = config.Connection;
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+            ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
             restClient = new Ser.Engine.Rest.Client.SerApiClient(new HttpClient());
             var baseUri = new Uri(restClient.BaseUrl);
             var baseUrl = $"{config.RestServiceUrl}{baseUri.PathAndQuery}";
             restClient.BaseUrl = baseUrl;
-            CheckRestService();
             sessionManager = new SessionManager();
-            runingTasks = new ConcurrentBag<ActiveTask>();
-            ValidationCallback.Connection = config.Connection;
-            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-            ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
+            runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
+            restClient.DeleteAllFilesAsync().Wait();
+            CheckRestService();
         }
         #endregion
 
@@ -289,15 +283,19 @@ namespace Ser.ConAai
                         else if (taskId.HasValue)
                         {
                             logger.Debug($"Status - Get task status from id {taskId.Value}.");
-                            var currentTask = runingTasks.ToArray().FirstOrDefault(t => t.Id == taskId.Value) ?? null;
-                            if (currentTask != null)
+                            var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId.Value);
+                            if (currentTask.Value != null)
                             {
-                                statusResult.Status = currentTask.Status;
-                                statusResult.Log = currentTask.Message;
-                                statusResult.Distribute = currentTask.Distribute;
+                                statusResult.Distribute = currentTask.Value.Distribute;
+                                statusResult.Status = currentTask.Value.Status;
+                                statusResult.Log = currentTask.Value.Message;
                             }
                             else
+                            {
                                 logger.Warn($"Status - No task id in task {taskId.Value} pool found.");
+                                statusResult.Status = -1;
+                                statusResult.Log = "No Task created - Error: No connection to qlik.";
+                            }
                         }
                         else
                         {
@@ -326,16 +324,16 @@ namespace Ser.ConAai
                         }
                         else if (taskId.HasValue)
                         {
-                            var currentTask = runingTasks.ToArray().FirstOrDefault(t => t.Id == taskId.Value);
-                            if (currentTask != null)
+                            var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId.Value);
+                            if (currentTask.Value != null)
                             {
-                                var stopResult = restClient.StopTasksAsync(currentTask.Id).Result;
+                                var stopResult = restClient.StopTasksAsync(currentTask.Value.Id).Result;
                                 if (stopResult.Success.Value)
-                                    logger.Debug($"The task {currentTask.Id} was stopped.");
+                                    logger.Debug($"The task {currentTask.Value.Id} was stopped.");
                                 else
-                                    logger.Debug($"The task {currentTask.Id} could not stopped.");
-                                FinishTask(currentTask);
-                                currentTask.Status = 0;
+                                    logger.Debug($"The task {currentTask.Value.Id} could not stopped.");
+                                FinishTask(currentTask.Value);
+                                currentTask.Value.Status = 0;
                             }
                         }
                         break;
@@ -373,9 +371,17 @@ namespace Ser.ConAai
             {
                 logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
 
+                activeTask = new ActiveTask()
+                {
+                    Id = Guid.NewGuid(),
+                    Status = 1,
+                    Session = qlikSession,
+                    StartTime = DateTime.Now
+                };
+
                 //get qlik session over jwt
                 logger.Debug("Get qlik session over jwt.");
-                qlikSession = sessionManager.GetSession(onDemandConfig.Connection, qlikUser, appId, CreateNewCookie);
+                qlikSession = sessionManager.GetSession(onDemandConfig.Connection, qlikUser, appId);
                 if (qlikSession == null)
                     throw new Exception("No session cookie generated (check qmc settings or connector config).");
 
@@ -385,15 +391,8 @@ namespace Ser.ConAai
                 if (qlikApp == null)
                     throw new Exception("No Websocket connection to Qlik.");
 
-                CreateNewCookie = false;
-                activeTask = new ActiveTask()
-                {
-                    Id = Guid.NewGuid(),
-                    Status = 1,
-                    Session = qlikSession,
-                    StartTime = DateTime.Now
-                };
-                runingTasks.Add(activeTask);
+                runningTasks.TryAdd(activeTask.Id, activeTask);
+
                 //create full engine config
                 logger.Debug("Create ser engine full config");
                 var newEngineConfig = GetNewJson(qlikSession, qlikApp, json);
@@ -438,15 +437,17 @@ namespace Ser.ConAai
                     FinishTask(activeTask);
                 }
                 if (qlikSession == null)
+                {
                     activeTask.Status = -2;
+                    activeTask.Message = ex.Message;
+                }
                 else
                 {
                     qlikSession.SocketSession?.CloseAsync()?.Wait(500);
                     qlikSession.SocketSession = null;
                 }
-                CreateNewCookie = true;
                 logger.Error(ex, "The report could not create.");
-                return new OnDemandResult() { TaskId = activeTask?.Id, Status = activeTask.Status, Log = activeTask?.Message };
+                return new OnDemandResult() { TaskId = activeTask?.Id, Status = activeTask?.Status ?? -1, Log = activeTask?.Message };
             }
         }
 
@@ -468,7 +469,8 @@ namespace Ser.ConAai
             if (dataloadCheck)
             {
                 logger.Debug("Start task on rest service.");
-                var createTaskResult = restClient.CreateTaskWithIdAsync(task.Id, task.JobJson.ToString()).Result;
+                var jobJson = task.JobJson.ToString();
+                var createTaskResult = restClient.CreateTaskWithIdAsync(task.Id, jobJson).Result;
                 if (createTaskResult.Success.Value)
                 {
                     logger.Debug($"Task was started {createTaskResult?.OperationId}.");
@@ -737,6 +739,8 @@ namespace Ser.ConAai
 
         private void CheckStatus(ActiveTask task)
         {
+            var cleanupPaths = new List<string>();
+
             try
             {
                 var status = task.Status;
@@ -778,13 +782,32 @@ namespace Ser.ConAai
                 if (status != 2)
                     throw new Exception("The report build process failed.");
                 sessionManager.MakeSocketFree(task?.Session ?? null);
-                task.Message = "Delivery Report, Please wait...";
+
+                //Download result files
+                var saveJobFolder = Path.Combine(SerUtilities.GetFullPathFromApp(onDemandConfig.WorkingDir), Guid.NewGuid().ToString());
+                var resultFolder = Path.Combine(SerUtilities.GetFullPathFromApp(onDemandConfig.WorkingDir), Guid.NewGuid().ToString());
+                var zipFileResult = restClient.DownloadFilesAsync(task.Id, null).Result;
+                if (zipFileResult?.Stream != null)
+                {
+                    var mem = new MemoryStream();
+                    zipFileResult?.Stream.CopyTo(mem);
+                    var saveJobZip = Path.Combine(saveJobFolder, "download.zip");
+                    Directory.CreateDirectory(saveJobFolder);
+                    cleanupPaths.Add(saveJobFolder);
+                    Directory.CreateDirectory(resultFolder);
+                    cleanupPaths.Add(resultFolder);
+                    File.WriteAllBytes(saveJobZip, mem.GetBuffer());
+                    ZipFile.ExtractToDirectory(saveJobZip, resultFolder, true);
+                }
+                else
+                {
+                    logger.Error("No content to download form rest service.");
+
+                }
 
                 //Delivery
-                //ODER wenn das nicht geht - Als json serialisieren und deserialisieren!!!
-                var serJobresults = ConvertApiType<List<JobResult>>(jobResults);
-                //var serJobresults = (List<JobResult>)Convert.ChangeType(jobResults, typeof(List<JobResult>));
-                status = StartDeliveryTool(task, serJobresults);
+                task.Message = "Delivery Report, Please wait...";
+                status = StartDeliveryTool(task, Path.Combine(resultFolder, "JobResults"));
                 task.Status = status;
                 if (status != 3)
                     throw new Exception("The delivery process failed.");
@@ -799,7 +822,7 @@ namespace Ser.ConAai
             finally
             {
                 //Cleanup
-                FinishTask(task);
+                FinishTask(task, cleanupPaths);
             }
         }
 
@@ -817,7 +840,7 @@ namespace Ser.ConAai
             }
         }
 
-        private void FinishTask(ActiveTask task)
+        private void FinishTask(ActiveTask task, List<string> cleanupPaths = null)
         {
             try
             {
@@ -840,6 +863,22 @@ namespace Ser.ConAai
                         else
                             logger.Warn($"Delete file folder {guidItem} - Failed.");
                     }
+
+                    if(cleanupPaths != null)
+                    {
+                        foreach (var cleanupPath in cleanupPaths)
+                        {
+                            try
+                            {
+                                Directory.Delete(cleanupPath, true);
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.Warn(ex, $"The folder {cleanupPath} could not remove.");
+                            }
+                        }
+                    }
+
                     logger.Debug($"Cleanup complete.");
                 });
             }
@@ -864,14 +903,14 @@ namespace Ser.ConAai
             }
         }
 
-        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
+        private int StartDeliveryTool(ActiveTask task, string resultFolder)
         {
             try
             {
                 var distribute = new Ser.Distribute.Distribute();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
-                var result = distribute.Run(jobResults, privateKeyFullname);
+                var result = distribute.Run(resultFolder, privateKeyFullname);
                 logger.Debug($"Distibute result: {result}");
                 task.Distribute = result;
                 return 3;
