@@ -34,7 +34,6 @@ namespace Ser.ConAai
     using Qlik.EngineAPI;
     using System.Collections.Concurrent;
     using System.IO.Compression;
-    using System.Net.Sockets;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -594,19 +593,24 @@ namespace Ser.ConAai
             }
         }
 
+        private JObject CreateNewConnectionConfig(SessionInfo session)
+        {
+            var connectorConfig = onDemandConfig.Connection;
+            var config = new SerConnection()
+            {
+                ServerUri = connectorConfig.ServerUri,
+                Credentials = new SerCredentials()
+                {
+                    Type = connectorConfig.Credentials.Type,
+                    Key = connectorConfig.Credentials.Key,
+                    Value = session?.Cookie?.Value
+                }
+            };
+            return JObject.FromObject(config);
+        }
+
         private SerConfig CreateEngineConfig(SessionInfo session, IDoc qlikApp, string userJson)
         {
-            var mainConnection = onDemandConfig.Connection;
-
-            var privateKey = String.Empty;
-            if (mainConnection.Credentials != null)
-            {
-                var cred = mainConnection.Credentials;
-                cred.Type = QlikCredentialType.SESSION;
-                cred.Value = session.Cookie.Value;
-                privateKey = cred.PrivateKey;
-            }
-
             //Make full user json
             logger.Debug("Auto replacement to normal hjson structure.");
             if (!userJson.ToLowerInvariant().Contains("reports:"))
@@ -627,10 +631,6 @@ namespace Ser.ConAai
                 logger.Error("Could not normalize user json content.");
             dynamic serJsonConfig = JObject.Parse(jsonConfig);
 
-            dynamic configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection));
-            configConnection.credentials.cert = null;
-            configConnection.credentials.privateKey = null;
-
             logger.Debug("Search for connections.");
             var tasks = serJsonConfig?.tasks ?? new JArray();
             foreach (var task in tasks)
@@ -650,11 +650,12 @@ namespace Ser.ConAai
                     for (int i = 0; i < userConnections.Count; i++)
                     {
                         var mergeConnection = userConnections[i] as JObject;
-                        configConnection.Merge(mergeConnection, new JsonMergeSettings()
+                        var connectorConnection = CreateNewConnectionConfig(session);
+                        connectorConnection.Merge(mergeConnection, new JsonMergeSettings()
                         {
                             MergeNullValueHandling = MergeNullValueHandling.Ignore
                         });
-                        newUserConnections.Add(mergeConnection);
+                        newUserConnections.Add(connectorConnection);
                     }
 
                     report.connections = new JArray(newUserConnections);
@@ -674,6 +675,7 @@ namespace Ser.ConAai
                         }
                     }
 
+                    var privateKey = onDemandConfig?.Connection?.Credentials?.PrivateKey ?? null;
                     if (!String.IsNullOrEmpty(privateKey))
                     {
                         var path = SerUtilities.GetFullPathFromApp(privateKey);
@@ -816,15 +818,17 @@ namespace Ser.ConAai
                 var zipFileResult = restClient.DownloadFilesAsync(task.Id, null).Result;
                 if (zipFileResult?.Stream != null)
                 {
-                    var mem = new MemoryStream();
-                    zipFileResult?.Stream.CopyTo(mem);
-                    var saveJobZip = Path.Combine(saveJobFolder, "download.zip");
-                    Directory.CreateDirectory(saveJobFolder);
-                    cleanupPaths.Add(saveJobFolder);
-                    Directory.CreateDirectory(resultFolder);
-                    cleanupPaths.Add(resultFolder);
-                    File.WriteAllBytes(saveJobZip, mem.GetBuffer());
-                    ZipFile.ExtractToDirectory(saveJobZip, resultFolder, true);
+                    using (var mem = new MemoryStream())
+                    {
+                        zipFileResult?.Stream.CopyTo(mem);
+                        var saveJobZip = Path.Combine(saveJobFolder, "download.zip");
+                        Directory.CreateDirectory(saveJobFolder);
+                        cleanupPaths.Add(saveJobFolder);
+                        Directory.CreateDirectory(resultFolder);
+                        cleanupPaths.Add(resultFolder);
+                        File.WriteAllBytes(saveJobZip, mem.GetBuffer());
+                        ZipFile.ExtractToDirectory(saveJobZip, resultFolder, true);
+                    }
                 }
                 else
                 {
@@ -876,7 +880,8 @@ namespace Ser.ConAai
                 .ContinueWith((_) =>
                 {
                     logger.Debug($"Cleanup Process, Folder and Socket connection.");
-                    runningTasks?.TryRemove(task.Id, out var taskResult);
+                    if (runningTasks.TryRemove(task.Id, out var taskResult))
+                        logger.Debug($"Remove task {task.Id} - Successfully.");
                     sessionManager.MakeSocketFree(task?.Session ?? null);
                     var deleteResult = restClient.DeleteFilesAsync(task.Id).Result;
                     if (deleteResult.Success.Value)
