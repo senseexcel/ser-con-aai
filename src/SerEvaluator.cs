@@ -613,10 +613,12 @@ namespace Ser.ConAai
         {
             //Make full user json
             logger.Debug("Auto replacement to normal hjson structure.");
-            if (!userJson.ToLowerInvariant().Contains("reports:"))
+            if (!userJson.ToLowerInvariant().Contains("reports:") &&
+                !userJson.ToLowerInvariant().Contains("\"reports\":"))
                 userJson = $"reports:[{{{userJson}}}]";
 
-            if (!userJson.ToLowerInvariant().Contains("tasks:"))
+            if (!userJson.ToLowerInvariant().Contains("tasks:") &&
+                !userJson.ToLowerInvariant().Contains("\"tasks\":"))
                 userJson = $"tasks:[{{{userJson}}}]";
 
             if (!userJson.Trim().StartsWith("{"))
