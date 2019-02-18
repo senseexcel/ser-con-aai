@@ -391,15 +391,24 @@ namespace Ser.ConAai
                 if (qlikApp == null)
                     throw new Exception("No Websocket connection to Qlik.");
 
+                //task to list
                 runningTasks.TryAdd(activeTask.Id, activeTask);
 
                 //create full engine config
                 logger.Debug("Create ser engine full config");
-                var newEngineConfig = GetNewJson(qlikSession, qlikApp, json);
+                var newEngineConfig = CreateEngineConfig(qlikSession, qlikApp, json);
                 foreach (var configTask in newEngineConfig.Tasks)
                 {
                     foreach (var configReport in configTask.Reports)
                     {
+                        //Important: Add bearer connection as last connection item.
+                        var firstConnection = configReport?.Connections?.FirstOrDefault() ?? null;
+                        if (firstConnection != null)
+                        {
+                            var newBearerConnection = CreateBearerConnection(qlikSession.User, firstConnection.App);
+                            configReport.Connections.Add(newBearerConnection);
+                        }
+
                         //Read content from lib and content libary
                         logger.Debug("Get template data from qlik.");
                         var uploadsteam = FindTemplatePath(qlikSession, qlikApp, configReport.Template);
@@ -551,20 +560,45 @@ namespace Ser.ConAai
 
         private byte[] DownloadFile(string relUrl, Cookie cookie)
         {
-            var webClient = new WebClient();
-            webClient.Headers.Add(HttpRequestHeader.Cookie, $"{cookie.Name}={cookie.Value}");
-            return webClient.DownloadData($"{onDemandConfig.Connection.ServerUri.AbsoluteUri}{relUrl}");
+            using (var webClient = new WebClient())
+            {
+                webClient.Headers.Add(HttpRequestHeader.Cookie, $"{cookie.Name}={cookie.Value}");
+                return webClient.DownloadData($"{onDemandConfig.Connection.ServerUri.AbsoluteUri}{relUrl}");
+            }
         }
 
-        private SerConfig GetNewJson(SessionInfo session, IDoc qlikApp, string userJson)
+        private SerConnection CreateBearerConnection(DomainUser user, string dataAppId)
         {
-            //Bearer Connection
-            var mainConnection = onDemandConfig.Connection;
-            logger.Debug("Create Bearer Connection");
-            var token = sessionManager.GetToken(session.User, mainConnection, TimeSpan.FromMinutes(30));
-            logger.Debug($"Token: {token}");
-            var privateKey = String.Empty;
+            try
+            {
+                var mainConnection = onDemandConfig.Connection;
+                logger.Debug("Create fallback bearer connection.");
+                var token = sessionManager.GetToken(user, mainConnection, TimeSpan.FromMinutes(30));
+                logger.Debug($"Bearer Token: {token}");
+                return new SerConnection()
+                {
+                    ServerUri = mainConnection.ServerUri,
+                    App = dataAppId,
+                    Credentials = new SerCredentials()
+                    {
+                        Type = QlikCredentialType.HEADER,
+                        Key = "Authorization",
+                        Value = $"Bearer { token }"
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The bearer connection could not create.");
+                return null;
+            }
+        }
 
+        private SerConfig CreateEngineConfig(SessionInfo session, IDoc qlikApp, string userJson)
+        {
+            var mainConnection = onDemandConfig.Connection;
+
+            var privateKey = String.Empty;
             if (mainConnection.Credentials != null)
             {
                 var cred = mainConnection.Credentials;
@@ -573,78 +607,70 @@ namespace Ser.ConAai
                 privateKey = cred.PrivateKey;
             }
 
-            if (!userJson.ToLowerInvariant().Contains("reports:") &&
-                !userJson.ToLowerInvariant().Contains("\"reports\":"))
+            //Make full user json
+            logger.Debug("Auto replacement to normal hjson structure.");
+            if (!userJson.ToLowerInvariant().Contains("reports:"))
                 userJson = $"reports:[{{{userJson}}}]";
 
-            if (!userJson.ToLowerInvariant().Contains("tasks:") &&
-                !userJson.ToLowerInvariant().Contains("\"tasks\":"))
+            if (!userJson.ToLowerInvariant().Contains("tasks:"))
                 userJson = $"tasks:[{{{userJson}}}]";
 
             if (!userJson.Trim().StartsWith("{"))
                 userJson = $"{{{userJson}";
+
             if (!userJson.Trim().EndsWith("}"))
                 userJson = $"{userJson}}}";
 
-            logger.Trace($"Parse user json: {userJson}");
+            logger.Trace($"Parse user hjson: {userJson}");
             var jsonConfig = GetNormalizeJson(userJson);
-            var serConfig = JObject.Parse(jsonConfig);
+            if (jsonConfig == null)
+                logger.Error("Could not normalize user json content.");
+            dynamic serJsonConfig = JObject.Parse(jsonConfig);
 
-            dynamic configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
+            dynamic configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection));
             configConnection.credentials.cert = null;
             configConnection.credentials.privateKey = null;
 
-            logger.Debug("search for connections.");
-            var tasks = serConfig["tasks"]?.ToList() ?? null;
+            logger.Debug("Search for connections.");
+            var tasks = serJsonConfig?.tasks ?? new JArray();
             foreach (var task in tasks)
             {
-                var reports = task["reports"]?.ToList() ?? null;
+                var reports = task?.reports ?? new JArray();
                 foreach (var report in reports)
                 {
-                    var userConnections = report["connections"].ToList();
+                    var userConnections = new JArray();
+                    JToken connections = report?.connections;
+                    if (connections.Type == JTokenType.Object)
+                        userConnections.Add(report?.connections);
+                    else if (connections.Type == JTokenType.Array)
+                        userConnections = report?.connections;
+                    else
+                        logger.Error("No valid connection type.");
                     var newUserConnections = new List<JToken>();
-                    var currentApp = String.Empty;
-                    foreach (var userConnection in userConnections)
+                    for (int i = 0; i < userConnections.Count; i++)
                     {
-                        var cvalue = userConnection.ToString();
-                        if (!cvalue.StartsWith("{"))
-                            cvalue = $"{{{cvalue}}}";
-                        var currentConnection = JObject.Parse(cvalue);
-                        //merge connections / config <> script
-                        currentConnection.Merge(configConnection);
-                        newUserConnections.Add(currentConnection);
-                        currentApp = (currentConnection as dynamic)?.app ?? null;
-                    }
-                    //Important: The bearer connection must be added as last.
-                    var bearerSerConnection = new Ser.Api.SerConnection()
-                    {
-                        App = currentApp,
-                        ServerUri = onDemandConfig.Connection.ServerUri,
-                        Credentials = new Ser.Api.SerCredentials()
+                        var mergeConnection = userConnections[i] as JObject;
+                        configConnection.Merge(mergeConnection, new JsonMergeSettings()
                         {
-                            Type = QlikCredentialType.HEADER,
-                            Key = "Authorization",
-                            Value = $"Bearer { token }",
-                        },
-                    };
-                    var bearerConnection = JToken.Parse(JsonConvert.SerializeObject(bearerSerConnection, Formatting.Indented));
-                    logger.Debug("serialize config connection.");
-                    newUserConnections.Add(bearerConnection);
+                            MergeNullValueHandling = MergeNullValueHandling.Ignore
+                        });
+                        newUserConnections.Add(mergeConnection);
+                    }
 
-                    report["connections"] = new JArray(newUserConnections);
-                    var distribute = report["distribute"];
+                    report.connections = new JArray(newUserConnections);
+                    JObject distribute = report.distribute;
                     var children = distribute?.Children().Children()?.ToList() ?? new List<JToken>();
-                    foreach (var child in children)
+                    foreach (dynamic child in children)
                     {
-                        var connection = child["connections"] ?? null;
+                        var connection = child.connections ?? null;
                         if (connection?.ToString() == "@CONFIGCONNECTION@")
-                            child["connections"] = newUserConnections.FirstOrDefault();
-                        var childProp = child.Parent as JProperty;
+                            child.connections = newUserConnections.FirstOrDefault();
+                        var childProp = (child as JObject).Parent as JProperty;
                         if (childProp?.Name == "hub")
                         {
-                            var hubOwner = child["owner"] ?? null;
+                            var hubOwner = child.owner ?? null;
                             if (hubOwner == null)
-                                child["owner"] = session.User.ToString();
+                                child.owner = session.User.ToString();
                         }
                     }
 
@@ -652,23 +678,24 @@ namespace Ser.ConAai
                     {
                         var path = SerUtilities.GetFullPathFromApp(privateKey);
                         var crypter = new TextCrypter(path);
-                        var value = report["template"]["outputPassword"] ?? null;
+                        var value = report?.template?.outputPassword ?? null;
                         if (value != null)
                         {
-                            var password = value.Value<string>();
+                            string password = value.Value<string>();
                             if (Convert.TryFromBase64String(password, new Span<byte>(), out var base64Result))
-                                report["template"]["outputPassword"] = crypter.DecryptText(password);
+                                report.template.outputPassword = crypter.DecryptText(password);
                             else
-                                report["template"]["outputPassword"] = password;
+                                report.template.outputPassword = password;
                         }
                     }
                 }
             }
 
+            //Resolve prefixes
             var qlikResolver = new QlikResolver(qlikApp);
-            serConfig = qlikResolver.Resolve(serConfig);
-            var result = JsonConvert.DeserializeObject<SerConfig>(serConfig.ToString());
-            return result;
+            serJsonConfig = qlikResolver.Resolve(serJsonConfig);
+            var serConfiguration = JsonConvert.DeserializeObject<SerConfig>(serJsonConfig.ToString());
+            return serConfiguration;
         }
 
         private List<string> GetLibraryContentInternal(IDoc app, string qName)
@@ -849,6 +876,7 @@ namespace Ser.ConAai
                 .ContinueWith((_) =>
                 {
                     logger.Debug($"Cleanup Process, Folder and Socket connection.");
+                    runningTasks?.TryRemove(task.Id, out var taskResult);
                     sessionManager.MakeSocketFree(task?.Session ?? null);
                     var deleteResult = restClient.DeleteFilesAsync(task.Id).Result;
                     if (deleteResult.Success.Value)
@@ -864,7 +892,7 @@ namespace Ser.ConAai
                             logger.Warn($"Delete file folder {guidItem} - Failed.");
                     }
 
-                    if(cleanupPaths != null)
+                    if (cleanupPaths != null)
                     {
                         foreach (var cleanupPath in cleanupPaths)
                         {
