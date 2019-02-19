@@ -182,12 +182,11 @@ namespace Ser.ConAai
             {
                 logger.Debug("ExecuteFunction was called");
                 Thread.Sleep(200);
-                var functionRequestHeaderStream = context.RequestHeaders.SingleOrDefault(header => header.Key == "qlik-functionrequestheader-bin");
-                if (functionRequestHeaderStream == null)
-                    throw new Exception("ExecuteFunction called without Function Request Header in Request Headers.");
 
-                var functionRequestHeader = new FunctionRequestHeader();
-                functionRequestHeader.MergeFrom(new CodedInputStream(functionRequestHeaderStream.ValueBytes));
+                //Read function header
+                var functionHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<FunctionRequestHeader>();
+
+                //Read common header
                 var commonHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<CommonRequestHeader>();
 
                 //Set appid
@@ -204,7 +203,7 @@ namespace Ser.ConAai
                 var row = GetParameter(requestStream);
                 var json = GetParameterValue(0, row);
 
-                var functionCall = (SerFunction)functionRequestHeader.FunctionId;
+                var functionCall = (SerFunction)functionHeader.FunctionId;
                 logger.Debug($"Function id: {functionCall}");
 
                 //Caution: Personal//Me => Desktop Mode
@@ -338,7 +337,7 @@ namespace Ser.ConAai
                         break;
                     #endregion
                     default:
-                        throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
+                        throw new Exception($"Unknown function id {functionHeader.FunctionId}.");
                 }
 
                 logger.Trace($"Qlik status result: {JsonConvert.SerializeObject(statusResult)}");
