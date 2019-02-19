@@ -89,8 +89,6 @@ namespace Ser.ConAai
             restClient.BaseUrl = baseUrl;
             sessionManager = new SessionManager();
             runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
-            restClient.DeleteAllFilesAsync().Wait();
-            CheckRestService();
         }
         #endregion
 
@@ -205,6 +203,9 @@ namespace Ser.ConAai
                 var functionCall = (SerFunction)functionHeader.FunctionId;
                 logger.Debug($"Function id: {functionCall}");
 
+                //Check rest service health
+                CheckRestService();
+
                 //Caution: Personal//Me => Desktop Mode
                 if (domainUser?.UserId == "sa_scheduler" && domainUser?.UserDirectory == "INTERNAL")
                 {
@@ -289,9 +290,9 @@ namespace Ser.ConAai
                             }
                             else
                             {
-                                logger.Warn($"Status - No task id in task {taskId.Value} pool found.");
-                                statusResult.Status = -1;
-                                statusResult.Log = "No Task created - Error: No connection to qlik.";
+                                logger.Debug($"Status - No task id in task {taskId.Value} pool found.");
+                                statusResult.Status = 0;
+                                statusResult.Log = "Ready";
                             }
                         }
                         else

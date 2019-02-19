@@ -177,12 +177,13 @@ namespace Ser.ConAai
 
         public void MakeSocketFree(SessionInfo session)
         {
-            if (session?.SocketSession != null)
+            lock (threadObject)
             {
-                lock (threadObject)
+                if (session?.SocketSession != null)
                 {
                     session.SocketSession?.CloseAsync()?.Wait(500);
                     session.SocketSession = null;
+
                 }
             }
         }
