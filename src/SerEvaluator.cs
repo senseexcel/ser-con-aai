@@ -574,18 +574,44 @@ namespace Ser.ConAai
                 var mainConnection = onDemandConfig.Connection;
                 var token = sessionManager.GetToken(session.User, mainConnection, TimeSpan.FromMinutes(30));
                 logger.Debug($"Bearer Token: {token}");
+
                 var conn = new SerConnection()
                 {
                     ServerUri = mainConnection.ServerUri,
-                    Credentials = new SerCredentials()
-                    {
-                        Type = type,
-                        Key = "Authorization",
-                        Value = $"Bearer { token }"
-                    }
                 };
 
-                if(!String.IsNullOrEmpty(dataAppId))
+                switch (type)
+                {
+                    case QlikCredentialType.JWT:
+                    case QlikCredentialType.HEADER:
+                        conn.Credentials = new SerCredentials()
+                        {
+                            Type = type,
+                            Key = "Authorization",
+                            Value = $"Bearer { token }"
+                        };
+                        break;
+                    case QlikCredentialType.SESSION:
+                        conn.Credentials = new SerCredentials()
+                        {
+                            Type = type,
+                            Key = session.Cookie?.Name ?? null,
+                            Value = session.Cookie?.Value ?? null
+                        };
+                        break;
+                    case QlikCredentialType.CERTIFICATE:
+                        conn.Credentials = new SerCredentials()
+                        {
+                            Type = type,
+                            Cert = onDemandConfig?.Connection?.Credentials?.Cert ?? null
+                        };
+                        break;
+                    default:
+                        logger.Error("Unknown connection type.");
+                        break;
+                }
+
+                if (!String.IsNullOrEmpty(dataAppId))
                     conn.App = dataAppId;
 
                 return conn;
