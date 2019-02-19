@@ -12,6 +12,8 @@ namespace Ser.ConAai
     #region Usings
     using System;
     using System.Collections.Generic;
+    using System.Collections.Concurrent;
+    using System.IO.Compression;
     using System.Diagnostics;
     using System.Linq;
     using System.Net;
@@ -20,20 +22,17 @@ namespace Ser.ConAai
     using System.Threading.Tasks;
     using System.IO;
     using Grpc.Core;
-    using Qlik.Sse;
-    using Google.Protobuf;
-    using NLog;
+    using Hjson;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
-    using Q2g.HelperQrs;
+    using NLog;
     using Ser.Api;
-    using Hjson;
     using Ser.Distribute;
-    using static Qlik.Sse.Connector;
+    using Q2g.HelperQrs;
     using Q2g.HelperPem;
     using Qlik.EngineAPI;
-    using System.Collections.Concurrent;
-    using System.IO.Compression;
+    using Qlik.Sse;
+    using static Qlik.Sse.Connector;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
