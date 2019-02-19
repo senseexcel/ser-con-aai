@@ -403,7 +403,8 @@ namespace Ser.ConAai
                         var firstConnection = configReport?.Connections?.FirstOrDefault() ?? null;
                         if (firstConnection != null)
                         {
-                            var newBearerConnection = CreateBearerConnection(qlikSession.User, firstConnection.App);
+                            logger.Debug("Create bearer connection.");
+                            var newBearerConnection = CreateConnection(QlikCredentialType.HEADER, qlikSession, firstConnection.App);
                             configReport.Connections.Add(newBearerConnection);
                         }
 
@@ -565,47 +566,35 @@ namespace Ser.ConAai
             }
         }
 
-        private SerConnection CreateBearerConnection(DomainUser user, string dataAppId)
+        private SerConnection CreateConnection(QlikCredentialType type, SessionInfo session, string dataAppId = null)
         {
             try
             {
+                logger.Debug("Create new connection.");
                 var mainConnection = onDemandConfig.Connection;
-                logger.Debug("Create fallback bearer connection.");
-                var token = sessionManager.GetToken(user, mainConnection, TimeSpan.FromMinutes(30));
+                var token = sessionManager.GetToken(session.User, mainConnection, TimeSpan.FromMinutes(30));
                 logger.Debug($"Bearer Token: {token}");
-                return new SerConnection()
+                var conn = new SerConnection()
                 {
                     ServerUri = mainConnection.ServerUri,
-                    App = dataAppId,
                     Credentials = new SerCredentials()
                     {
-                        Type = QlikCredentialType.HEADER,
+                        Type = type,
                         Key = "Authorization",
                         Value = $"Bearer { token }"
                     }
                 };
+
+                if(!String.IsNullOrEmpty(dataAppId))
+                    conn.App = dataAppId;
+
+                return conn;
             }
             catch (Exception ex)
             {
                 logger.Error(ex, "The bearer connection could not create.");
                 return null;
             }
-        }
-
-        private JObject CreateNewConnectionConfig(SessionInfo session)
-        {
-            var connectorConfig = onDemandConfig.Connection;
-            var config = new SerConnection()
-            {
-                ServerUri = connectorConfig.ServerUri,
-                Credentials = new SerCredentials()
-                {
-                    Type = connectorConfig.Credentials.Type,
-                    Key = connectorConfig.Credentials.Key,
-                    Value = session?.Cookie?.Value
-                }
-            };
-            return JObject.FromObject(config);
         }
 
         private SerConfig CreateEngineConfig(SessionInfo session, IDoc qlikApp, string userJson)
@@ -651,7 +640,8 @@ namespace Ser.ConAai
                     for (int i = 0; i < userConnections.Count; i++)
                     {
                         var mergeConnection = userConnections[i] as JObject;
-                        var connectorConnection = CreateNewConnectionConfig(session);
+                        var credType = onDemandConfig?.Connection?.Credentials?.Type ?? QlikCredentialType.JWT;
+                        var connectorConnection = JObject.FromObject(CreateConnection(credType, session));
                         connectorConnection.Merge(mergeConnection, new JsonMergeSettings()
                         {
                             MergeNullValueHandling = MergeNullValueHandling.Ignore
