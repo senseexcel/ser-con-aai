@@ -83,6 +83,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="SerConnections">
+      <HintPath>..\..\ser-connections-nuget\src\bin\Debug\netcoreapp2.1\SerConnections.dll</HintPath>
+    </Reference>
     <Reference Include="SerEngineRest">
       <HintPath>..\..\ser-engine-rest\src\bin\Debug\netcoreapp2.1\publish\SerEngineRest.dll</HintPath>
     </Reference>

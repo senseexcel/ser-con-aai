@@ -32,6 +32,7 @@ namespace Ser.ConAai
     using Q2g.HelperPem;
     using Qlik.EngineAPI;
     using Qlik.Sse;
+    using Ser.Connections;
     using static Qlik.Sse.Connector;
     #endregion
 
