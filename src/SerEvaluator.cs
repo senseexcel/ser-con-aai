@@ -682,7 +682,7 @@ namespace Ser.ConAai
                     {
                         var connection = child.connections ?? null;
                         if (connection?.ToString() == "@CONFIGCONNECTION@")
-                            child.connections = newUserConnections.FirstOrDefault();
+                            child.connections = new JArray(newUserConnections);
                         var childProp = (child as JObject).Parent as JProperty;
                         if (childProp?.Name == "hub")
                         {
