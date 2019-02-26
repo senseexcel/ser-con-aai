@@ -33,6 +33,5 @@ namespace Ser.ConAai
         public string Message { get; set; }
         public List<Guid> FileUploadIds { get; set; } = new List<Guid>();
         public JObject JobJson { get; set; }
-        public int TaksCount { get; set; }
     }
 }

@@ -439,7 +439,6 @@ namespace Ser.ConAai
                         else
                             logger.Warn($"The Upload was failed. - Error: {uploadResult?.Error}");
                         uploadsteam.Close();
-                        activeTask.TaksCount++;
                     }
                 }
 
@@ -806,6 +805,7 @@ namespace Ser.ConAai
             try
             {
                 var status = task.Status;
+                var hasResult = false;
                 var jobResults = new List<Ser.Engine.Rest.Client.JobResult>();
                 task.Message = "Build Report, Please wait...";
                 while (status != 2)
@@ -822,14 +822,18 @@ namespace Ser.ConAai
                         if (operationResult.Success.Value)
                         {
                             jobResults = operationResult?.Results?.ToList() ?? new List<Ser.Engine.Rest.Client.JobResult>();
-                            var finishedResults = jobResults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.ABORT).ToList();
-                            if (finishedResults.Count == task.TaksCount)
+                            var runningResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ABORT).ToList();
+                            if (runningResults.Count == 0 && hasResult)
                             {
-                                var successResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
-                                if (successResults.Count == task.TaksCount)
+                                var finishResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
+                                if (finishResults.Count == jobResults.Count)
                                     status = 2;
                                 else
                                     status = -1;
+                            }
+                            else if(runningResults.Count > 0)
+                            {
+                                hasResult = true;
                             }
                         }
                         else
