@@ -386,16 +386,32 @@ namespace Ser.ConAai
 
                 //connect to qlik app
                 logger.Debug("Connect to Qlik over websocket.");
-                var qlikApp = QlikWebsocket.CreateNewConnection(qlikSession);
-                if (qlikApp == null)
+                var fullConnectionConfig = new SerConnection
+                {
+                    App = qlikSession.AppId,
+                    ServerUri = onDemandConfig.Connection.ServerUri,
+                    Credentials = new SerCredentials()
+                    {
+                        Type = QlikCredentialType.SESSION,
+                        Key = qlikSession.Cookie.Name,
+                        Value = qlikSession.Cookie.Value
+                    }
+                };
+                var qlikConnection = ConnectionManager.NewConnection(fullConnectionConfig);
+                if (qlikConnection == null)
                     throw new Exception("No Websocket connection to Qlik.");
+                else
+                {
+                    qlikSession.QlikConn = qlikConnection;
+                    activeTask.Session = qlikSession;
+                }
 
                 //task to list
                 runningTasks.TryAdd(activeTask.Id, activeTask);
 
                 //create full engine config
                 logger.Debug("Create ser engine full config");
-                var newEngineConfig = CreateEngineConfig(qlikSession, qlikApp, json);
+                var newEngineConfig = CreateEngineConfig(qlikSession, json);
                 foreach (var configTask in newEngineConfig.Tasks)
                 {
                     foreach (var configReport in configTask.Reports)
@@ -411,7 +427,7 @@ namespace Ser.ConAai
 
                         //Read content from lib and content libary
                         logger.Debug("Get template data from qlik.");
-                        var uploadsteam = FindTemplatePath(qlikSession, qlikApp, configReport.Template);
+                        var uploadsteam = FindTemplatePath(qlikSession, configReport.Template);
                         logger.Debug("Upload template data to rest service.");
                         var serfilename = Path.GetFileName(configReport.Template.Input);
                         var uploadResult = restClient.UploadAsync(serfilename, false, uploadsteam).Result;
@@ -434,7 +450,7 @@ namespace Ser.ConAai
 
                 //Use the connector in the same App, than wait for data reload
                 var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)?.SelectMany(r => r.Connections)?.FirstOrDefault(c => c.App == qlikSession.AppId) ?? null;
-                Task.Run(() => WaitForDataLoad(activeTask, qlikSession, qlikApp, scriptConnection));
+                Task.Run(() => WaitForDataLoad(activeTask, qlikSession, scriptConnection));
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
             }
             catch (Exception ex)
@@ -445,16 +461,14 @@ namespace Ser.ConAai
                     activeTask.Message = ex.Message;
                     FinishTask(activeTask);
                 }
+
                 if (qlikSession == null)
                 {
                     activeTask.Status = -2;
                     activeTask.Message = ex.Message;
                 }
                 else
-                {
-                    qlikSession.SocketSession?.CloseAsync()?.Wait(500);
-                    qlikSession.SocketSession = null;
-                }
+                    sessionManager.MakeSocketFree(activeTask?.Session ?? null);
                 logger.Error(ex, "The report could not create.");
                 return new OnDemandResult() { TaskId = activeTask?.Id, Status = activeTask?.Status ?? -1, Log = activeTask?.Message };
             }
@@ -470,7 +484,7 @@ namespace Ser.ConAai
             return jobJson;
         }
 
-        private void WaitForDataLoad(ActiveTask task, SessionInfo session, IDoc qlikApp, Ser.Api.SerConnection configConn)
+        private void WaitForDataLoad(ActiveTask task, SessionInfo session, Ser.Api.SerConnection configConn)
         {
             var scriptApp = configConn?.App;
             var timeout = configConn?.RetryTimeout ?? 0;
@@ -511,13 +525,13 @@ namespace Ser.ConAai
             }
         }
 
-        private Stream FindTemplatePath(SessionInfo session, IDoc qlikApp, SerTemplate template)
+        private Stream FindTemplatePath(SessionInfo session, SerTemplate template)
         {
             var result = UriUtils.NormalizeUri(template.Input);
             var templateUri = result.Item1;
             if (templateUri.Scheme.ToLowerInvariant() == "content")
             {
-                var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, session.AppId, qlikApp, result.Item2);
+                var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, session.AppId, session.QlikConn.CurrentApp, result.Item2);
                 logger.Debug($"File count in content library: {contentFiles?.Count}");
                 var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(templateUri.AbsolutePath));
                 if (filterFile != null)
@@ -531,7 +545,7 @@ namespace Ser.ConAai
             }
             else if (templateUri.Scheme.ToLowerInvariant() == "lib")
             {
-                var connUrl = qlikApp.GetConnectionsAsync()
+                var connUrl = session.QlikConn.CurrentApp.GetConnectionsAsync()
                     .ContinueWith<string>((connections) =>
                     {
                         var libResult = connections.Result.FirstOrDefault(n => n.qName.ToLowerInvariant() == result.Item2) ?? null;
@@ -624,7 +638,7 @@ namespace Ser.ConAai
             }
         }
 
-        private SerConfig CreateEngineConfig(SessionInfo session, IDoc qlikApp, string userJson)
+        private SerConfig CreateEngineConfig(SessionInfo session, string userJson)
         {
             //Make full user json
             logger.Debug("Auto replacement to normal hjson structure.");
@@ -712,7 +726,7 @@ namespace Ser.ConAai
             }
 
             //Resolve prefixes
-            var qlikResolver = new QlikResolver(qlikApp);
+            var qlikResolver = new QlikResolver(session.QlikConn.CurrentApp);
             serJsonConfig = qlikResolver.Resolve(serJsonConfig);
             var serConfiguration = JsonConvert.DeserializeObject<SerConfig>(serJsonConfig.ToString());
             return serConfiguration;

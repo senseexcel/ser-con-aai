@@ -23,6 +23,7 @@ namespace Ser.ConAai
     using Q2g.HelperQrs;
     using Qlik.EngineAPI;
     using Ser.Api;
+    using Ser.Connections;
     #endregion
 
     public class SessionManager
@@ -134,7 +135,7 @@ namespace Ser.ConAai
         {
             try
             {
-                lock (this)
+                lock (threadObject)
                 {
                     var uri = connection.ServerUri;
                     var oldSession = Sessions?.FirstOrDefault(u => u.ConnectUri.OriginalString == uri.OriginalString
@@ -177,14 +178,10 @@ namespace Ser.ConAai
 
         public void MakeSocketFree(SessionInfo session)
         {
-            lock (threadObject)
+            if (session?.QlikConn != null)
             {
-                if (session?.SocketSession != null)
-                {
-                    session.SocketSession?.CloseAsync()?.Wait(500);
-                    session.SocketSession = null;
-
-                }
+                session.QlikConn.Close();
+                session.QlikConn = null;
             }
         }
         #endregion
@@ -197,8 +194,7 @@ namespace Ser.ConAai
         public string AppId { get; set; }
         public Cookie Cookie { get; set; }
         public Uri ConnectUri { get; set; }
-        public IDoc QlikApp { get; set; }
-        public Session SocketSession { get; set; }
+        public QlikConnection QlikConn { get; set; }
         #endregion
     }
 }

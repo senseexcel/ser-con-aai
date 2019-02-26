@@ -11,6 +11,8 @@
     using System.Net.Http;
     using Q2g.HelperQrs;
     using Newtonsoft.Json.Linq;
+    using Ser.Connections;
+    using Ser.Api;
     #endregion
 
     public static class ScriptCheck
@@ -32,12 +34,12 @@
 
                 var reloadTime = GetLastReloadTime(serverUri, info.Cookie, scriptAppId);
                 var tsConn = new CancellationTokenSource(timeout);
-                var app = GetConnection(info, tsConn.Token);
+                var session = GetConnection(info, tsConn.Token);
                 var ts = new CancellationTokenSource(timeout);
-                if (app != null)
+                if (session != null)
                 {
                     logger.Debug("Reload - Attached session found.");
-                    var result = TestCalc(app, ts.Token);
+                    var result = TestCalc(session.QlikConn.CurrentApp, ts.Token);
                     return true;
                 }
                 if (reloadTime == null)
@@ -109,18 +111,20 @@
             }
         }
 
-        private static IDoc GetConnection(SessionInfo info, CancellationToken token)
+        private static SessionInfo GetConnection(SessionInfo session, CancellationToken token)
         {
             try
             {
-                var app = QlikWebsocket.CreateNewConnection(info, true);
-                if (app != null)
-                    return app;
+                var attenchedConnection = session.QlikConn.Config;
+                attenchedConnection.Identities = new List<string>() { "" };
+                var qlikconn = ConnectionManager.NewConnection(attenchedConnection);
+                if (qlikconn != null)
+                    return session;
                 if (token.IsCancellationRequested)
                     return null;
                 logger.Debug("No attched session found.");
                 Thread.Sleep(2000);
-                return GetConnection(info, token);
+                return GetConnection(session, token);
             }
             catch (Exception ex)
             {

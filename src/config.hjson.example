@@ -32,7 +32,7 @@
 		 # the authentification mode of the proxy
 		 # in the standard use JWT, if you want to use other
 		 # authentification methods please look into the documentation
-		 type: JWT
+		 type: SESSION
 
 		 # filename of the JWT certificate, you can define
 		 # relative paths or absolute paths
