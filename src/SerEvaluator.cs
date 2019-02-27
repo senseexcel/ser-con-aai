@@ -844,32 +844,33 @@ namespace Ser.ConAai
                 sessionManager.MakeSocketFree(task?.Session ?? null);
 
                 //Download result files
-                var saveJobFolder = Path.Combine(SerUtilities.GetFullPathFromApp(onDemandConfig.WorkingDir), Guid.NewGuid().ToString());
-                var resultFolder = Path.Combine(SerUtilities.GetFullPathFromApp(onDemandConfig.WorkingDir), Guid.NewGuid().ToString());
-                var zipFileResult = restClient.DownloadFilesAsync(task.Id, null).Result;
-                if (zipFileResult?.Stream != null)
+                var distJobresults = ConvertApiType<List<JobResult>>(jobResults);
+                foreach (var jobResult in distJobresults)
                 {
-                    using (var mem = new MemoryStream())
+                    var fileDataList = new List<JobResultFileData>();
+                    foreach (var jobReport in jobResult.Reports)
                     {
-                        zipFileResult?.Stream.CopyTo(mem);
-                        var saveJobZip = Path.Combine(saveJobFolder, "download.zip");
-                        Directory.CreateDirectory(saveJobFolder);
-                        cleanupPaths.Add(saveJobFolder);
-                        Directory.CreateDirectory(resultFolder);
-                        cleanupPaths.Add(resultFolder);
-                        File.WriteAllBytes(saveJobZip, mem.GetBuffer());
-                        ZipFile.ExtractToDirectory(saveJobZip, resultFolder, true);
+                        foreach (var path in jobReport.Paths)
+                        {
+                            var filename = Path.GetFileName(path);
+                            var streamData = restClient.DownloadFilesAsync(task.Id, filename).Result;
+                            var mem = new MemoryStream();
+                            streamData.Stream.CopyTo(mem);
+                            var buffer = mem?.GetBuffer() ?? null;
+                            var fileData = new JobResultFileData()
+                            {
+                                Filename = filename,
+                                Data = buffer
+                            };
+                            fileDataList.Add(fileData);
+                        }
                     }
-                }
-                else
-                {
-                    logger.Error("No content to download form rest service.");
-
+                    jobResult.SetData(fileDataList);
                 }
 
                 //Delivery
                 task.Message = "Delivery Report, Please wait...";
-                status = StartDeliveryTool(task, Path.Combine(resultFolder, "JobResults"));
+                status = StartDeliveryTool(task, distJobresults);
                 task.Status = status;
                 if (status != 3)
                     throw new Exception("The delivery process failed.");
@@ -967,14 +968,14 @@ namespace Ser.ConAai
             }
         }
 
-        private int StartDeliveryTool(ActiveTask task, string resultFolder)
+        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
         {
             try
             {
                 var distribute = new Ser.Distribute.Distribute();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
-                var result = distribute.Run(resultFolder, privateKeyFullname);
+                var result = distribute.Run(jobResults, privateKeyFullname);
                 logger.Debug($"Distibute result: {result}");
                 task.Distribute = result;
                 return 3;
