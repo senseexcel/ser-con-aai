@@ -90,10 +90,16 @@ namespace Ser.ConAai
             restClient.BaseUrl = baseUrl;
             sessionManager = new SessionManager();
             runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
+            Cleanup();
         }
         #endregion
 
         #region Private Methods
+        private void Cleanup()
+        {
+            Task.Delay(250).ContinueWith((res) => restClient.DeleteAllFilesAsync());
+        }
+
         private void CheckRestService()
         {
             try
@@ -512,18 +518,6 @@ namespace Ser.ConAai
                 logger.Debug("Dataload check failed.");
         }
 
-        private Process GetProcess(int id)
-        {
-            try
-            {
-                return Process.GetProcesses()?.FirstOrDefault(p => p.Id == id) ?? null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
         private Stream FindTemplatePath(SessionInfo session, SerTemplate template)
         {
             var result = UriUtils.NormalizeUri(template.Input);
@@ -831,7 +825,7 @@ namespace Ser.ConAai
                                 else
                                     status = -1;
                             }
-                            else if(runningResults.Count > 0)
+                            else if (runningResults.Count > 0)
                             {
                                 hasResult = true;
                             }
