@@ -883,18 +883,20 @@ namespace Ser.Engine.Rest.Client
         }
     
         /// <summary>Gets the results from all Tasks.</summary>
+        /// <param name="serTaskStatus">Get all tasks with this status.</param>
         /// <returns>Gets the results from all Tasks.</returns>
         /// <exception cref="SwaggerException">A server side error occurred.</exception>
-        public System.Threading.Tasks.Task<OperationResult> TasksAsync()
+        public System.Threading.Tasks.Task<OperationResult> TasksAsync(string serTaskStatus)
         {
-            return TasksAsync(System.Threading.CancellationToken.None);
+            return TasksAsync(serTaskStatus, System.Threading.CancellationToken.None);
         }
     
         /// <summary>Gets the results from all Tasks.</summary>
+        /// <param name="serTaskStatus">Get all tasks with this status.</param>
         /// <returns>Gets the results from all Tasks.</returns>
         /// <exception cref="SwaggerException">A server side error occurred.</exception>
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        public async System.Threading.Tasks.Task<OperationResult> TasksAsync(System.Threading.CancellationToken cancellationToken)
+        public async System.Threading.Tasks.Task<OperationResult> TasksAsync(string serTaskStatus, System.Threading.CancellationToken cancellationToken)
         {
             var urlBuilder_ = new System.Text.StringBuilder();
             urlBuilder_.Append(BaseUrl != null ? BaseUrl.TrimEnd('/') : "").Append("/task");
@@ -904,6 +906,8 @@ namespace Ser.Engine.Rest.Client
             {
                 using (var request_ = new System.Net.Http.HttpRequestMessage())
                 {
+                    if (serTaskStatus != null)
+                        request_.Headers.TryAddWithoutValidation("serTaskStatus", ConvertToString(serTaskStatus, System.Globalization.CultureInfo.InvariantCulture));
                     request_.Method = new System.Net.Http.HttpMethod("GET");
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
     

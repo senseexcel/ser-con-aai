@@ -97,6 +97,7 @@ namespace Ser.ConAai
         #region Private Methods
         private void Cleanup()
         {
+            //var jj = new Ser.Engine.Rest.Controllers.TaskOperationsApiController(null);
             Task.Delay(250).ContinueWith((res) => restClient.DeleteAllFilesAsync());
         }
 
@@ -278,7 +279,7 @@ namespace Ser.ConAai
                         if (tasks == "all")
                         {
                             logger.Debug("Status - Get all tasks.");
-                            var taskResult = restClient.TasksAsync().Result;
+                            var taskResult = restClient.TasksAsync(null).Result;
                             if (taskResult.Success.Value)
                             {
                                 var allJobResults = taskResult?.Results?.ToList() ?? new List<Engine.Rest.Client.JobResult>();
@@ -853,16 +854,22 @@ namespace Ser.ConAai
                         foreach (var path in jobReport.Paths)
                         {
                             var filename = Path.GetFileName(path);
+                            logger.Debug($"Download file {filename} form task {task.Id}.");
                             var streamData = restClient.DownloadFilesAsync(task.Id, filename).Result;
-                            var mem = new MemoryStream();
-                            streamData.Stream.CopyTo(mem);
-                            var buffer = mem?.GetBuffer() ?? null;
-                            var fileData = new JobResultFileData()
+                            if (streamData != null)
                             {
-                                Filename = filename,
-                                Data = buffer
-                            };
-                            fileDataList.Add(fileData);
+                                var mem = new MemoryStream();
+                                streamData.Stream.CopyTo(mem);
+                                var buffer = mem?.GetBuffer() ?? null;
+                                var fileData = new JobResultFileData()
+                                {
+                                    Filename = filename,
+                                    Data = buffer
+                                };
+                                fileDataList.Add(fileData);
+                            }
+                            else
+                                logger.Warn($"File {filename} for download not found.");
                         }
                     }
                     jobResult.SetData(fileDataList);
