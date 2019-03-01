@@ -75,6 +75,7 @@ namespace Ser.ConAai
         private SessionManager sessionManager;
         private Ser.Engine.Rest.Client.SerApiClient restClient;
         private ConcurrentDictionary<Guid, ActiveTask> runningTasks;
+        private object threadObject = new object();
         #endregion
 
         #region Connstructor & Dispose
@@ -97,7 +98,7 @@ namespace Ser.ConAai
         #region Private Methods
         private void Cleanup()
         {
-            //var jj = new Ser.Engine.Rest.Controllers.TaskOperationsApiController(null);
+            //var jj = new Ser.Engine.Rest.Services.ReportingService(null);
             Task.Delay(250).ContinueWith((res) => restClient.DeleteAllFilesAsync());
         }
 
@@ -704,16 +705,20 @@ namespace Ser.ConAai
                     var privateKey = onDemandConfig?.Connection?.Credentials?.PrivateKey ?? null;
                     if (!String.IsNullOrEmpty(privateKey))
                     {
-                        var path = SerUtilities.GetFullPathFromApp(privateKey);
-                        var crypter = new TextCrypter(path);
-                        var value = report?.template?.outputPassword ?? null;
-                        if (value != null)
+                        // For file access
+                        lock (threadObject)
                         {
-                            string password = value.Value<string>();
-                            if (Convert.TryFromBase64String(password, new Span<byte>(), out var base64Result))
-                                report.template.outputPassword = crypter.DecryptText(password);
-                            else
-                                report.template.outputPassword = password;
+                            var path = SerUtilities.GetFullPathFromApp(privateKey);
+                            var crypter = new TextCrypter(path);
+                            var value = report?.template?.outputPassword ?? null;
+                            if (value != null)
+                            {
+                                string password = value.Value<string>();
+                                if (Convert.TryFromBase64String(password, new Span<byte>(), out var base64Result))
+                                    report.template.outputPassword = crypter.DecryptText(password);
+                                else
+                                    report.template.outputPassword = password;
+                            }
                         }
                     }
                 }
