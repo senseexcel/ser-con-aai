@@ -280,12 +280,7 @@ namespace Ser.ConAai
                         if (tasks == "all")
                         {
                             logger.Debug("Status - Get all tasks.");
-                            var taskResult = restClient.TasksAsync(null).Result;
-                            if (taskResult.Success.Value)
-                            {
-                                var allJobResults = taskResult?.Results?.ToList() ?? new List<Engine.Rest.Client.JobResult>();
-                                statusResult.Tasks.AddRange(allJobResults);
-                            }
+                            statusResult.Tasks = runningTasks.Values?.ToList() ?? new List<ActiveTask>();
                         }
                         else if (taskId.HasValue)
                         {
