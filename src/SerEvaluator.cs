@@ -280,7 +280,19 @@ namespace Ser.ConAai
                         if (tasks == "all")
                         {
                             logger.Debug("Status - Get all tasks.");
-                            statusResult.Tasks = runningTasks.Values?.ToList() ?? new List<ActiveTask>();
+                            var activeTasks = runningTasks.Values?.ToArray().ToList() ?? new List<ActiveTask>();
+                            statusResult.Tasks = new JArray();
+                            foreach (var activeTask in activeTasks)
+                            {
+                                statusResult.Tasks.Add(JObject.FromObject(new
+                                {
+                                    startTime = activeTask.StartTime,
+                                    status = activeTask.Status,
+                                    taskId = activeTask.Id,
+                                    appId = activeTask.Session.AppId,
+                                    userId = activeTask.Session.User.ToString()
+                                }));
+                            }
                         }
                         else if (taskId.HasValue)
                         {
