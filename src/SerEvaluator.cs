@@ -32,7 +32,7 @@ namespace Ser.ConAai
     using Q2g.HelperPem;
     using Qlik.EngineAPI;
     using Qlik.Sse;
-    using Ser.Connections;
+    using Q2g.HelperQlik;
     using static Qlik.Sse.Connector;
     #endregion
 
@@ -412,7 +412,8 @@ namespace Ser.ConAai
                         Value = qlikSession.Cookie.Value
                     }
                 };
-                var qlikConnection = ConnectionManager.NewConnection(fullConnectionConfig);
+                var connConfig = Convert.ChangeType(fullConnectionConfig, typeof(ConnectionConfig)) as ConnectionConfig;
+                var qlikConnection = ConnectionManager.NewConnection(connConfig);
                 if (qlikConnection == null)
                     throw new Exception("No Websocket connection to Qlik.");
                 else

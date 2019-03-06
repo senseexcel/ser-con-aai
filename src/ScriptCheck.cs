@@ -1,18 +1,17 @@
 ﻿namespace Ser.ConAai
 {
     #region Usings
-    using Qlik.EngineAPI;
     using System;
-    using NLog;
     using System.Collections.Generic;
     using System.Text;
     using System.Threading;
     using System.Net;
     using System.Net.Http;
-    using Q2g.HelperQrs;
     using Newtonsoft.Json.Linq;
-    using Ser.Connections;
-    using Ser.Api;
+    using Qlik.EngineAPI;
+    using Q2g.HelperQrs;
+    using Q2g.HelperQlik;
+    using NLog;
     #endregion
 
     public static class ScriptCheck

@@ -17,13 +17,11 @@ namespace Ser.ConAai
     using System.Net.Http;
     using System.Security.Claims;
     using System.Security.Cryptography.X509Certificates;
-    using enigma;
     using NLog;
     using Q2g.HelperPem;
     using Q2g.HelperQrs;
-    using Qlik.EngineAPI;
     using Ser.Api;
-    using Ser.Connections;
+    using Q2g.HelperQlik;
     #endregion
 
     public class SessionManager
@@ -194,7 +192,7 @@ namespace Ser.ConAai
         public string AppId { get; set; }
         public Cookie Cookie { get; set; }
         public Uri ConnectUri { get; set; }
-        public QlikConnection QlikConn { get; set; }
+        public Q2g.HelperQlik.Connection QlikConn { get; set; }
         #endregion
     }
 }

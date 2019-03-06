@@ -39,6 +39,7 @@
         <PackageReference Include="SerApi" Version="3.4.2" />
         <PackageReference Include="Q2gHelperPem" Version="1.2.0" />
         <PackageReference Include="Q2gHelperQrs" Version="1.3.0" />
+        <PackageReference Include="Q2g.HelperQlik" Version="1.0.1" />
         <PackageReference Include="Ser.Distribute" Version="2.3.4" />
       </ItemGroup>
     </When>
@@ -55,6 +56,9 @@
         </Reference>
         <Reference Include="Q2gHelperQrs">
           <HintPath>..\..\q2g-helper-qrs-nuget\src\bin\Debug\$(TargetFramework)\Q2gHelperQrs.dll</HintPath>
+        </Reference>
+        <Reference Include="Q2g.HelperQlik">
+          <HintPath>..\..\q2g-helper-qlik-nuget\src\bin\Debug\$(TargetFramework)\Q2gHelperQlik.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Distribute">
           <HintPath>..\..\ser-distribute-nuget\src\bin\Debug\$(TargetFramework)\SerDistribute.dll</HintPath>
@@ -83,9 +87,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="SerConnections">
-      <HintPath>..\..\ser-connections-nuget\src\bin\Debug\netcoreapp2.1\SerConnections.dll</HintPath>
-    </Reference>
     <Reference Include="SerEngineRest">
       <HintPath>..\..\ser-engine-rest\src\bin\Debug\netcoreapp2.1\publish\SerEngineRest.dll</HintPath>
     </Reference>
