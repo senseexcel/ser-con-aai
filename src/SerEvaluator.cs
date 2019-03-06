@@ -401,7 +401,7 @@ namespace Ser.ConAai
 
                 //connect to qlik app
                 logger.Debug("Connect to Qlik over websocket.");
-                var fullConnectionConfig = new SerConnection
+                var fullConnectionConfig = new ConnectionConfig
                 {
                     App = qlikSession.AppId,
                     ServerUri = onDemandConfig.Connection.ServerUri,
@@ -412,8 +412,7 @@ namespace Ser.ConAai
                         Value = qlikSession.Cookie.Value
                     }
                 };
-                var connConfig = Convert.ChangeType(fullConnectionConfig, typeof(ConnectionConfig)) as ConnectionConfig;
-                var qlikConnection = ConnectionManager.NewConnection(connConfig);
+                var qlikConnection = ConnectionManager.NewConnection(fullConnectionConfig);
                 if (qlikConnection == null)
                     throw new Exception("No Websocket connection to Qlik.");
                 else
