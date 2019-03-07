@@ -19,6 +19,7 @@ namespace Ser.ConAai
     using System.Net;
     using enigma;
     using Newtonsoft.Json.Linq;
+    using System.Threading;
     #endregion
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
@@ -33,5 +34,8 @@ namespace Ser.ConAai
         public string Message { get; set; }
         public List<Guid> FileUploadIds { get; set; } = new List<Guid>();
         public JObject JobJson { get; set; }
+        public bool Stoppable { get; set; }
+        public bool Stopped { get; set; }
+        public CancellationTokenSource CancelSource { get; set; }
     }
 }

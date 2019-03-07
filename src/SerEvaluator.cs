@@ -34,6 +34,7 @@ namespace Ser.ConAai
     using Qlik.Sse;
     using Q2g.HelperQlik;
     using static Qlik.Sse.Connector;
+    using System.Text;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -98,7 +99,6 @@ namespace Ser.ConAai
         #region Private Methods
         private void Cleanup()
         {
-            //var jj = new Ser.Engine.Rest.Services.ReportingService(null);
             Task.Delay(250).ContinueWith((res) => restClient.DeleteAllFilesAsync());
         }
 
@@ -118,6 +118,130 @@ namespace Ser.ConAai
             {
                 logger.Error(ex, $"No connection to rest service \"{onDemandConfig.RestServiceUrl}\" Details: {ex.Message}.'");
             }
+        }
+
+        private JObject CreateAuditMatrixParameters(DomainUser user)
+        {
+            return JObject.FromObject(new
+            {
+                resourceType = "App",
+                resourceRef = new { },
+                subjectRef = new
+                {
+                    resourceFilter = $"userid eq '{user.UserId}' and userdirectory eq '{user.UserDirectory}'"
+                },
+                actions = 46,
+                environmentAttributes = "",
+                subjectProperties = new string[] { "id", "name", "userId", "userDirectory" },
+                auditLimit = 1000,
+                outputObjectsPrivileges = 2
+            });
+        }
+
+        private async Task<DomainUser> GetAppOwner(QlikQrsHub qrsHub, string appId)
+        {
+            DomainUser resultUser = null;
+            try
+            {
+                var qrsResult = await qrsHub.SendRequestAsync($"app/{appId}", HttpMethod.Get);
+                logger.Trace($"appResult:{qrsResult}");
+                dynamic jObject = JObject.Parse(qrsResult);
+                string userDirectory = jObject?.owner?.userDirectory ?? null;
+                string userId = jObject?.owner?.userId ?? null;
+                if (!String.IsNullOrEmpty(userDirectory) && !String.IsNullOrEmpty(userId))
+                {
+                    resultUser = new DomainUser($"{userDirectory}\\{userId}");
+                    logger.Debug($"Found app owner: {resultUser.ToString()}");
+                }
+                else
+                    logger.Error($"No user directory {userDirectory} or user id {userId} found.");
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The app owner could not found.");
+            }
+            return resultUser;
+        }
+
+        private async Task<bool> HasReadRights(QlikQrsHub qrsHub, ActiveTask task)
+        {
+            try
+            {
+                logger.Debug($"Search for read right of user {task.Session.User.ToString()}");
+                var parameter = CreateAuditMatrixParameters(task.Session.User);
+                var contentData = Encoding.UTF8.GetBytes(parameter.ToString());
+                var data = new ContentData()
+                {
+                    ContentType = "application/json",
+                    FileData = contentData,
+                };
+                var matrixResponse = await qrsHub.SendRequestAsync("systemrule/security/audit/matrix", HttpMethod.Post, data);
+                var responseObject = JObject.Parse(matrixResponse);
+                var matrix = responseObject["matrix"]?.FirstOrDefault(m => m["resourceId"]?.ToString() == task.Session.AppId) ?? null;
+                if (matrix != null)
+                {
+                    var privileges = responseObject["resources"][matrix["resourceId"]?.ToObject<string>()]["privileges"].ToList() ?? new List<JToken>();
+                    var canAppRead = privileges?.FirstOrDefault(p => p?.ToObject<string>() == "read") ?? null;
+                    if (canAppRead != null)
+                        return true;
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The read rights of the user could not found.");
+                return false;
+            }
+        }
+
+        private JObject CreateTaskResult(ActiveTask task)
+        {
+            return JObject.FromObject(new
+            {
+                startTime = task.StartTime,
+                status = task.Status,
+                taskId = task.Id,
+                appId = task.Session.AppId,
+                userId = task.Session.User.ToString()
+            });
+        }
+
+        private async Task<JArray> GetAllowedTasks(List<ActiveTask> activeTasks, DomainUser user, string appId)
+        {
+            var results = new JArray();
+            try
+            {
+                var session = sessionManager.GetSession(onDemandConfig.Connection, user, appId);
+                var qrsHub = new QlikQrsHub(session.ConnectUri, session.Cookie);
+                foreach (var activeTask in activeTasks)
+                {
+                    if (activeTask.Stopped)
+                        continue;
+
+                    activeTask.Stoppable = false;
+                    var appOwner = await GetAppOwner(qrsHub, activeTask.Session.AppId);
+                    if (appOwner != null && appOwner.ToString() == activeTask.Session.User.ToString())
+                    {
+                        logger.Debug($"The app owner {appOwner.ToString()} for task list found.");
+                        activeTask.Stoppable = true;
+                        results.Add(CreateTaskResult(activeTask));
+                    }
+                    else
+                    {
+                        var readResult = await HasReadRights(qrsHub, activeTask);
+                        if (readResult)
+                        {
+                            activeTask.Stoppable = true;
+                            results.Add(CreateTaskResult(activeTask));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The list of tasks could not be determined.");
+            }
+            return results;
         }
         #endregion
 
@@ -226,19 +350,10 @@ namespace Ser.ConAai
                         var tmpsession = sessionManager.GetSession(onDemandConfig.Connection, domainUser, activeAppId);
                         if (tmpsession == null)
                             throw new Exception("No session cookie generated. (Qlik Task)");
-                        var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
-                        var qrsResult = qrshub.SendRequestAsync($"app/{activeAppId}", HttpMethod.Get).Result;
-                        logger.Trace($"appResult:{qrsResult}");
-                        dynamic jObject = JObject.Parse(qrsResult);
-                        string userDirectory = jObject?.owner?.userDirectory ?? null;
-                        string userId = jObject?.owner?.userId ?? null;
-                        if (String.IsNullOrEmpty(userDirectory) || String.IsNullOrEmpty(userId))
-                            logger.Warn($"No user directory {userDirectory} or user id {userId} found.");
-                        else
-                        {
-                            domainUser = new DomainUser($"{userDirectory}\\{userId}");
-                            logger.Debug($"Use real Qlik User: {domainUser.ToString()}");
-                        }
+                        var qrsHub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
+                        domainUser = await GetAppOwner(qrsHub, activeAppId);
+                        if (domainUser == null)
+                            throw new Exception("The owner of the could not found.");
                     }
                     catch (Exception ex)
                     {
@@ -281,18 +396,7 @@ namespace Ser.ConAai
                         {
                             logger.Debug("Status - Get all tasks.");
                             var activeTasks = runningTasks.Values?.ToArray().ToList() ?? new List<ActiveTask>();
-                            statusResult.Tasks = new JArray();
-                            foreach (var activeTask in activeTasks)
-                            {
-                                statusResult.Tasks.Add(JObject.FromObject(new
-                                {
-                                    startTime = activeTask.StartTime,
-                                    status = activeTask.Status,
-                                    taskId = activeTask.Id,
-                                    appId = activeTask.Session.AppId,
-                                    userId = activeTask.Session.User.ToString()
-                                }));
-                            }
+                            statusResult.Tasks = GetAllowedTasks(activeTasks, domainUser, activeAppId).Result;
                         }
                         else if (taskId.HasValue)
                         {
@@ -330,26 +434,49 @@ namespace Ser.ConAai
                         if (tasks == "all")
                         {
                             logger.Debug("Stop - All tasks.");
-                            var stopResult = restClient.StopAllTasksAsync().Result;
-                            if (stopResult.Success.Value)
-                                logger.Debug("All tasks stopped.");
-                            else
-                                logger.Debug("All tasks could not stopped.");
+                            statusResult.Log = "Stop all tasks.";
+                            if (runningTasks.Count == 0)
+                                logger.Warn("No Tasks to stop");
+
+                            foreach (var runningTask in runningTasks)
+                            {
+                                if (runningTask.Value?.Stoppable ?? false)
+                                {
+                                    runningTask.Value?.CancelSource?.Cancel();
+                                    var stopResult = restClient.StopTasksAsync(runningTask.Value.Id).Result;
+                                    if (stopResult.Success.Value)
+                                    {
+                                        runningTask.Value.Message = "Stop Task";
+                                        runningTask.Value.Status = 4;
+                                        runningTask.Value.Stopped = true;
+                                        FinishTask(runningTask.Value);
+                                    }
+                                    else
+                                    {
+                                        logger.Debug("All tasks could not stopped.");
+                                        statusResult.Log = "All tasks could not stopped.";
+                                    }
+                                }
+                            }
                         }
                         else if (taskId.HasValue)
                         {
                             var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId.Value);
                             if (currentTask.Value != null)
                             {
+                                currentTask.Value?.CancelSource?.Cancel();
                                 var stopResult = restClient.StopTasksAsync(currentTask.Value.Id).Result;
                                 if (stopResult.Success.Value)
                                     logger.Debug($"The task {currentTask.Value.Id} was stopped.");
                                 else
                                     logger.Debug($"The task {currentTask.Value.Id} could not stopped.");
                                 FinishTask(currentTask.Value);
-                                currentTask.Value.Status = 0;
+                                statusResult.Log = $"Task {currentTask.Value?.Id} was stoppt.";
+                                currentTask.Value.Stopped = true;
+                                currentTask.Value.Status = 4;
                             }
                         }
+                        statusResult.Status = 4;
                         break;
                     #endregion
                     default:
@@ -388,6 +515,7 @@ namespace Ser.ConAai
                 activeTask = new ActiveTask()
                 {
                     Id = Guid.NewGuid(),
+                    CancelSource = new CancellationTokenSource(),
                     Status = 1,
                     Session = qlikSession,
                     StartTime = DateTime.Now
@@ -963,6 +1091,7 @@ namespace Ser.ConAai
                         }
                     }
 
+                    task.Status = 0;
                     logger.Debug($"Cleanup complete.");
                 });
             }
@@ -994,7 +1123,7 @@ namespace Ser.ConAai
                 var distribute = new Ser.Distribute.Distribute();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
-                var result = distribute.Run(jobResults, privateKeyFullname);
+                var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
                 logger.Debug($"Distibute result: {result}");
                 task.Distribute = result;
                 return 3;
