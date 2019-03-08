@@ -446,7 +446,7 @@ namespace Ser.ConAai
                                     var stopResult = restClient.StopTasksAsync(runningTask.Value.Id).Result;
                                     if (stopResult.Success.Value)
                                     {
-                                        runningTask.Value.Message = "Stop Task";
+                                        runningTask.Value.Message = "The Task was stopped by user.";
                                         runningTask.Value.Status = 4;
                                         runningTask.Value.Stopped = true;
                                         FinishTask(runningTask.Value);
@@ -1019,8 +1019,16 @@ namespace Ser.ConAai
                 task.Message = "Delivery Report, Please wait...";
                 status = StartDeliveryTool(task, distJobresults);
                 task.Status = status;
-                if (status != 3)
-                    throw new Exception("The delivery process failed.");
+                switch (status)
+                {
+                    case 3:
+                        logger.Debug("The delivery was successfully.");
+                        break;
+                    case 4:
+                        throw new Exception("The delivery was canceled by user.");
+                    default:
+                        throw new Exception("The delivery process failed.");
+                }
             }
             catch (Exception ex)
             {
@@ -1124,9 +1132,17 @@ namespace Ser.ConAai
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
                 var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
-                logger.Debug($"Distibute result: {result}");
-                task.Distribute = result;
-                return 3;
+                if (task.CancelSource.IsCancellationRequested)
+                {
+                    logger.Debug("Distibute is canceled by user.");
+                    return 4;
+                }
+                else
+                {
+                    logger.Debug($"Distibute result: {result}");
+                    task.Distribute = result;
+                    return 3;
+                }
             }
             catch (Exception ex)
             {
