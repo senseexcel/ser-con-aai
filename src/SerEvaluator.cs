@@ -978,7 +978,9 @@ namespace Ser.ConAai
                     }
                 }
 
-                //Generate Reports
+                //Status after build
+                if (task.Status == 4)
+                    throw new TaskCanceledException("The build of the report was canceled by user.");
                 task.Status = status;
                 if (status != 2)
                     throw new Exception("The report build process failed.");
@@ -1025,14 +1027,19 @@ namespace Ser.ConAai
                         logger.Debug("The delivery was successfully.");
                         break;
                     case 4:
-                        throw new Exception("The delivery was canceled by user.");
+                        throw new TaskCanceledException("The delivery was canceled by user.");
                     default:
                         throw new Exception("The delivery process failed.");
                 }
             }
+            catch (TaskCanceledException ex)
+            {
+                task.Message = ex.Message;
+                task.Status = 4;
+                logger.Error(ex, "The status check was canceled by user.");
+            }
             catch (Exception ex)
             {
-                sessionManager.MakeSocketFree(task?.Session ?? null);
                 task.Message = ex.Message;
                 task.Status = -1;
                 logger.Error(ex, "The status check has detected a processing error.");
@@ -1040,6 +1047,7 @@ namespace Ser.ConAai
             finally
             {
                 //Cleanup
+                sessionManager.MakeSocketFree(task?.Session ?? null);
                 FinishTask(task, cleanupPaths);
             }
         }
