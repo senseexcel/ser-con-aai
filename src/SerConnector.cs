@@ -208,7 +208,7 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "Service could not be started.");
+                logger.Fatal(ex, "Service could not be started.");
             }
         }
 
