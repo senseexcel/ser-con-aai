@@ -970,6 +970,12 @@ namespace Ser.ConAai
                             {
                                 hasResult = true;
                             }
+                            else
+                            {
+                                var errorResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ERROR).ToList();
+                                if(errorResults.Count == jobResults.Count)
+                                    status = -1;
+                            }
                         }
                         else
                         {
