@@ -2,30 +2,25 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <TargetFramework>netcoreapp2.2</TargetFramework>
     <RootNamespace>Ser.ConAai</RootNamespace>
     <Authors>Konrad Mattheis und Martin Berthold</Authors>
-    <Copyright>Copyright (c) 2018</Copyright>
+    <Copyright>Copyright (c) 2019</Copyright>
     <Company>senseexcel</Company>
     <Configuration>Release</Configuration>
     <Version>$(GitVersion_NuGetVersion)</Version>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BouncyCastle.NetCore" Version="1.8.3" />
-    <PackageReference Include="enigma.net" Version="0.14.0-alpha0015" />
+    <PackageReference Include="enigma.net" Version="1.0.0" />
     <PackageReference Include="GitVersionTask" Version="4.0.0" PrivateAssets="All" />
     <PackageReference Include="Hjson" Version="3.0.0" />
-    <PackageReference Include="Markdig" Version="0.15.7" />
-    <PackageReference Include="Microsoft.AspNetCore.App" Version="2.1.8" />
+    <PackageReference Include="Markdig" Version="0.16.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
     <PackageReference Include="NLog" Version="4.5.11" />
-    <PackageReference Include="NLog.Web.AspNetCore" Version="4.8.0" />
-    <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.10" />
+    <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.11" />
     <PackageReference Include="qlik-engineapi" Version="0.3.0-alpha0015" />
     <PackageReference Include="qlik-sseapi" Version="1.3.1" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="5.0.0-beta" />
-    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="5.0.0-beta" />
     <PackageReference Include="System.Drawing.Common" Version="4.5.1" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.4.0" />
   </ItemGroup>
@@ -36,11 +31,11 @@
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
       </PropertyGroup>
       <ItemGroup>
-        <PackageReference Include="SerApi" Version="3.4.2" />
-        <PackageReference Include="Q2gHelperPem" Version="1.2.0" />
-        <PackageReference Include="Q2gHelperQrs" Version="1.3.0" />
-        <PackageReference Include="Q2g.HelperQlik" Version="1.0.1" />
-        <PackageReference Include="Ser.Distribute" Version="2.3.4" />
+        <PackageReference Include="Ser.Api" Version="3.5.0" />
+        <PackageReference Include="Q2gHelperPem" Version="1.4.0" />
+        <PackageReference Include="Q2gHelperQrs" Version="1.4.2" />
+        <PackageReference Include="Q2g.HelperQlik" Version="1.1.3" />
+        <PackageReference Include="Ser.Distribute" Version="2.4.2" />
       </ItemGroup>
     </When>
     <Otherwise>
@@ -48,7 +43,7 @@
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
       </PropertyGroup>
       <ItemGroup>
-        <Reference Include="SerApi">
+        <Reference Include="Ser.Api">
           <HintPath>..\..\ser-api-nuget\src\bin\Debug\$(TargetFramework)\SerApi.dll</HintPath>
         </Reference>
         <Reference Include="Q2gHelperPem">
@@ -88,7 +83,7 @@
 
   <ItemGroup>
     <Reference Include="SerEngineRest">
-      <HintPath>..\..\ser-engine-rest\src\bin\Debug\netcoreapp2.1\publish\SerEngineRest.dll</HintPath>
+      <HintPath>..\..\ser-engine-rest\src\bin\Debug\netcoreapp2.2\win-x64\SerEngineRest.dll</HintPath>
     </Reference>
   </ItemGroup>
 
