@@ -124,7 +124,7 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
-                logger.Error(ex);
+                logger.Error(ex, "Can´t create a jwt token.");
                 return null;
             }
         }
