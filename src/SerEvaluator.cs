@@ -1151,16 +1151,21 @@ namespace Ser.ConAai
                     logger.Debug("Distibute is canceled by user.");
                     return 4;
                 }
-                else
+                else if(result != null)
                 {
                     logger.Debug($"Distibute result: {result}");
                     task.Distribute = result;
                     return 3;
                 }
+                else
+                {
+                    logger.Error("The disibute has errors.");
+                    return -1;
+                }
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "The delivery tool could not start as process.");
+                logger.Error(ex, "The disibute was failed.");
                 return -1;
             }
         }

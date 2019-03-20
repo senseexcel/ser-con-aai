@@ -83,7 +83,7 @@
 
   <ItemGroup>
     <Reference Include="SerEngineRest">
-      <HintPath>..\..\ser-engine-rest\src\bin\Debug\netcoreapp2.2\win-x64\SerEngineRest.dll</HintPath>
+      <HintPath>..\..\ser-engine-rest\src\bin\Debug\netcoreapp2.2\publish\SerEngineRest.dll</HintPath>
     </Reference>
   </ItemGroup>
 
