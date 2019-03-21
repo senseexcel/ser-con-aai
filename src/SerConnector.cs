@@ -30,6 +30,7 @@ namespace Ser.ConAai
     using Q2g.HelperQrs;
     using System.Threading.Tasks;
     using System.Threading;
+    using System.Net.Http;
     #endregion
 
     public class SSEtoSER : MicroService, IMicroService
@@ -41,8 +42,9 @@ namespace Ser.ConAai
         #region Properties & Variables
         private Server server;
         private SerEvaluator serEvaluator;
+        private CancellationTokenSource cts;
         private delegate IPHostEntry GetHostEntryHandler(string name);
-        private static SerOnDemandConfig config;
+        private SerOnDemandConfig config;
         #endregion
 
         #region Private Methods
@@ -62,12 +64,10 @@ namespace Ser.ConAai
                 logger.Error(ex, $"The Method {nameof(CreateCertificate)} was failed.");
             }
         }
-        #endregion
 
-        #region Public Methods
-        public void CheckQlikConnection(Uri fallbackUri = null)
+        private Task CheckQlikConnection(Uri fallbackUri = null)
         {
-            var newTask = Task<bool>.Factory.StartNew(() =>
+            return Task.Run(() =>
             {
                 try
                 {
@@ -75,14 +75,9 @@ namespace Ser.ConAai
                     if (fallbackUri != null)
                         connection.ServerUri = fallbackUri;
 
-                    var task = new ActiveTask()
-                    {
-                        AppId = connection.App,
-                        UserId = new DomainUser("INTERNAL\\ser_scheduler"),
-                    };
-
-                    var taskManager = new TaskManager();
-                    var session = taskManager.GetSession(connection, task);
+                    var qlikUser = new DomainUser("INTERNAL\\ser_scheduler");
+                    var taskManager = new SessionManager();
+                    var session = taskManager.GetSession(connection, qlikUser, connection.App);
                     if (session?.Cookie != null)
                     {
                         logger.Info("The connection to Qlik Sense was successful.");
@@ -95,7 +90,7 @@ namespace Ser.ConAai
                     if (fallbackUri == null)
                     {
                         logger.Warn("The right configuration is missing.");
-                        var alternativeUris = ConnectionFallbackHelper.AlternativeUris;
+                        var alternativeUris = ConnectionFallbackHelper.AlternativeUris ?? new List<Uri>();
                         foreach (var alternativeUri in alternativeUris)
                         {
                             logger.Warn($"Test uri \"{alternativeUri.AbsoluteUri}\" for alternative mode.");
@@ -119,10 +114,21 @@ namespace Ser.ConAai
             });
         }
 
+        private Task StartRestServer(string[] arguments)
+        {
+            return Task.Run(() =>
+            {
+                Ser.Engine.Rest.Program.Main(arguments);
+            }, cts.Token);
+        }
+        #endregion
+
+        #region Public Methods
         public void Start()
         {
             try
             {
+                cts = new CancellationTokenSource();
                 var configPath = Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, "config.hjson");
                 if (!File.Exists(configPath))
                 {
@@ -132,6 +138,7 @@ namespace Ser.ConAai
                     else
                         throw new Exception($"config file {configPath} not found.");
                 }
+
                 var json = HjsonValue.Load(configPath).ToString();
                 var configObject = JObject.Parse(json);
 
@@ -149,8 +156,13 @@ namespace Ser.ConAai
                 config = JsonConvert.DeserializeObject<SerOnDemandConfig>(virtConnection.ToString());
                 logger.Debug($"ServerUri: {config.Connection.ServerUri}");
 
+                //Start Rest Service
+                var rootContentFolder = SerUtilities.GetFullPathFromApp(config.WorkingDir);
+                var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
+                var restTask = StartRestServer(arguments.ToArray());
+
                 //Read Assembly versions
-                var enginePath = PathUtils.GetFullPathFromApp(config.SerEnginePath);
+                var enginePath = SerUtilities.GetFullPathFromApp(Path.Combine(AppContext.BaseDirectory, "ser-engine.dll"));
                 if (!File.Exists(enginePath))
                     logger.Warn($"The engine path \"{enginePath}\" does not exists.");
 
@@ -160,11 +172,11 @@ namespace Ser.ConAai
 
                 //check to generate certifiate and private key if not exists
                 var certFile = config?.Connection?.Credentials?.Cert ?? null;
-                certFile = PathUtils.GetFullPathFromApp(certFile);
+                certFile = SerUtilities.GetFullPathFromApp(certFile);
                 if (!File.Exists(certFile))
                 {
                     var privateKeyFile = config?.Connection?.Credentials?.PrivateKey ?? null;
-                    privateKeyFile = PathUtils.GetFullPathFromApp(privateKeyFile);
+                    privateKeyFile = SerUtilities.GetFullPathFromApp(privateKeyFile);
                     if (File.Exists(privateKeyFile))
                         privateKeyFile = null;
 
@@ -180,6 +192,7 @@ namespace Ser.ConAai
 
                 logger.Debug($"Check qlik connection...");
                 CheckQlikConnection();
+
                 using (serEvaluator = new SerEvaluator(config))
                 {
                     server = new Server()
@@ -195,7 +208,7 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "Service could not be started.");
+                logger.Fatal(ex, "Service could not be started.");
             }
         }
 
@@ -204,6 +217,7 @@ namespace Ser.ConAai
             try
             {
                 logger.Info("Shutdown SSEtoSER...");
+                cts.Cancel();
                 server?.ShutdownAsync().Wait();
                 serEvaluator.Dispose();
             }

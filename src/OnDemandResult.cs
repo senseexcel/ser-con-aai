@@ -14,7 +14,9 @@ namespace Ser.ConAai
     using System.Collections.Generic;
     using System.Text;
     using Newtonsoft.Json;
+    using Newtonsoft.Json.Linq;
     using Newtonsoft.Json.Serialization;
+    using Ser.Api;
     #endregion
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
@@ -23,10 +25,10 @@ namespace Ser.ConAai
     {
         #region Properties
         public int Status { get; set; }
-        public string TaskId { get; set; }
+        public Guid? TaskId { get; set; }
         public string Log { get; set; }
         public string Distribute { get; set; }
-        public List<ActiveTask> Tasks { get; set; }
+        public JArray Tasks { get; set; }
         public List<VersionInfo> Versions { get; set; }
         #endregion
 

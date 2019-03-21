@@ -1,16 +1,17 @@
 ﻿namespace Ser.ConAai
 {
     #region Usings
-    using Qlik.EngineAPI;
     using System;
-    using NLog;
     using System.Collections.Generic;
     using System.Text;
     using System.Threading;
     using System.Net;
     using System.Net.Http;
-    using Q2g.HelperQrs;
     using Newtonsoft.Json.Linq;
+    using Qlik.EngineAPI;
+    using Q2g.HelperQrs;
+    using Q2g.HelperQlik;
+    using NLog;
     #endregion
 
     public static class ScriptCheck
@@ -20,7 +21,7 @@
         #endregion
 
         #region public methods
-        public static bool DataLoadCheck(Uri serverUri, string scriptAppId, UserParameter parameter, SessionInfo info, int timeout)
+        public static bool DataLoadCheck(Uri serverUri, string scriptAppId, SessionInfo info, int timeout)
         {
             try
             {
@@ -30,19 +31,18 @@
                 if (timeout <= 0)
                     return true;
 
-                var reloadTime = GetLastReloadTime(serverUri, parameter.ConnectCookie, scriptAppId);
+                var reloadTime = GetLastReloadTime(serverUri, info.Cookie, scriptAppId);
                 var tsConn = new CancellationTokenSource(timeout);
-                var app = GetConnection(info, tsConn.Token);
+                var session = GetConnection(info, tsConn.Token);
                 var ts = new CancellationTokenSource(timeout);
-                if (app != null)
+                if (session != null)
                 {
                     logger.Debug("Reload - Attached session found.");
-                    var result = TestCalc(app, ts.Token);
+                    var result = TestCalc(session.QlikConn.CurrentApp, ts.Token);
                     return true;
                 }
                 if (reloadTime == null)
                     return false;
-                app = parameter.SocketConnection;
                 if (reloadTime != null)
                 {
                     logger.Debug("Reload - Wait for finish scripts.");
@@ -51,10 +51,10 @@
                         Thread.Sleep(1000);
                         if (ts.Token.IsCancellationRequested)
                             return false;
-                        var taskStatus = GetTaskStatus(serverUri, parameter.ConnectCookie, scriptAppId);
+                        var taskStatus = GetTaskStatus(serverUri, info.Cookie, scriptAppId);
                         if (taskStatus != 2)
                             return true;
-                        var tempLoad = GetLastReloadTime(serverUri, parameter.ConnectCookie, scriptAppId);
+                        var tempLoad = GetLastReloadTime(serverUri, info.Cookie, scriptAppId);
                         if (tempLoad == null)
                             return false;
                         if (reloadTime.Value.Ticks < tempLoad.Value.Ticks)
@@ -110,18 +110,20 @@
             }
         }
 
-        private static IDoc GetConnection(SessionInfo info, CancellationToken token)
+        private static SessionInfo GetConnection(SessionInfo session, CancellationToken token)
         {
             try
             {
-                var app = QlikWebsocket.CreateNewConnection(info, true);
-                if (app != null)
-                    return app;
+                var attenchedConnection = session.QlikConn.Config;
+                attenchedConnection.Identities = new List<string>() { "" };
+                var qlikconn = ConnectionManager.NewConnection(attenchedConnection);
+                if (qlikconn != null)
+                    return session;
                 if (token.IsCancellationRequested)
                     return null;
                 logger.Debug("No attched session found.");
                 Thread.Sleep(2000);
-                return GetConnection(info, token);
+                return GetConnection(session, token);
             }
             catch (Exception ex)
             {
