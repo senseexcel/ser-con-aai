@@ -521,6 +521,9 @@ namespace Ser.ConAai
                     StartTime = DateTime.Now
                 };
 
+                //task to list
+                runningTasks.TryAdd(activeTask.Id, activeTask);
+
                 //get qlik session over jwt
                 logger.Debug("Get qlik session over jwt.");
                 qlikSession = sessionManager.GetSession(onDemandConfig.Connection, qlikUser, appId);
@@ -548,9 +551,6 @@ namespace Ser.ConAai
                     qlikSession.QlikConn = qlikConnection;
                     activeTask.Session = qlikSession;
                 }
-
-                //task to list
-                runningTasks.TryAdd(activeTask.Id, activeTask);
 
                 //create full engine config
                 logger.Debug("Create ser engine full config");
