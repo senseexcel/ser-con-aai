@@ -671,7 +671,7 @@ namespace Ser.ConAai
                     return new MemoryStream(data);
                 }
                 else
-                    throw new Exception($"No file in content library found.");
+                    throw new Exception($"No file in app library found.");
             }
             else if (templateUri.Scheme.ToLowerInvariant() == "lib")
             {
@@ -689,7 +689,7 @@ namespace Ser.ConAai
                     }).Result;
 
                 if (connUrl == null)
-                    throw new Exception($"No path in connection library found.");
+                    throw new Exception($"No path in content library found.");
                 else
                 {
                     template.Input = Path.GetFileName(connUrl);
