@@ -34,11 +34,11 @@
       </PropertyGroup>
       <ItemGroup>
         <PackageReference Include="Ser.Api" Version="3.5.0" />
-        <PackageReference Include="Q2gHelperPem" Version="1.4.1" />
-        <PackageReference Include="Q2gHelperQrs" Version="1.4.3" />
-        <PackageReference Include="Q2g.HelperQlik" Version="1.1.4" />
-        <PackageReference Include="Ser.Distribute" Version="2.4.7" />
-        <PackageReference Include="Ser.Engine.Rest" Version="1.0.0" />
+        <PackageReference Include="Q2gHelperPem" Version="1.4.3" />
+        <PackageReference Include="Q2gHelperQrs" Version="1.4.5" />
+        <PackageReference Include="Q2g.HelperQlik" Version="1.1.6" />
+        <PackageReference Include="Ser.Distribute" Version="2.4.9" />
+        <PackageReference Include="Ser.Engine.Rest" Version="1.0.3" />
       </ItemGroup>
     </When>
     <Otherwise>
