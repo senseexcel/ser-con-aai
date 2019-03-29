@@ -966,7 +966,7 @@ namespace Ser.ConAai
                                 else
                                     status = -1;
                             }
-                            else if (runningResults.Count > 0)
+                            else if (runningResults.Count > 0 || jobResults.Count(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS) == jobResults.Count)
                             {
                                 hasResult = true;
                             }
