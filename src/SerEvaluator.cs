@@ -934,6 +934,32 @@ namespace Ser.ConAai
             return resultBundle;
         }
 
+        private byte[] GetStreamBuffer(Engine.Rest.Client.FileResponse result)
+        {
+            List<byte> bufferList = new List<byte>();
+            var contentLength = result.Headers["Content-Length"].FirstOrDefault();
+            if (contentLength != null)
+            {
+                var bufferLength = Convert.ToInt32(contentLength);
+                var readLength = -1;
+                while (readLength != 0)
+                {
+                    var buffer = new byte[bufferLength];
+                    readLength = result.Stream.Read(buffer, 0, bufferLength);
+                    bufferList.AddRange(buffer.Take(readLength));
+                }
+                return bufferList.ToArray();
+            }
+            else
+            {
+                var mem = new MemoryStream();
+                result.Stream.CopyTo(mem);
+                var buffer = mem?.GetBuffer() ?? null;
+                bufferList.AddRange(buffer);
+            }
+            return bufferList.ToArray();
+        }
+
         private void CheckStatus(ActiveTask task)
         {
             var cleanupPaths = new List<string>();
@@ -1007,9 +1033,7 @@ namespace Ser.ConAai
                             var streamData = restClient.DownloadFilesAsync(task.Id, filename).Result;
                             if (streamData != null)
                             {
-                                var mem = new MemoryStream();
-                                streamData.Stream.CopyTo(mem);
-                                var buffer = mem?.GetBuffer() ?? null;
+                                var buffer = GetStreamBuffer(streamData);
                                 var fileData = new JobResultFileData()
                                 {
                                     Filename = filename,
@@ -1147,26 +1171,28 @@ namespace Ser.ConAai
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
                 var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
+                var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                 if (task.CancelSource.IsCancellationRequested)
                 {
-                    logger.Debug("Distibute is canceled by user.");
+                    logger.Debug("Distribute is canceled by user.");
                     return 4;
                 }
                 else if(result != null)
                 {
-                    logger.Debug($"Distibute result: {result}");
+                    logger.Debug($"Distribute result: {result}");
+                    logger.Info($"{xmlResult}");
                     task.Distribute = result;
                     return 3;
                 }
                 else
                 {
-                    logger.Error("The disibute has errors.");
+                    logger.Error("The distribute has errors.");
                     return -1;
                 }
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "The disibute was failed.");
+                logger.Error(ex, "The distribute was failed.");
                 return -1;
             }
         }
