@@ -522,6 +522,8 @@ namespace Ser.ConAai
                     StartTime = DateTime.Now
                 };
 
+                MappedDiagnosticsLogicalContext.Set("jobId", activeTask.Id.ToString());
+
                 //task to list
                 runningTasks.TryAdd(activeTask.Id, activeTask);
 
@@ -1080,6 +1082,7 @@ namespace Ser.ConAai
                 //Cleanup
                 sessionManager.MakeSocketFree(task?.Session ?? null);
                 FinishTask(task, cleanupPaths);
+                LogManager.Flush();
             }
         }
 
