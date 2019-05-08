@@ -511,7 +511,6 @@ namespace Ser.ConAai
             try
             {
                 logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
-                logger.Info($"<user>{qlikUser.ToString()}</user>");
 
                 activeTask = new ActiveTask()
                 {
@@ -523,6 +522,7 @@ namespace Ser.ConAai
                 };
 
                 MappedDiagnosticsLogicalContext.Set("jobId", activeTask.Id.ToString());
+                logger.Info($"<user>{qlikUser.ToString()}</user>");
 
                 //task to list
                 runningTasks.TryAdd(activeTask.Id, activeTask);
