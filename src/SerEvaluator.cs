@@ -12,33 +12,29 @@ namespace Ser.ConAai
     #region Usings
     using System;
     using System.Collections.Generic;
+    using System.Collections.Concurrent;
+    using System.IO.Compression;
     using System.Diagnostics;
     using System.Linq;
     using System.Net;
     using System.Net.Http;
-    using System.Net.Security;
-    using System.Security.Cryptography.X509Certificates;
-    using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
     using System.IO;
     using Grpc.Core;
-    using Qlik.Sse;
-    using Google.Protobuf;
-    using NLog;    
+    using Hjson;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
-    using Q2g.HelperQrs;
+    using NLog;
     using Ser.Api;
-    using Hjson;
     using Ser.Distribute;
-    using static Qlik.Sse.Connector;
-    using System.Net.WebSockets;
+    using Q2g.HelperQrs;
     using Q2g.HelperPem;
     using Qlik.EngineAPI;
-    using enigma;
-    using ImpromptuInterface;
-    using System.Reflection;
+    using Qlik.Sse;
+    using Q2g.HelperQlik;
+    using static Qlik.Sse.Connector;
+    using System.Text;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -76,26 +72,182 @@ namespace Ser.ConAai
         #endregion
 
         #region Properties & Variables
-        private static bool CreateNewCookie = false;
         private static SerOnDemandConfig onDemandConfig;
-        private TaskManager taskManager;
+        private SessionManager sessionManager;
+        private Ser.Engine.Rest.Client.SerApiClient restClient;
+        private ConcurrentDictionary<Guid, ActiveTask> runningTasks;
+        private object threadObject = new object();
         #endregion
 
         #region Connstructor & Dispose
         public SerEvaluator(SerOnDemandConfig config)
         {
             onDemandConfig = config;
-            taskManager = new TaskManager();
             ValidationCallback.Connection = config.Connection;
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
             ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
-            ////RestoreTasks();
+            restClient = new Ser.Engine.Rest.Client.SerApiClient(new HttpClient());
+            var baseUri = new Uri(restClient.BaseUrl);
+            var baseUrl = $"{config.RestServiceUrl}{baseUri.PathAndQuery}";
+            restClient.BaseUrl = baseUrl;
+            sessionManager = new SessionManager();
+            runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
+            Cleanup();
         }
-
-        public void Dispose() { }
         #endregion
 
-        #region Public functions
+        #region Private Methods
+        private void Cleanup()
+        {
+            Task.Delay(250).ContinueWith((res) => restClient.DeleteAllFilesAsync());
+        }
+
+        private void CheckRestService()
+        {
+            try
+            {
+                //Check rest service health
+                logger.Debug("Check rest service connection...");
+                var healthResult = restClient.HealthStatusAsync().Result;
+                if (healthResult.Success.Value)
+                    logger.Info("The communication with ser rest service was successfully.");
+                else
+                    throw new Exception("The rest service is not available.");
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, $"No connection to rest service \"{onDemandConfig.RestServiceUrl}\" Details: {ex.Message}.'");
+            }
+        }
+
+        private JObject CreateAuditMatrixParameters(DomainUser user)
+        {
+            return JObject.FromObject(new
+            {
+                resourceType = "App",
+                resourceRef = new { },
+                subjectRef = new
+                {
+                    resourceFilter = $"userid eq '{user.UserId}' and userdirectory eq '{user.UserDirectory}'"
+                },
+                actions = 46,
+                environmentAttributes = "",
+                subjectProperties = new string[] { "id", "name", "userId", "userDirectory" },
+                auditLimit = 1000,
+                outputObjectsPrivileges = 2
+            });
+        }
+
+        private async Task<DomainUser> GetAppOwner(QlikQrsHub qrsHub, string appId)
+        {
+            DomainUser resultUser = null;
+            try
+            {
+                var qrsResult = await qrsHub.SendRequestAsync($"app/{appId}", HttpMethod.Get);
+                logger.Trace($"appResult:{qrsResult}");
+                dynamic jObject = JObject.Parse(qrsResult);
+                string userDirectory = jObject?.owner?.userDirectory ?? null;
+                string userId = jObject?.owner?.userId ?? null;
+                if (!String.IsNullOrEmpty(userDirectory) && !String.IsNullOrEmpty(userId))
+                {
+                    resultUser = new DomainUser($"{userDirectory}\\{userId}");
+                    logger.Debug($"Found app owner: {resultUser.ToString()}");
+                }
+                else
+                    logger.Error($"No user directory {userDirectory} or user id {userId} found.");
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The app owner could not found.");
+            }
+            return resultUser;
+        }
+
+        private async Task<bool> HasReadRights(QlikQrsHub qrsHub, ActiveTask task)
+        {
+            try
+            {
+                logger.Debug($"Search for read right of user {task.Session.User.ToString()}");
+                var parameter = CreateAuditMatrixParameters(task.Session.User);
+                var contentData = Encoding.UTF8.GetBytes(parameter.ToString());
+                var data = new ContentData()
+                {
+                    ContentType = "application/json",
+                    FileData = contentData,
+                };
+                var matrixResponse = await qrsHub.SendRequestAsync("systemrule/security/audit/matrix", HttpMethod.Post, data);
+                var responseObject = JObject.Parse(matrixResponse);
+                var matrix = responseObject["matrix"]?.FirstOrDefault(m => m["resourceId"]?.ToString() == task.Session.AppId) ?? null;
+                if (matrix != null)
+                {
+                    var privileges = responseObject["resources"][matrix["resourceId"]?.ToObject<string>()]["privileges"].ToList() ?? new List<JToken>();
+                    var canAppRead = privileges?.FirstOrDefault(p => p?.ToObject<string>() == "read") ?? null;
+                    if (canAppRead != null)
+                        return true;
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The read rights of the user could not found.");
+                return false;
+            }
+        }
+
+        private JObject CreateTaskResult(ActiveTask task)
+        {
+            return JObject.FromObject(new
+            {
+                startTime = task.StartTime,
+                status = task.Status,
+                taskId = task.Id,
+                appId = task.Session.AppId,
+                userId = task.Session.User.ToString()
+            });
+        }
+
+        private async Task<JArray> GetAllowedTasks(List<ActiveTask> activeTasks, DomainUser user, string appId)
+        {
+            var results = new JArray();
+            try
+            {
+                var session = sessionManager.GetSession(onDemandConfig.Connection, user, appId);
+                var qrsHub = new QlikQrsHub(session.ConnectUri, session.Cookie);
+                foreach (var activeTask in activeTasks)
+                {
+                    if (activeTask.Stopped)
+                        continue;
+
+                    activeTask.Stoppable = false;
+                    var appOwner = await GetAppOwner(qrsHub, activeTask.Session.AppId);
+                    if (appOwner != null && appOwner.ToString() == activeTask.Session.User.ToString())
+                    {
+                        logger.Debug($"The app owner {appOwner.ToString()} for task list found.");
+                        activeTask.Stoppable = true;
+                        results.Add(CreateTaskResult(activeTask));
+                    }
+                    else
+                    {
+                        var readResult = await HasReadRights(qrsHub, activeTask);
+                        if (readResult)
+                        {
+                            activeTask.Stoppable = true;
+                            results.Add(CreateTaskResult(activeTask));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "The list of tasks could not be determined.");
+            }
+            return results;
+        }
+        #endregion
+
+        #region Public Methods
+        public void Dispose() { }
+
         public override Task<Capabilities> GetCapabilities(Empty request, ServerCallContext context)
         {
             try
@@ -160,82 +312,66 @@ namespace Ser.ConAai
             {
                 logger.Debug("ExecuteFunction was called");
                 Thread.Sleep(200);
-                var functionRequestHeaderStream = context.RequestHeaders.SingleOrDefault(header => header.Key == "qlik-functionrequestheader-bin");
-                if (functionRequestHeaderStream == null)
-                    throw new Exception("ExecuteFunction called without Function Request Header in Request Headers.");
 
-                var functionRequestHeader = new FunctionRequestHeader();
-                functionRequestHeader.MergeFrom(new CodedInputStream(functionRequestHeaderStream.ValueBytes));
+                //Read function header
+                var functionHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<FunctionRequestHeader>();
 
+                //Read common header
                 var commonHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<CommonRequestHeader>();
-                logger.Info($"request from user: {commonHeader.UserId} for AppId: {commonHeader.AppId}");
-                var domainUser = new DomainUser(commonHeader.UserId);
-                logger.Debug($"DomainUser: {domainUser.ToString()}");
 
-                var userParameter = new UserParameter()
-                {
-                    AppId = commonHeader.AppId,
-                    DomainUser = domainUser,
-                    WorkDir = PathUtils.GetFullPathFromApp(onDemandConfig.WorkingDir),
-                };
+                //Set appid
+                logger.Info($"Qlik AppId from header: {commonHeader?.AppId}");
+                var activeAppId = commonHeader?.AppId;
+
+                //Set qlik user
+                logger.Debug($"Qlik DomainUser from header: {commonHeader?.UserId}");
+                var domainUser = new DomainUser(commonHeader?.UserId);
 
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
 
-                var result = new OnDemandResult() { Status = 0 };
+                var statusResult = new OnDemandResult() { Status = 0 };
                 var row = GetParameter(requestStream);
                 var json = GetParameterValue(0, row);
 
-                var functionCall = (SerFunction)functionRequestHeader.FunctionId;
+                var functionCall = (SerFunction)functionHeader.FunctionId;
                 logger.Debug($"Function id: {functionCall}");
-                dynamic jsonObject;
+
+                //Check rest service health
+                CheckRestService();
 
                 //Caution: Personal//Me => Desktop Mode
-                ActiveTask activeTask = null;
-                if (userParameter.DomainUser.UserId == "sa_scheduler" &&
-                    userParameter.DomainUser.UserDirectory == "INTERNAL")
+                if (domainUser?.UserId == "sa_scheduler" && domainUser?.UserDirectory == "INTERNAL")
                 {
                     try
                     {
-                        //In Doku mit aufnehmen / Security rule für Task User ser_scheduler
-                        userParameter.DomainUser = new DomainUser("INTERNAL\\ser_scheduler");
-                        activeTask = taskManager.CreateTask(userParameter);
-                        logger.Debug($"scheduler task: {activeTask.Id}");
-                        var tmpsession = taskManager.GetSession(onDemandConfig.Connection, activeTask);
-                        var qrshub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
-                        var qrsResult = qrshub.SendRequestAsync($"app/{userParameter.AppId}", HttpMethod.Get).Result;
-                        logger.Trace($"appResult:{qrsResult}");
-                        dynamic jObject = JObject.Parse(qrsResult);
-                        string userDirectory = jObject?.owner?.userDirectory ?? null;
-                        string userId = jObject?.owner?.userId ?? null;
-                        if (String.IsNullOrEmpty(userDirectory) || String.IsNullOrEmpty(userId))
-                            logger.Warn($"No user directory {userDirectory} or user id {userId} found.");
-                        else
-                        {
-                            userParameter.DomainUser = new DomainUser($"{userDirectory}\\{userId}");
-                            logger.Debug($"New DomainUser: {userParameter.DomainUser.ToString()}");
-                        }
-
-                        lock (this)
-                        {
-                            taskManager.RemoveTask(activeTask.Id);
-                        }
+                        logger.Debug($"Qlik Service user: {domainUser.ToString()}");
+                        domainUser = new DomainUser("INTERNAL\\ser_scheduler");
+                        logger.Debug($"Change to ser service user: {domainUser.ToString()}");
+                        var tmpsession = sessionManager.GetSession(onDemandConfig.Connection, domainUser, activeAppId);
+                        if (tmpsession == null)
+                            throw new Exception("No session cookie generated. (Qlik Task)");
+                        var qrsHub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
+                        domainUser = await GetAppOwner(qrsHub, activeAppId);
+                        if (domainUser == null)
+                            throw new Exception("The owner of the could not found.");
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, "could not switch the task user.");
+                        logger.Error(ex, "Could not switch the task user to real qlik user.");
                     }
                 }
 
-                string taskId = null;
+                Guid? taskId = null;
                 string versions = null;
                 string tasks = null;
                 string log = null;
+                dynamic jsonObject;
 
                 switch (functionCall)
                 {
                     case SerFunction.START:
                         logger.Trace("Create report start");
-                        result = CreateReport(userParameter, json);
+                        statusResult = CreateReport(domainUser, activeAppId, json);
                         logger.Trace("Create report end");
                         break;
                     case SerFunction.STATUS:
@@ -250,35 +386,41 @@ namespace Ser.ConAai
                             log = jsonObject.log ?? null;
                         }
 
-                        var statusResult = new OnDemandResult()
-                        {
-                            Status = 0,
-                        };
-
                         if (versions == "all")
-                            statusResult.Versions = onDemandConfig.PackageVersions;
-
-                        if (!String.IsNullOrEmpty(taskId))
                         {
-                            activeTask = taskManager.GetRunningTask(taskId);
-                            if (activeTask != null)
+                            logger.Debug("Status - Read all versions.");
+                            statusResult.Versions = onDemandConfig.PackageVersions;
+                        }
+
+                        if (tasks == "all")
+                        {
+                            logger.Debug("Status - Get all tasks.");
+                            var activeTasks = runningTasks.Values?.ToArray().ToList() ?? new List<ActiveTask>();
+                            statusResult.Tasks = GetAllowedTasks(activeTasks, domainUser, activeAppId).Result;
+                        }
+                        else if (taskId.HasValue)
+                        {
+                            logger.Debug($"Status - Get task status from id {taskId.Value}.");
+                            var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId.Value);
+                            if (currentTask.Value != null)
                             {
-                                if (tasks == "all")
-                                {
-                                    var session = activeTask.Session;
-                                    statusResult.Tasks = taskManager.GetAllTasksForUser(session?.ConnectUri,
-                                                                                        session?.Cookie, activeTask.UserId);
-                                }
-                                statusResult.Status = activeTask.Status;
-                                statusResult.Log = activeTask.Message;
-                                statusResult.Distribute = activeTask.Distribute;
+                                statusResult.Distribute = currentTask.Value.Distribute;
+                                statusResult.Status = currentTask.Value.Status;
+                                statusResult.Log = currentTask.Value.Message;
                             }
                             else
-                                logger.Debug($"No existing task id {taskId} found.");
+                            {
+                                logger.Debug($"Status - No task id in task {taskId.Value} pool found.");
+                                statusResult.Status = 0;
+                                statusResult.Log = "Ready";
+                            }
                         }
-                        result = statusResult;
+                        else
+                        {
+                            logger.Trace("Status - No task with \"all\" or \"id\" found.");
+                        }
                         break;
-                        #endregion
+                    #endregion
                     case SerFunction.STOP:
                         #region Stop
                         json = GetNormalizeJson(json);
@@ -286,37 +428,72 @@ namespace Ser.ConAai
                         {
                             jsonObject = JObject.Parse(json) ?? null;
                             taskId = jsonObject?.taskId ?? null;
-                        }
-                        activeTask = taskManager.GetRunningTask(taskId);
-                        if (activeTask == null)
-                        {
-                            //Alle Prozesse zur AppId beenden
-                            logger.Debug($"Stop all processes for app id {userParameter.AppId}");
-                        }
-                        else
-                        {
-                            activeTask.Status = 0;
-                            FinishTask(userParameter, activeTask);
+                            tasks = jsonObject.tasks ?? null;
                         }
 
-                        result = new OnDemandResult() { Status = activeTask.Status };
+                        if (tasks == "all")
+                        {
+                            logger.Debug("Stop - All tasks.");
+                            statusResult.Log = "Stop all tasks.";
+                            if (runningTasks.Count == 0)
+                                logger.Warn("No Tasks to stop");
+
+                            foreach (var runningTask in runningTasks)
+                            {
+                                if (runningTask.Value?.Stoppable ?? false)
+                                {
+                                    runningTask.Value?.CancelSource?.Cancel();
+                                    var stopResult = restClient.StopTasksAsync(runningTask.Value.Id).Result;
+                                    if (stopResult.Success.Value)
+                                    {
+                                        runningTask.Value.Message = "The Task was stopped by user.";
+                                        runningTask.Value.Status = 4;
+                                        runningTask.Value.Stopped = true;
+                                        FinishTask(runningTask.Value);
+                                    }
+                                    else
+                                    {
+                                        logger.Debug("All tasks could not stopped.");
+                                        statusResult.Log = "All tasks could not stopped.";
+                                    }
+                                }
+                            }
+                        }
+                        else if (taskId.HasValue)
+                        {
+                            var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId.Value);
+                            if (currentTask.Value != null)
+                            {
+                                currentTask.Value?.CancelSource?.Cancel();
+                                var stopResult = restClient.StopTasksAsync(currentTask.Value.Id).Result;
+                                if (stopResult.Success.Value)
+                                    logger.Debug($"The task {currentTask.Value.Id} was stopped.");
+                                else
+                                    logger.Debug($"The task {currentTask.Value.Id} could not stopped.");
+                                FinishTask(currentTask.Value);
+                                statusResult.Log = $"Task {currentTask.Value?.Id} was stoppt.";
+                                currentTask.Value.Stopped = true;
+                                currentTask.Value.Status = 4;
+                            }
+                        }
+                        statusResult.Status = 4;
                         break;
-                         #endregion
+                    #endregion
                     default:
-                        throw new Exception($"Unknown function id {functionRequestHeader.FunctionId}.");
+                        throw new Exception($"Unknown function id {functionHeader.FunctionId}.");
                 }
 
-                logger.Debug($"Result: {result}");
-                await responseStream.WriteAsync(GetResult(result));
+                logger.Trace($"Qlik status result: {JsonConvert.SerializeObject(statusResult)}");
+                await responseStream.WriteAsync(GetResult(statusResult));
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "ExecuteFunction has errors");
+                logger.Error(ex, $"ExecuteFunction - {ex.Message}");
                 await responseStream.WriteAsync(GetResult(new OnDemandResult()
                 {
-                    Log = ex.ToString(),
+                    Log = ex.Message,
                     Status = -1
-                })); 
+                }));
             }
             finally
             {
@@ -326,395 +503,372 @@ namespace Ser.ConAai
         #endregion
 
         #region Private Functions
-        private OnDemandResult CreateReport(UserParameter parameter, string json)
+        private OnDemandResult CreateReport(DomainUser qlikUser, string appId, string json)
         {
             ActiveTask activeTask = null;
-            var currentWorkingDir = String.Empty;
+            SessionInfo qlikSession = null;
 
             try
             {
-                var id = new DirectoryInfo(parameter.WorkDir).Name;
-                if (!Guid.TryParse(id, out var result))
-                {
-                    if (activeTask == null)
-                        activeTask = taskManager.CreateTask(parameter);
+                logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
+                logger.Info($"<user>{qlikUser.ToString()}</user>");
 
-                    currentWorkingDir = Path.Combine(parameter.WorkDir, activeTask.Id);
-                    Directory.CreateDirectory(currentWorkingDir);
-                    logger.Debug($"New Task-ID: {activeTask.Id}");
-                }
+                activeTask = new ActiveTask()
+                {
+                    Id = Guid.NewGuid(),
+                    CancelSource = new CancellationTokenSource(),
+                    Status = 1,
+                    Session = qlikSession,
+                    StartTime = DateTime.Now
+                };
+
+                MappedDiagnosticsLogicalContext.Set("jobId", activeTask.Id.ToString());
+
+                //task to list
+                runningTasks.TryAdd(activeTask.Id, activeTask);
+
+                //get qlik session over jwt
+                logger.Debug("Get qlik session over jwt.");
+                qlikSession = sessionManager.GetSession(onDemandConfig.Connection, qlikUser, appId);
+                if (qlikSession == null)
+                    throw new Exception("No session cookie generated (check qmc settings or connector config).");
+
+                //connect to qlik app
+                logger.Debug("Connect to Qlik over websocket.");
+                var fullConnectionConfig = new ConnectionConfig
+                {
+                    App = qlikSession.AppId,
+                    ServerUri = onDemandConfig.Connection.ServerUri,
+                    Credentials = new SerCredentials()
+                    {
+                        Type = QlikCredentialType.SESSION,
+                        Key = qlikSession.Cookie.Name,
+                        Value = qlikSession.Cookie.Value
+                    }
+                };
+                var qlikConnection = ConnectionManager.NewConnection(fullConnectionConfig);
+                if (qlikConnection == null)
+                    throw new Exception("No Websocket connection to Qlik.");
                 else
                 {
-                    activeTask = taskManager.GetRunningTask(id);
-                    logger.Debug($"Running Task-ID: {activeTask.Id}");
-                    currentWorkingDir = parameter.WorkDir;
+                    qlikSession.QlikConn = qlikConnection;
+                    activeTask.Session = qlikSession;
                 }
 
-                logger.Debug($"TempFolder: {currentWorkingDir}");
-                activeTask.WorkingDir = currentWorkingDir;
-
-               //check for task is already running
-               var task = taskManager.GetRunningTask(activeTask.Id);
-                if (task != null)
+                //create full engine config
+                logger.Debug("Create ser engine full config");
+                var newEngineConfig = CreateEngineConfig(qlikSession, json);
+                foreach (var configTask in newEngineConfig.Tasks)
                 {
-                    if (task.Status == 1 || task.Status == 2)
+                    foreach (var configReport in configTask.Reports)
                     {
-                        logger.Debug("Session ist already running.");
-                        return new OnDemandResult() { TaskId = activeTask.Id };
+                        //Important: Add bearer connection as last connection item.
+                        var firstConnection = configReport?.Connections?.FirstOrDefault() ?? null;
+                        if (firstConnection != null)
+                        {
+                            logger.Debug("Create bearer connection.");
+                            var newBearerConnection = CreateConnection(QlikCredentialType.HEADER, qlikSession, firstConnection.App);
+                            configReport.Connections.Add(newBearerConnection);
+                        }
+
+                        //Read content from lib and content libary
+                        logger.Debug("Get template data from qlik.");
+                        var uploadsteam = FindTemplatePath(qlikSession, configReport.Template);
+                        logger.Debug("Upload template data to rest service.");
+                        var serfilename = Path.GetFileName(configReport.Template.Input);
+                        var uploadResult = restClient.UploadAsync(serfilename, false, uploadsteam).Result;
+                        if (uploadResult.Success.Value)
+                        {
+                            logger.Debug($"Upload {uploadResult.OperationId.ToString()} successfully.");
+                            activeTask.FileUploadIds.Add(uploadResult.OperationId.Value);
+                        }
+                        else
+                            logger.Warn($"The Upload was failed. - Error: {uploadResult?.Error}");
+                        uploadsteam.Close();
                     }
                 }
 
-                //get a session and websocket connection
-                var session = taskManager.GetSession(onDemandConfig.Connection, activeTask, CreateNewCookie);
-                if (session == null)
-                {
-                    SoftDelete(currentWorkingDir);
-                    Program.Service?.CheckQlikConnection();
-                    throw new Exception("No session cookie generated.");
-                }
-
-                parameter.ConnectCookie = session?.Cookie;
-                parameter.SocketConnection = QlikWebsocket.CreateNewConnection(session);
-                if (parameter.SocketConnection == null)
-                    throw new Exception("No Websocket connection to Qlik.");
-
-                CreateNewCookie = false;
-                activeTask.Status = 1;
-
-                //get engine config
-                var newEngineConfig = GetNewJson(parameter, json, currentWorkingDir);
-                parameter.CleanupTimeout = newEngineConfig.Tasks.FirstOrDefault()
-                                           .Reports.FirstOrDefault().General.CleanupTimeOut * 1000;
-
-                //Save template from content libary
-                FindTemplatePaths(parameter, newEngineConfig, currentWorkingDir);
-
-                //Save config for SER engine
-                var savePath = Path.Combine(currentWorkingDir, "job.json");
-                logger.Debug($"Save SER config file \"{savePath}\"");
-                var settings = new JsonSerializerSettings()
-                {
-                    DefaultValueHandling = DefaultValueHandling.Ignore,
-                    Formatting = Formatting.Indented,
-                };
-                var serConfig = JsonConvert.SerializeObject(newEngineConfig, settings);
-                File.WriteAllText(savePath, serConfig, Encoding.UTF8);
+                //Append Upload ids on config
+                var jobJson = JObject.FromObject(newEngineConfig);
+                jobJson = AppendUploadGuids(jobJson, activeTask.FileUploadIds);
+                activeTask.JobJson = jobJson;
 
                 //Use the connector in the same App, than wait for data reload
-                var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)?.SelectMany(r => r.Connections)?.FirstOrDefault(c => c.App == parameter.AppId) ?? null;
-                Task.Run(() => WaitForDataLoad(activeTask, parameter, session, scriptConnection?.App, scriptConnection?.RetryTimeout ?? 0));
+                var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)?.SelectMany(r => r.Connections)?.FirstOrDefault(c => c.App == qlikSession.AppId) ?? null;
+                Task.Run(() => WaitForDataLoad(activeTask, qlikSession, scriptConnection));
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
             }
             catch (Exception ex)
             {
-                var task = taskManager.GetRunningTask(activeTask.Id);
-                if (task != null)
-                    task.Status = -1;
-                if (task.Session == null)
-                    task.Status = -2;
-                task.Message = ex.Message;
-                CreateNewCookie = true;
-                task.Session.SocketSession?.CloseAsync()?.Wait(500);
-                task.Session.SocketSession = null;
+                if (activeTask != null)
+                {
+                    activeTask.Status = -1;
+                    activeTask.Message = ex.Message;
+                    FinishTask(activeTask);
+                }
+
+                if (qlikSession == null)
+                {
+                    activeTask.Status = -2;
+                    activeTask.Message = ex.Message;
+                }
+                else
+                    sessionManager.MakeSocketFree(activeTask?.Session ?? null);
                 logger.Error(ex, "The report could not create.");
-                FinishTask(parameter, task);
-                return new OnDemandResult() { TaskId = activeTask.Id, Status = task.Status, Log = task.Message };
+                return new OnDemandResult() { TaskId = activeTask?.Id, Status = activeTask?.Status ?? -1, Log = activeTask?.Message };
             }
         }
 
-        private void StartProcess(ActiveTask task, UserParameter parameter)
+        private JObject AppendUploadGuids(JObject jobJson, List<Guid> guidList)
         {
-            //Start SER Engine as Process
-            var currentWorkDir = Path.Combine(parameter.WorkDir, task.Id);
-            var enginePath = PathUtils.GetFullPathFromApp(onDemandConfig.SerEnginePath);
-            logger.Debug($"Start Engine \"{enginePath}\"...");
-            var serProcess = new Process();
-            serProcess.StartInfo.FileName = "dotnet";
-            serProcess.StartInfo.Arguments = $"{enginePath} --workdir \"{currentWorkDir}\"";
-            serProcess.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
-            serProcess.Start();
-            task.ProcessId = serProcess.Id;
-
-            //Write process file
-            var procFileName = $"{Path.GetFileNameWithoutExtension(serProcess.StartInfo.FileName)}.pid";
-            File.WriteAllText(Path.Combine(currentWorkDir, procFileName),
-                              $"{serProcess.Id.ToString()}|{parameter.AppId.ToString()}|{parameter.DomainUser.ToString()}");
-
-            var statusThread = new Thread(() => CheckStatus(parameter, task))
-            {
-                IsBackground = true
-            };
-            statusThread.Start();
+            var jarray = new JArray();
+            foreach (var guidItem in guidList)
+                jarray.Add(guidItem.ToString());
+            var uploadGuids = new JProperty("uploadGuids", jarray);
+            jobJson.Last.AddAfterSelf(uploadGuids);
+            return jobJson;
         }
 
-        private void WaitForDataLoad(ActiveTask task, UserParameter parameter, SessionInfo session, string scriptApp, int timeout)
+        private void WaitForDataLoad(ActiveTask task, SessionInfo session, Ser.Api.SerConnection configConn)
         {
-            var dataloadCheck = ScriptCheck.DataLoadCheck(onDemandConfig.Connection.ServerUri, scriptApp, parameter, session, timeout);
+            var scriptApp = configConn?.App;
+            var timeout = configConn?.RetryTimeout ?? 0;
+            var dataloadCheck = ScriptCheck.DataLoadCheck(onDemandConfig.Connection.ServerUri, scriptApp, session, timeout);
             if (dataloadCheck)
             {
-                logger.Debug("Start the engine.");
-                StartProcess(task, parameter);
+                logger.Debug("Start task on rest service.");
+                var jobJson = task.JobJson.ToString();
+                var createTaskResult = restClient.CreateTaskWithIdAsync(task.Id, jobJson).Result;
+                if (createTaskResult.Success.Value)
+                {
+                    logger.Debug($"Task was started {createTaskResult?.OperationId}.");
+                    var statusThread = new Thread(() => CheckStatus(task))
+                    {
+                        IsBackground = true
+                    };
+                    statusThread.Start();
+                }
+                else
+                {
+                    logger.Debug($"The task was failed - Error: {createTaskResult?.Error}.");
+                    throw new Exception($"Task error: {createTaskResult?.Error}");
+                }
             }
             else
-                logger.Debug("Dataload failed.");
+                logger.Debug("Dataload check failed.");
         }
 
-        private bool KillProcess(int id)
+        private Stream FindTemplatePath(SessionInfo session, SerTemplate template)
+        {
+            var result = UriUtils.NormalizeUri(template.Input);
+            var templateUri = result.Item1;
+            if (templateUri.Scheme.ToLowerInvariant() == "content")
+            {
+                var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, session.AppId, session.QlikConn.CurrentApp, result.Item2);
+                logger.Debug($"File count in content library: {contentFiles?.Count}");
+                var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(templateUri.AbsolutePath));
+                if (filterFile != null)
+                {
+                    var data = DownloadFile(filterFile, session.Cookie);
+                    template.Input = Path.GetFileName(filterFile);
+                    return new MemoryStream(data);
+                }
+                else
+                    throw new Exception($"No file in app library found.");
+            }
+            else if (templateUri.Scheme.ToLowerInvariant() == "lib")
+            {
+                var connUrl = session.QlikConn.CurrentApp.GetConnectionsAsync()
+                    .ContinueWith<string>((connections) =>
+                    {
+                        var libResult = connections.Result.FirstOrDefault(n => n.qName.ToLowerInvariant() == result.Item2) ?? null;
+                        if (libResult == null)
+                            return null;
+                        var libPath = libResult?.qConnectionString?.ToString();
+                        var relPath = templateUri?.LocalPath?.TrimStart(new char[] { '\\', '/' })?.Replace("/", "\\");
+                        if (relPath == null)
+                            return null;
+                        return $"{libPath}{relPath}";
+                    }).Result;
+
+                if (connUrl == null)
+                    throw new Exception($"No path in content library found.");
+                else
+                {
+                    template.Input = Path.GetFileName(connUrl);
+                    return File.OpenRead(connUrl);
+                }
+            }
+            else
+            {
+                throw new Exception($"Unknown Scheme in Filename Uri {template.Input}.");
+            }
+        }
+
+        private byte[] DownloadFile(string relUrl, Cookie cookie)
+        {
+            using (var webClient = new WebClient())
+            {
+                webClient.Headers.Add(HttpRequestHeader.Cookie, $"{cookie.Name}={cookie.Value}");
+                return webClient.DownloadData($"{onDemandConfig.Connection.ServerUri.AbsoluteUri}{relUrl}");
+            }
+        }
+
+        private SerConnection CreateConnection(QlikCredentialType type, SessionInfo session, string dataAppId = null)
         {
             try
             {
-                var process = GetProcess(id);
-                if (process != null)
+                logger.Debug("Create new connection.");
+                var mainConnection = onDemandConfig.Connection;
+                var token = sessionManager.GetToken(session.User, mainConnection, TimeSpan.FromMinutes(30));
+                logger.Debug($"Bearer Token: {token}");
+
+                var conn = new SerConnection()
                 {
-                    logger.Debug($"Stop Process with ID: {process?.Id} and Name: {process?.ProcessName}");
-                    process?.Kill();
-                    Thread.Sleep(1000);
+                    ServerUri = mainConnection.ServerUri,
+                };
+
+                switch (type)
+                {
+                    case QlikCredentialType.JWT:
+                    case QlikCredentialType.HEADER:
+                        conn.Credentials = new SerCredentials()
+                        {
+                            Type = type,
+                            Key = "Authorization",
+                            Value = $"Bearer { token }"
+                        };
+                        break;
+                    case QlikCredentialType.SESSION:
+                        conn.Credentials = new SerCredentials()
+                        {
+                            Type = type,
+                            Key = session.Cookie?.Name ?? null,
+                            Value = session.Cookie?.Value ?? null
+                        };
+                        break;
+                    case QlikCredentialType.CERTIFICATE:
+                        conn.Credentials = new SerCredentials()
+                        {
+                            Type = type,
+                            Cert = onDemandConfig?.Connection?.Credentials?.Cert ?? null
+                        };
+                        break;
+                    default:
+                        logger.Error("Unknown connection type.");
+                        break;
                 }
 
-                return true;
+                if (!String.IsNullOrEmpty(dataAppId))
+                    conn.App = dataAppId;
+
+                return conn;
             }
             catch (Exception ex)
             {
-                logger.Error(ex);
-                return false;
-            }
-        }
-
-        private Process GetProcess(int id)
-        {
-            try
-            {
-                return Process.GetProcesses()?.FirstOrDefault(p => p.Id == id) ?? null;
-            }
-            catch
-            {
+                logger.Error(ex, "The bearer connection could not create.");
                 return null;
             }
         }
 
-        private void RestoreTasks()
+        private SerConfig CreateEngineConfig(SessionInfo session, string userJson)
         {
-            logger.Debug("Check for reload tasks");
-            var tempFolder = PathUtils.GetFullPathFromApp(onDemandConfig.WorkingDir);
-            var tempFolders = Directory.GetDirectories(tempFolder);
-            foreach (var folder in tempFolders)
-            {
-                var files = Directory.GetFiles(folder, "*.*", SearchOption.AllDirectories);
-                if (files.Length > 0)
-                {
-                    //find pid
-                    var pidFile = files.Where(f => f.EndsWith(".pid")).FirstOrDefault();
-                    if (pidFile != null)
-                    {
-                        var contentArray = File.ReadAllText(pidFile).Trim().Split('|');
-                        if (contentArray.Length == 3)
-                        {
-                            logger.Debug($"Reload Task from folder {folder}");
-                            var pId = Convert.ToInt32(contentArray[0]);
-                            var parameter = new UserParameter()
-                            {
-                                AppId = contentArray[1],
-                                DomainUser = new DomainUser(contentArray[2]),
-                                WorkDir = folder,
-                            };
-
-                            var jobJsonFile = files.Where(f => f.EndsWith("userJson.hjson")).FirstOrDefault();
-                            var json = File.ReadAllText(jobJsonFile);
-
-                            //Remove Result file for distribute
-                            var resultFile = files.Where(f => f.Contains("\\result_") && f.EndsWith(".json")).FirstOrDefault() ?? null;
-                            if (resultFile != null)
-                                SoftDelete(Path.GetDirectoryName(resultFile));
-
-                            CreateReport(parameter, json);
-                        }
-                        else
-                        {
-                            logger.Debug($"The content of the process file {pidFile} is invalid.");
-                        }
-                    }
-                    else
-                    {
-                        logger.Debug($"No process file in folder {folder} found.");
-                    }
-                }
-                else
-                {
-                    Directory.Delete(folder);
-                }
-            }
-        }
-
-        private void FindTemplatePaths(UserParameter parameter, SerConfig config, string workDir)
-        {
-            var cookie = parameter.ConnectCookie;
-            foreach (var task in config.Tasks)
-            {
-                var report = task.Reports.FirstOrDefault() ?? null;
-                var result = UriUtils.NormalizeUri(report.Template.Input);
-                var templateUri = result.Item1;
-                if (templateUri.Scheme.ToLowerInvariant() == "content")
-                {
-                    var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, parameter.AppId, parameter.SocketConnection, result.Item2);
-                    logger.Debug($"File count in content library: {contentFiles?.Count}");
-                    var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(templateUri.AbsolutePath));
-                    if (filterFile != null)
-                    {
-                        var savePath = DownloadFile(filterFile, workDir, cookie);
-                        report.Template.Input = Path.GetFileName(savePath);
-                    }
-                    else
-                        throw new Exception($"No file in content library found.");
-                }
-                else if (templateUri.Scheme.ToLowerInvariant() == "lib")
-                {
-                    var connUrl = parameter.SocketConnection.GetConnectionsAsync()
-                        .ContinueWith<string>((connections) =>
-                        {
-                            var libResult = connections.Result.FirstOrDefault(n => n.qName.ToLowerInvariant() == result.Item2) ?? null;
-                            if (libResult == null)
-                                return null;
-                            var libPath = libResult?.qConnectionString?.ToString();
-                            var relPath = templateUri?.LocalPath?.TrimStart(new char[] { '\\', '/' })?.Replace("/", "\\");
-                            if (relPath == null)
-                                return null;
-                            return $"{libPath}{relPath}";
-                        }).Result;
-
-                    if (connUrl == null)
-                        throw new Exception($"No path in connection library found.");
-                    else
-                        report.Template.Input = connUrl; 
-                }
-                else
-                {
-                    throw new Exception($"Unknown Scheme in Filename Uri {report.Template.Input}.");
-                }
-            }
-        }
-
-        private string DownloadFile(string relUrl, string workdir, Cookie cookie)
-        {
-            var savePath = Path.Combine(workdir, Path.GetFileName(relUrl));
-            var webClient = new WebClient();
-            webClient.Headers.Add(HttpRequestHeader.Cookie, $"{cookie.Name}={cookie.Value}");
-            webClient.DownloadFile($"{onDemandConfig.Connection.ServerUri.AbsoluteUri}{relUrl}", savePath);
-            return savePath;
-        }
-
-        private SerConfig GetNewJson(UserParameter parameter, string userJson, string workdir)
-        {
-            //Bearer Connection
-            var mainConnection = onDemandConfig.Connection;
-            logger.Debug("Create Bearer Connection");
-            var token = taskManager.GetToken(parameter.DomainUser, mainConnection, TimeSpan.FromMinutes(30));
-            logger.Debug($"Token: {token}");
-            
-            if (mainConnection.Credentials != null)
-            {
-                var cred = mainConnection.Credentials;
-                cred.Type = QlikCredentialType.SESSION;
-                cred.Value = parameter.ConnectCookie.Value;
-                parameter.PrivateKeyPath = cred.PrivateKey;
-            }
-
-            if (!userJson.ToLowerInvariant().Contains("reports:") && 
+            //Make full user json
+            logger.Debug("Auto replacement to normal hjson structure.");
+            if (!userJson.ToLowerInvariant().Contains("reports:") &&
                 !userJson.ToLowerInvariant().Contains("\"reports\":"))
                 userJson = $"reports:[{{{userJson}}}]";
 
-            if (!userJson.ToLowerInvariant().Contains("tasks:") && 
+            if (!userJson.ToLowerInvariant().Contains("tasks:") &&
                 !userJson.ToLowerInvariant().Contains("\"tasks\":"))
                 userJson = $"tasks:[{{{userJson}}}]";
 
             if (!userJson.Trim().StartsWith("{"))
                 userJson = $"{{{userJson}";
+
             if (!userJson.Trim().EndsWith("}"))
                 userJson = $"{userJson}}}";
 
-            logger.Trace($"Parse user json: {userJson}");
+            logger.Trace($"Parse user hjson: {userJson}");
             var jsonConfig = GetNormalizeJson(userJson);
-            var serConfig = JObject.Parse(jsonConfig);
+            if (jsonConfig == null)
+                logger.Error("Could not normalize user json content.");
+            dynamic serJsonConfig = JObject.Parse(jsonConfig);
 
-            dynamic configConnection = JObject.Parse(JsonConvert.SerializeObject(mainConnection, Formatting.Indented));
-            configConnection.credentials.cert = null;
-            configConnection.credentials.privateKey = null;
-
-            logger.Debug("search for connections.");
-            var tasks = serConfig["tasks"]?.ToList() ?? null;
+            logger.Debug("Search for connections.");
+            var tasks = serJsonConfig?.tasks ?? new JArray();
             foreach (var task in tasks)
             {
-                var reports = task["reports"]?.ToList() ?? null;
+                var reports = task?.reports ?? new JArray();
                 foreach (var report in reports)
                 {
-                    var userConnections = report["connections"].ToList();
+                    var userConnections = new JArray();
+                    JToken connections = report?.connections;
+                    if (connections.Type == JTokenType.Object)
+                        userConnections.Add(report?.connections);
+                    else if (connections.Type == JTokenType.Array)
+                        userConnections = report?.connections;
+                    else
+                        logger.Error("No valid connection type.");
                     var newUserConnections = new List<JToken>();
-                    var currentApp = String.Empty;
-                    foreach (var userConnection in userConnections)
+                    for (int i = 0; i < userConnections.Count; i++)
                     {
-                        var cvalue = userConnection.ToString();
-                        if (!cvalue.StartsWith("{"))
-                            cvalue = $"{{{cvalue}}}";
-                        var currentConnection = JObject.Parse(cvalue);
-                        //merge connections / config <> script
-                        currentConnection.Merge(configConnection);
-                        newUserConnections.Add(currentConnection);
-                        currentApp = (currentConnection as dynamic)?.app ?? null;
-                    }
-                    //Important: The bearer connection must be added as last.
-                    var bearerSerConnection = new SerConnection()
-                    {
-                        App = currentApp,
-                        ServerUri = onDemandConfig.Connection.ServerUri,
-                        Credentials = new SerCredentials()
+                        var mergeConnection = userConnections[i] as JObject;
+                        var credType = onDemandConfig?.Connection?.Credentials?.Type ?? QlikCredentialType.JWT;
+                        var connectorConnection = JObject.FromObject(CreateConnection(credType, session));
+                        connectorConnection.Merge(mergeConnection, new JsonMergeSettings()
                         {
-                            Type = QlikCredentialType.HEADER,
-                            Key = "Authorization",
-                            Value = $"Bearer { token }",
-                        },
-                    };
-                    var bearerConnection = JToken.Parse(JsonConvert.SerializeObject(bearerSerConnection, Formatting.Indented));
-                    logger.Debug("serialize config connection.");
-                    newUserConnections.Add(bearerConnection);
+                            MergeNullValueHandling = MergeNullValueHandling.Ignore
+                        });
+                        newUserConnections.Add(connectorConnection);
+                    }
 
-                    report["connections"] = new JArray(newUserConnections);
-                    var distribute = report["distribute"];
+                    report.connections = new JArray(newUserConnections);
+                    JObject distribute = report.distribute;
                     var children = distribute?.Children().Children()?.ToList() ?? new List<JToken>();
-                    foreach (var child in children)
+                    foreach (dynamic child in children)
                     {
-                        var connection = child["connections"] ?? null;
+                        var connection = child.connections ?? null;
                         if (connection?.ToString() == "@CONFIGCONNECTION@")
-                            child["connections"] = newUserConnections.FirstOrDefault();
-                        var childProp = child.Parent as JProperty;
+                            child.connections = new JArray(newUserConnections);
+                        var childProp = (child as JObject).Parent as JProperty;
                         if (childProp?.Name == "hub")
                         {
-                            var hubOwner = child["owner"] ?? null;
+                            var hubOwner = child.owner ?? null;
                             if (hubOwner == null)
-                                child["owner"] = parameter.DomainUser.ToString();
+                                child.owner = session.User.ToString();
                         }
                     }
 
-                    if (!String.IsNullOrEmpty(parameter.PrivateKeyPath))
+                    var privateKey = onDemandConfig?.Connection?.Credentials?.PrivateKey ?? null;
+                    if (!String.IsNullOrEmpty(privateKey))
                     {
-                        var path = PathUtils.GetFullPathFromApp(parameter.PrivateKeyPath);
-                        var crypter = new TextCrypter(path);
-                        var value = report["template"]["outputPassword"] ?? null;
-                        if (value != null)
+                        // For file access
+                        lock (threadObject)
                         {
-                            var password = value.Value<string>();
-                            if (Convert.TryFromBase64String(password, new Span<byte>(), out var base64Result))
-                                report["template"]["outputPassword"] = crypter.DecryptText(password);
-                            else
-                                report["template"]["outputPassword"] = password;
+                            var path = SerUtilities.GetFullPathFromApp(privateKey);
+                            var crypter = new TextCrypter(path);
+                            var value = report?.template?.outputPassword ?? null;
+                            if (value != null)
+                            {
+                                string password = value.Value<string>();
+                                if (Convert.TryFromBase64String(password, new Span<byte>(), out var base64Result))
+                                    report.template.outputPassword = crypter.DecryptText(password);
+                                else
+                                    report.template.outputPassword = password;
+                            }
                         }
                     }
                 }
             }
 
-            var qlikResolver = new QlikResolver(parameter.SocketConnection);
-            serConfig = qlikResolver.Resolve(serConfig);
-            var result = JsonConvert.DeserializeObject<SerConfig>(serConfig.ToString());
-            return result;
+            //Resolve prefixes
+            var qlikResolver = new QlikResolver(session.QlikConn.CurrentApp);
+            serJsonConfig = qlikResolver.Resolve(serJsonConfig);
+            var serConfiguration = JsonConvert.DeserializeObject<SerConfig>(serJsonConfig.ToString());
+            return serConfiguration;
         }
+
 
         private List<string> GetLibraryContentInternal(IDoc app, string qName)
         {
@@ -723,18 +877,18 @@ namespace Ser.ConAai
         }
 
         private List<string> GetLibraryContent(Uri serverUri, string appId, IDoc app, string contentName = "")
-        {            
+        {
             try
             {
                 var results = new List<string>();
                 var readItems = new List<string>() { contentName };
                 if (String.IsNullOrEmpty(contentName))
                 {
-                    // search for all App Specific ContentLibraries                    
+                    // search for all App Specific ContentLibraries
                     var libs = app.GetContentLibrariesAsync().Result;
                     readItems = libs.qItems.Where(s => s.qAppSpecific == true).Select(s => s.qName).ToList();
                 }
-                    
+
                 foreach (var item in readItems)
                 {
                     var qUrls = GetLibraryContentInternal(app, item);
@@ -782,80 +936,213 @@ namespace Ser.ConAai
             return resultBundle;
         }
 
-        private void CheckStatus(UserParameter parameter, ActiveTask task)
+        private byte[] GetStreamBuffer(Engine.Rest.Client.FileResponse result)
         {
+            List<byte> bufferList = new List<byte>();
+            var contentLength = result.Headers["Content-Length"].FirstOrDefault();
+            if (contentLength != null)
+            {
+                var bufferLength = Convert.ToInt32(contentLength);
+                var readLength = -1;
+                while (readLength != 0)
+                {
+                    var buffer = new byte[bufferLength];
+                    readLength = result.Stream.Read(buffer, 0, bufferLength);
+                    bufferList.AddRange(buffer.Take(readLength));
+                }
+                return bufferList.ToArray();
+            }
+            else
+            {
+                var mem = new MemoryStream();
+                result.Stream.CopyTo(mem);
+                var buffer = mem?.GetBuffer() ?? null;
+                bufferList.AddRange(buffer);
+            }
+            return bufferList.ToArray();
+        }
+
+        private void CheckStatus(ActiveTask task)
+        {
+            var cleanupPaths = new List<string>();
+
             try
             {
-                var status = 0;
+                var status = task.Status;
+                var hasResult = false;
+                var jobResults = new List<Ser.Engine.Rest.Client.JobResult>();
                 task.Message = "Build Report, Please wait...";
                 while (status != 2)
                 {
-                    Thread.Sleep(250);
-                    if (task.Status == -1 || task.Status == 0)
-                    {
-                        status = task.Status;
-                        break;
-                    }
-                    status = Status(Path.Combine(parameter.WorkDir, task.Id), task.Status);
-                    if (status == -1 || status == 0)
+                    logger.Trace("CheckStatus - Wait for finished tasks.");
+
+                    Thread.Sleep(1000);
+                    if (task.Status == -1 || task.Status == 0 || status == -1)
                         break;
 
                     if (status == 1)
                     {
-                        var serProcess = GetProcess(task.ProcessId);
-                        if (serProcess == null)
+                        var operationResult = restClient.TaskWithIdAsync(task.Id).Result;
+                        if (operationResult.Success.Value)
                         {
-                            status = -1;
-                            logger.Error("The engine process was terminated.");
-                            break;
+                            jobResults = operationResult?.Results?.ToList() ?? new List<Ser.Engine.Rest.Client.JobResult>();
+                            var runningResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ABORT).ToList();
+                            if (runningResults.Count == 0 && hasResult)
+                            {
+                                var finishResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
+                                if (finishResults.Count == jobResults.Count)
+                                    status = 2;
+                                else
+                                    status = -1;
+                            }
+                            else if (runningResults.Count > 0 || jobResults.Count(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS) == jobResults.Count)
+                            {
+                                hasResult = true;
+                            }
+                            else
+                            {
+                                var errorResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ERROR).ToList();
+                                if(errorResults.Count == jobResults.Count)
+                                    status = -1;
+                            }
+                        }
+                        else
+                        {
+                            logger.Warn("CheckStatus - The operation result of task response was false.");
                         }
                     }
                 }
 
-                //Generate Reports
+                //Status after build
+                if (task.Status == 4)
+                    throw new TaskCanceledException("The build of the report was canceled by user.");
                 task.Status = status;
                 if (status != 2)
                     throw new Exception("The report build process failed.");
-                task.Session.SocketSession?.CloseAsync()?.Wait(500);
-                task.Session.SocketSession = null;
-                task.Message = "Delivery Report, Please wait...";
+                sessionManager.MakeSocketFree(task?.Session ?? null);
+
+                //Download result files
+                var distJobresults = ConvertApiType<List<JobResult>>(jobResults);
+                foreach (var jobResult in distJobresults)
+                {
+                    var fileDataList = new List<JobResultFileData>();
+                    foreach (var jobReport in jobResult.Reports)
+                    {
+                        foreach (var path in jobReport.Paths)
+                        {
+                            var filename = Path.GetFileName(path);
+                            logger.Debug($"Download file {filename} form task {task.Id}.");
+                            var streamData = restClient.DownloadFilesAsync(task.Id, filename).Result;
+                            if (streamData != null)
+                            {
+                                var buffer = GetStreamBuffer(streamData);
+                                var fileData = new JobResultFileData()
+                                {
+                                    Filename = filename,
+                                    Data = buffer
+                                };
+                                fileDataList.Add(fileData);
+                            }
+                            else
+                                logger.Warn($"File {filename} for download not found.");
+                        }
+                    }
+                    jobResult.SetData(fileDataList);
+                }
 
                 //Delivery
-                status = StartDeliveryTool(task, parameter);
+                task.Message = "Delivery Report, Please wait...";
+                status = StartDeliveryTool(task, distJobresults);
                 task.Status = status;
-                if (status != 3)
-                    throw new Exception("The delivery process failed.");
+                switch (status)
+                {
+                    case 3:
+                        logger.Debug("The delivery was successfully.");
+                        break;
+                    case 4:
+                        throw new TaskCanceledException("The delivery was canceled by user.");
+                    default:
+                        throw new Exception("The delivery process failed.");
+                }
+            }
+            catch (TaskCanceledException ex)
+            {
+                task.Message = ex.Message;
+                task.Status = 4;
+                logger.Error(ex, "The status check was canceled by user.");
             }
             catch (Exception ex)
             {
                 task.Message = ex.Message;
+                task.Status = -1;
                 logger.Error(ex, "The status check has detected a processing error.");
             }
             finally
             {
                 //Cleanup
-                FinishTask(parameter, task);
+                sessionManager.MakeSocketFree(task?.Session ?? null);
+                FinishTask(task, cleanupPaths);
+                LogManager.Flush();
             }
         }
 
-        private void FinishTask(UserParameter parameter, ActiveTask task)
+        private T ConvertApiType<T>(object value)
+        {
+            try
+            {
+                var json = JsonConvert.SerializeObject(value);
+                return JsonConvert.DeserializeObject<T>(json);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Convert type failed.");
+                return default(T);
+            }
+        }
+
+        private void FinishTask(ActiveTask task, List<string> cleanupPaths = null)
         {
             try
             {
                 var finTask = Task
-                .Delay(parameter.CleanupTimeout)
+                .Delay(onDemandConfig.CleanupTimeout)
                 .ContinueWith((_) =>
                 {
-                    logger.Debug($"Cleanup Process, Folder and Task");
-                    if (task.Session.SocketSession != null)
+                    logger.Debug($"Cleanup Process, Folder and Socket connection.");
+                    if (runningTasks.TryRemove(task.Id, out var taskResult))
+                        logger.Debug($"Remove task {task.Id} - Successfully.");
+                    sessionManager.MakeSocketFree(task?.Session ?? null);
+                    var deleteResult = restClient.DeleteFilesAsync(task.Id).Result;
+                    if (deleteResult.Success.Value)
+                        logger.Debug($"Delete task folder {task.Id} - Successfully.");
+                    else
+                        logger.Warn($"Delete task folder {task.Id} - Failed.");
+                    foreach (var guidItem in task.FileUploadIds)
                     {
-                        task.Session.SocketSession?.CloseAsync()?.Wait(250);
-                        task.Session.SocketSession = null;
+                        deleteResult = restClient.DeleteFilesAsync(guidItem).Result;
+                        if (deleteResult.Success.Value)
+                            logger.Debug($"Delete file folder {guidItem} - Successfully.");
+                        else
+                            logger.Warn($"Delete file folder {guidItem} - Failed.");
                     }
-                    KillProcess(task.ProcessId);
-                    taskManager.RemoveTask(task.Id);
-                    SoftDelete($"{parameter.WorkDir}\\{task.Id}");
-                    logger.Debug($"Cleanup complete");
+
+                    if (cleanupPaths != null)
+                    {
+                        foreach (var cleanupPath in cleanupPaths)
+                        {
+                            try
+                            {
+                                Directory.Delete(cleanupPath, true);
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.Warn(ex, $"The folder {cleanupPath} could not remove.");
+                            }
+                        }
+                    }
+
+                    task.Status = 0;
+                    logger.Debug($"Cleanup complete.");
                 });
             }
             catch (Exception ex)
@@ -879,149 +1166,57 @@ namespace Ser.ConAai
             }
         }
 
-        private bool GetBoolean(string value)
-        {
-            if (value.ToLowerInvariant() == "true")
-                return true;
-            else if (value.ToLowerInvariant() == "false")
-                return false;
-            else
-                return Boolean.TryParse(value, out var boolResult);
-        }
-
-        private ContentData GetContentData(string fullname)
-        {
-            var contentData = new ContentData()
-            {
-                ContentType = $"application/{Path.GetExtension(fullname).Replace(".", "")}",
-                ExternalPath = Path.GetFileName(fullname),
-                FileData = File.ReadAllBytes(fullname),
-            };
-
-            return contentData;
-        }
-
-        private bool SoftDelete(string folder)
+        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
         {
             try
             {
-                if (Directory.Exists(folder))
-                {
-                    Directory.Delete(folder, true);
-                    logger.Debug($"The temp dir {folder} was deleted.");
-                }
-                return true;
-            }
-            catch (Exception ex)
-            {
-                logger.Warn(ex, $"The temp dir {folder} could not deleted.");
-                return false;
-            }
-        }
-
-        private int StartDeliveryTool(ActiveTask task, UserParameter parameter)
-        {
-            try
-            {
-                var jobResultPath = Path.Combine(parameter.WorkDir, task.Id, "JobResults");
                 var distribute = new Ser.Distribute.Distribute();
-                var privateKeyFullname = PathUtils.GetFullPathFromApp(parameter.PrivateKeyPath);
-                var result = distribute.Run(jobResultPath, privateKeyFullname);
-                task.Distribute = result;
-                return 3;
+                var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
+                var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
+                var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
+                var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
+                if (task.CancelSource.IsCancellationRequested)
+                {
+                    logger.Debug("Distribute is canceled by user.");
+                    return 4;
+                }
+                else if(result != null)
+                {
+                    logger.Debug($"Distribute result: {result}");
+                    logger.Info($"{xmlResult}");
+                    task.Distribute = result;
+                    return 3;
+                }
+                else
+                {
+                    logger.Error("The distribute has errors.");
+                    return -1;
+                }
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "The delivery tool could not start as process.");
+                logger.Error(ex, "The distribute was failed.");
                 return -1;
             }
         }
 
-        private int Status(string workDir, int sessionStatus)
+        private int Status(Ser.Engine.Rest.Client.JobResult result)
         {
-            var status = GetStatus(workDir);
-            logger.Trace($"Report status {status}");
-            switch (status)
+            logger.Trace($"The Report status is {result.Status}.");
+            switch (result.Status)
             {
-                case EngineResult.SUCCESS:
-                    return 2;
-                case EngineResult.ABORT:
+                case Engine.Rest.Client.JobResultStatus.ABORT:
                     return 1;
-                case EngineResult.ERROR:
+                case Engine.Rest.Client.JobResultStatus.SUCCESS:
+                    return 2;
+                case Engine.Rest.Client.JobResultStatus.ERROR:
                     logger.Error("No Report created (ERROR).");
                     return -1;
-                case EngineResult.WARNING:
-                    logger.Warn("No Report created (WARNING).");
+                case Engine.Rest.Client.JobResultStatus.WARNING:
+                    logger.Warn("No successfully Report created (WARNING).");
                     return -1;
                 default:
-                    return sessionStatus;
-            }
-        }
-
-        private string GetResultFile(string workDir)
-        {
-            var resultFolder = Path.Combine(workDir, "JobResults");
-            if (Directory.Exists(resultFolder))
-            {
-                var resultFiles = new DirectoryInfo(resultFolder).GetFiles("*.json", SearchOption.TopDirectoryOnly).ToList();
-                var sortFiles = resultFiles.OrderBy(f => f.LastWriteTime).Reverse();
-                return sortFiles.FirstOrDefault().FullName;
-            }
-
-            return null;
-        }
-
-        private JObject GetJsonObject(string workDir)
-        {
-            var resultFile = GetResultFile(workDir);
-            if (File.Exists(resultFile))
-            {
-                logger.Trace($"json file {resultFile} found.");
-                using (var fs = new FileStream(resultFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                {
-                    using (var sr = new StreamReader(fs, true))
-                    {
-                        var json = sr.ReadToEnd();
-                        return JsonConvert.DeserializeObject<JObject>(json);
-                    } 
-                }
-            }
-
-            logger.Trace($"json file {resultFile} not found.");
-            return null;
-        }
-
-        private string GetReportFile(string workDir, string taskId)
-        {
-            try
-            {
-                var jobject = GetJsonObject(workDir);
-                var path = jobject["reports"].FirstOrDefault()["paths"].FirstOrDefault().Value<string>() ?? null;
-                return path;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex);
-                return null;
-            }
-        }
-
-        private EngineResult GetStatus(string workDir)
-        {
-            try
-            {
-                var jobject = GetJsonObject(workDir);
-                var result = jobject?.Property("status")?.Value?.Value<string>() ?? null;
-                logger.Trace($"EngineResult: {result}");
-                if (result != null)
-                    return (EngineResult)Enum.Parse(typeof(EngineResult), result, true);
-                else
-                    return EngineResult.UNKOWN;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex);
-                return EngineResult.UNKOWN;
+                    return 0;
             }
         }
 

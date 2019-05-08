@@ -11,10 +11,6 @@
 
     public class QlikResolver
     {
-        #region Logger
-        private static Logger logger = LogManager.GetCurrentClassLogger();
-        #endregion
-
         #region Variables & Properties
         private IDoc App { get; set; }
         private JObject Json { get; set; }
@@ -41,7 +37,9 @@
             }
             else
             {
-                var value = jtoken?.Value<string>() ?? String.Empty;
+                if (jtoken.Type == JTokenType.Object)
+                    return;
+                var value = jtoken?.ToObject<string>() ?? String.Empty;
                 if (value.StartsWith("="))
                 {
                     var parent = jtoken.Parent;
