@@ -35,6 +35,8 @@ namespace Ser.ConAai
     using Q2g.HelperQlik;
     using static Qlik.Sse.Connector;
     using System.Text;
+    using YamlDotNet.Serialization;
+    using YamlDotNet.Serialization.NamingConventions;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -376,7 +378,7 @@ namespace Ser.ConAai
                         break;
                     case SerFunction.STATUS:
                         #region Status
-                        json = GetNormalizeJson(json);
+                        json = ConvertHJsonToJson(json);
                         if (json != null)
                         {
                             jsonObject = JObject.Parse(json);
@@ -423,7 +425,7 @@ namespace Ser.ConAai
                     #endregion
                     case SerFunction.STOP:
                         #region Stop
-                        json = GetNormalizeJson(json);
+                        json = ConvertHJsonToJson(json);
                         if (json != null)
                         {
                             jsonObject = JObject.Parse(json) ?? null;
@@ -773,27 +775,36 @@ namespace Ser.ConAai
 
         private SerConfig CreateEngineConfig(SessionInfo session, string userJson)
         {
-            //Make full user json
+            logger.Trace($"Parse user script: {userJson}");
+            userJson = userJson?.Trim();
+            //Parse YAML
+            logger.Trace("Parse YAML");
+            var jsonStr = ConvertYamlToJson(userJson);
+            if (jsonStr == null)
+            {
+                //Parse HJSON
+                logger.Trace("Parse HJSON");
+                jsonStr = ConvertHJsonToJson(userJson);
+            }
+
+            if (jsonStr == null)
+                throw new Exception("Could not read user script.");
+
+            //Make real JSON
             logger.Debug("Auto replacement to normal hjson structure.");
-            if (!userJson.ToLowerInvariant().Contains("reports:") &&
-                !userJson.ToLowerInvariant().Contains("\"reports\":"))
-                userJson = $"reports:[{{{userJson}}}]";
+            if (!jsonStr.ToLowerInvariant().Contains("\"reports\":"))
+                jsonStr = $"\"reports\":[{jsonStr}]";
 
-            if (!userJson.ToLowerInvariant().Contains("tasks:") &&
-                !userJson.ToLowerInvariant().Contains("\"tasks\":"))
-                userJson = $"tasks:[{{{userJson}}}]";
+            if (!jsonStr.ToLowerInvariant().Contains("\"tasks\":"))
+                jsonStr = $"\"tasks\":[{{{jsonStr}}}]";
 
-            if (!userJson.Trim().StartsWith("{"))
-                userJson = $"{{{userJson}";
+            if (!jsonStr.Trim().StartsWith("{"))
+                jsonStr = $"{{{jsonStr}";
 
-            if (!userJson.Trim().EndsWith("}"))
-                userJson = $"{userJson}}}";
+            if (!jsonStr.Trim().EndsWith("}"))
+                jsonStr = $"{jsonStr}}}";
 
-            logger.Trace($"Parse user hjson: {userJson}");
-            var jsonConfig = GetNormalizeJson(userJson);
-            if (jsonConfig == null)
-                logger.Error("Could not normalize user json content.");
-            dynamic serJsonConfig = JObject.Parse(jsonConfig);
+            dynamic serJsonConfig = JObject.Parse(jsonStr);
 
             logger.Debug("Search for connections.");
             var tasks = serJsonConfig?.tasks ?? new JArray();
@@ -1002,7 +1013,7 @@ namespace Ser.ConAai
                             else
                             {
                                 var errorResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ERROR).ToList();
-                                if(errorResults.Count == jobResults.Count)
+                                if (errorResults.Count == jobResults.Count)
                                     status = -1;
                             }
                         }
@@ -1180,7 +1191,7 @@ namespace Ser.ConAai
                     logger.Debug("Distribute is canceled by user.");
                     return 4;
                 }
-                else if(result != null)
+                else if (result != null)
                 {
                     logger.Debug($"Distribute result: {result}");
                     logger.Info($"{xmlResult}");
@@ -1220,7 +1231,28 @@ namespace Ser.ConAai
             }
         }
 
-        private string GetNormalizeJson(string json)
+        private string ConvertYamlToJson(string yaml)
+        {
+            try
+            {
+                if (String.IsNullOrEmpty(yaml))
+                    return null;
+
+                using (TextReader sr = new StringReader(yaml))
+                {
+                    var deserializer = new Deserializer();
+                    var yamlConfig = deserializer.Deserialize(sr);
+                    return JsonConvert.SerializeObject(yamlConfig);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Could not normalize yaml, please check your script.");
+                return null;
+            }
+        }
+
+        private string ConvertHJsonToJson(string json)
         {
             try
             {
@@ -1230,7 +1262,8 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
-                throw ex;
+                logger.Error(ex, "Could not normalize hjson, please check your script.");
+                return null;
             }
         }
         #endregion
