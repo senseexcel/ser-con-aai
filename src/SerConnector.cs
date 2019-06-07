@@ -116,6 +116,8 @@ namespace Ser.ConAai
 
         private Task StartRestServer(string[] arguments)
         {
+            //var hh = new Ser.Engine.Rest.SerController(null, null);
+
             return Task.Run(() =>
             {
                 Ser.Engine.Rest.Program.Main(arguments);
