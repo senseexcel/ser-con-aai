@@ -36,7 +36,6 @@ namespace Ser.ConAai
     using static Qlik.Sse.Connector;
     using System.Text;
     using YamlDotNet.Serialization;
-    using YamlDotNet.Serialization.NamingConventions;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -94,7 +93,7 @@ namespace Ser.ConAai
             restClient.BaseUrl = baseUrl;
             sessionManager = new SessionManager();
             runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
-            Cleanup();
+            Cleanup(); 
         }
         #endregion
 
@@ -512,6 +511,7 @@ namespace Ser.ConAai
 
             try
             {
+                logger.Debug("Create Report");
                 logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
 
                 activeTask = new ActiveTask()
@@ -558,7 +558,7 @@ namespace Ser.ConAai
                 }
 
                 //create full engine config
-                logger.Debug("Create ser engine full config");
+                logger.Debug("Create ser engine full config.");
                 var newEngineConfig = CreateEngineConfig(qlikSession, json);
                 foreach (var configTask in newEngineConfig.Tasks)
                 {
@@ -640,6 +640,7 @@ namespace Ser.ConAai
             {
                 logger.Debug("Start task on rest service.");
                 var jobJson = task.JobJson.ToString();
+                logger.Debug($"Script:{Environment.NewLine}{jobJson}");
                 var createTaskResult = restClient.CreateTaskWithIdAsync(task.Id, jobJson).Result;
                 if (createTaskResult.Success.Value)
                 {
@@ -1247,7 +1248,7 @@ namespace Ser.ConAai
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "Could not normalize yaml, please check your script.");
+                logger.Info(ex, "Could not normalize yaml, please check your script.");
                 return null;
             }
         }
