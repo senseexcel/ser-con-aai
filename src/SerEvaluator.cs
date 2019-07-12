@@ -874,10 +874,10 @@ namespace Ser.ConAai
                 }
             }
 
-            //Resolve prefixes
-            var qlikResolver = new QlikResolver(session.QlikConn.CurrentApp);
-            serJsonConfig = qlikResolver.Resolve(serJsonConfig);
-            var serConfiguration = JsonConvert.DeserializeObject<SerConfig>(serJsonConfig.ToString());
+            //Resolve @PROPERTYNAME@ and @("
+            var jsonResolver = new JsonConfigResolver(serJsonConfig.ToString());
+            var jsonResult = jsonResolver.Resolve();
+            var serConfiguration = JsonConvert.DeserializeObject<SerConfig>(jsonResult);
             return serConfiguration;
         }
 
