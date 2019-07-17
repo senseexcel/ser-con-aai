@@ -41,7 +41,7 @@
         <PackageReference Include="Q2gHelperPem" Version="1.4.7" />
         <PackageReference Include="Q2gHelperQrs" Version="1.5.1" />
         <PackageReference Include="Q2g.HelperQlik" Version="1.2.0" />
-        <PackageReference Include="Ser.Distribute" Version="2.4.17" />
+        <PackageReference Include="Ser.Distribute" Version="2.4.18" />
         <PackageReference Include="Ser.Engine.Rest" Version="1.0.17" />
       </ItemGroup>
     </When>
