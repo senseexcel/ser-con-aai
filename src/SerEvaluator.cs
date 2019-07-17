@@ -836,19 +836,22 @@ namespace Ser.ConAai
                     }
 
                     report.connections = new JArray(newUserConnections);
-                    JObject distribute = report.distribute;
-                    var children = distribute?.Children().Children()?.ToList() ?? new List<JToken>();
-                    foreach (dynamic child in children)
+                    if (report.distribute is JObject distribute)
                     {
-                        var connection = child.connections ?? null;
-                        if (connection?.ToString() == "@CONFIGCONNECTION@")
-                            child.connections = new JArray(newUserConnections);
-                        var childProp = (child as JObject).Parent as JProperty;
-                        if (childProp?.Name == "hub")
+                        //JObject distribute = report.distribute;
+                        var children = distribute?.Children().Children()?.ToList() ?? new List<JToken>();
+                        foreach (dynamic child in children)
                         {
-                            var hubOwner = child.owner ?? null;
-                            if (hubOwner == null)
-                                child.owner = session.User.ToString();
+                            var connection = child.connections ?? null;
+                            if (connection?.ToString() == "@CONFIGCONNECTION@")
+                                child.connections = new JArray(newUserConnections);
+                            var childProp = (child as JObject).Parent as JProperty;
+                            if (childProp?.Name == "hub")
+                            {
+                                var hubOwner = child.owner ?? null;
+                                if (hubOwner == null)
+                                    child.owner = session.User.ToString();
+                            }
                         }
                     }
 
@@ -874,10 +877,10 @@ namespace Ser.ConAai
                 }
             }
 
-            //Resolve prefixes
-            var qlikResolver = new QlikResolver(session.QlikConn.CurrentApp);
-            serJsonConfig = qlikResolver.Resolve(serJsonConfig);
-            var serConfiguration = JsonConvert.DeserializeObject<SerConfig>(serJsonConfig.ToString());
+            //Resolve @PROPERTYNAME@ and @("
+            var jsonResolver = new JsonConfigResolver(serJsonConfig.ToString());
+            var jsonResult = jsonResolver.Resolve();
+            var serConfiguration = JsonConvert.DeserializeObject<SerConfig>(jsonResult);
             return serConfiguration;
         }
 
@@ -1051,7 +1054,8 @@ namespace Ser.ConAai
                                 var fileData = new JobResultFileData()
                                 {
                                     Filename = filename,
-                                    Data = buffer
+                                    Data = buffer,
+                                    TaskId = jobResult.TaskId
                                 };
                                 fileDataList.Add(fileData);
                             }
