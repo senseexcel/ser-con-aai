@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="enigma.net" Version="1.0.0" />
-    <PackageReference Include="GitVersionTask" Version="4.0.0" PrivateAssets="All" />
+    <PackageReference Include="GitVersionTask" Version="5.0.0" PrivateAssets="All" />
     <PackageReference Include="Hjson" Version="3.0.0" />
     <PackageReference Include="Markdig" Version="0.17.0" />
     <PackageReference Include="Microsoft.AspNetCore.App" />
