@@ -1038,9 +1038,9 @@ namespace Ser.ConAai
 
                 //Download result files
                 var distJobresults = ConvertApiType<List<JobResult>>(jobResults);
+                var fileDataList = new List<JobResultFileData>();
                 foreach (var jobResult in distJobresults)
                 {
-                    var fileDataList = new List<JobResultFileData>();
                     foreach (var jobReport in jobResult.Reports)
                     {
                         foreach (var path in jobReport.Paths)
@@ -1063,12 +1063,11 @@ namespace Ser.ConAai
                                 logger.Warn($"File {filename} for download not found.");
                         }
                     }
-                    jobResult.SetData(fileDataList);
                 }
 
                 //Delivery
                 task.Message = "Delivery Report, Please wait...";
-                status = StartDeliveryTool(task, distJobresults);
+                status = StartDeliveryTool(task, distJobresults, fileDataList);
                 task.Status = status;
                 switch (status)
                 {
@@ -1182,14 +1181,14 @@ namespace Ser.ConAai
             }
         }
 
-        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
+        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults, List<JobResultFileData> fileDataList)
         {
             try
             {
                 var distribute = new Ser.Distribute.Distribute();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
-                var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
+                var result = distribute.Run(jobResults, fileDataList, privateKeyFullname, task.CancelSource.Token);
                 var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                 if (task.CancelSource.IsCancellationRequested)
                 {

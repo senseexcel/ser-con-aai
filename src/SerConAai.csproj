@@ -13,12 +13,12 @@
 
   <ItemGroup>
     <PackageReference Include="enigma.net" Version="1.0.0" />
-    <PackageReference Include="GitVersionTask" Version="4.0.0" PrivateAssets="All" />
+    <PackageReference Include="GitVersionTask" Version="5.0.1" PrivateAssets="All" />
     <PackageReference Include="Hjson" Version="3.0.0" />
-    <PackageReference Include="Markdig" Version="0.17.0" />
+    <PackageReference Include="Markdig" Version="0.17.1" />
     <PackageReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
-    <PackageReference Include="NLog" Version="4.6.5" />
+    <PackageReference Include="NLog" Version="4.6.6" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.11" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.8.5" />
     <PackageReference Include="prometheus-net" Version="3.1.4" />
@@ -28,7 +28,7 @@
     <PackageReference Include="System.Drawing.Common" Version="4.5.1" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.5.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="4.5.1" />
-    <PackageReference Include="YamlDotNet" Version="6.1.1" />
+    <PackageReference Include="YamlDotNet" Version="6.1.2" />
   </ItemGroup>
 
   <Choose>
@@ -38,11 +38,15 @@
       </PropertyGroup>
       <ItemGroup>
         <PackageReference Include="Ser.Api" Version="3.5.1" />
-        <PackageReference Include="Q2gHelperPem" Version="1.4.7" />
-        <PackageReference Include="Q2gHelperQrs" Version="1.5.1" />
-        <PackageReference Include="Q2g.HelperQlik" Version="1.2.0" />
-        <PackageReference Include="Ser.Distribute" Version="2.4.18" />
-        <PackageReference Include="Ser.Engine.Rest" Version="1.0.17" />
+        <PackageReference Include="Q2gHelperPem" Version="1.4.8" />
+        <PackageReference Include="Q2gHelperQrs" Version="1.5.5" />
+        <PackageReference Include="Q2g.HelperQlik" Version="1.2.2" />
+        <Reference Include="Ser.Distribute">
+          <HintPath>..\..\ser-distribute-nuget\src\bin\Release\$(TargetFramework)\publish\SerDistribute.dll</HintPath>
+        </Reference>
+        <Reference Include="Ser.Engine.Rest">
+          <HintPath>..\..\ser-engine-rest\src\bin\Release\$(TargetFramework)\publish\SerEngineRest.dll</HintPath>
+        </Reference>
       </ItemGroup>
     </When>
     <Otherwise>
@@ -66,7 +70,7 @@
           <HintPath>..\..\ser-distribute-nuget\src\bin\Debug\$(TargetFramework)\SerDistribute.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Engine.Rest">
-          <HintPath>..\..\ser-engine-rest\src\bin\Debug\netcoreapp2.2\publish\SerEngineRest.dll</HintPath>
+          <HintPath>..\..\ser-engine-rest\src\bin\Debug\$(TargetFramework)\publish\SerEngineRest.dll</HintPath>
         </Reference>
       </ItemGroup>
     </Otherwise>
