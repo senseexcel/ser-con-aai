@@ -217,9 +217,8 @@ namespace Ser.ConAai
             try
             {
                 logger.Info("Shutdown SSEtoSER...");
-                cts.Cancel();
+                cts?.Cancel();
                 server?.ShutdownAsync().Wait();
-                serEvaluator.Dispose();
             }
             catch (Exception ex)
             {
