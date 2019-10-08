@@ -36,6 +36,7 @@ namespace Ser.ConAai
     using static Qlik.Sse.Connector;
     using System.Text;
     using YamlDotNet.Serialization;
+    using Ser.Engine.Rest;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable

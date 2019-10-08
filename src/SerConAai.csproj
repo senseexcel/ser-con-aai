@@ -3,6 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.0</TargetFramework>
+    <IncludeOpenAPIAnalyzers>true</IncludeOpenAPIAnalyzers>
     <RootNamespace>Ser.ConAai</RootNamespace>
     <Authors>Konrad Mattheis und Martin Berthold</Authors>
     <Copyright>Copyright (c) 2019</Copyright>
@@ -11,7 +12,12 @@
     <Version>$(GitVersion_NuGetVersion)</Version>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+  </PropertyGroup>
+
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="enigma.net" Version="1.0.0" />
     <PackageReference Include="GitVersionTask" Version="5.0.1" PrivateAssets="All" />
     <PackageReference Include="Hjson" Version="3.0.0" />
@@ -99,7 +105,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Properties\PublishProfiles\" />
+    <None Include="Properties\PublishProfiles\DebugVersion.pubxml" />
+    <None Include="Properties\PublishProfiles\ReleaseVersion.pubxml" />
   </ItemGroup>
 
   <ItemGroup>
