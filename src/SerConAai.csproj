@@ -55,7 +55,7 @@
           <HintPath>..\..\q2g-helper-qlik-nuget\src\bin\Release\$(TargetFramework)\Q2gHelperQlik.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Distribute">
-          <HintPath>..\..\ser-distribute-nuget\src\bin\Release\$(TargetFramework)\publish\SerDistribute.dll</HintPath>
+          <HintPath>..\..\ser-distribute-nuget\src\bin\Release\$(TargetFramework)\SerDistribute.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Engine.Rest">
           <HintPath>..\..\ser-engine-rest\src\bin\Release\$(TargetFramework)\publish\SerEngineRest.dll</HintPath>
