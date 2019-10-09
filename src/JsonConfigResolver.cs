@@ -79,7 +79,9 @@
                             }
                             else if (strValue.StartsWith("="))
                             {
-                                strValue = strValue.Replace("$@(", "$(");
+                                var newValue = strValue.Replace("$@(", "$(");
+                                var replaceToken = newJsonObjectConfig.SelectToken(jsonBuilder.ToString());
+                                replaceToken.Replace(newValue);
                             }
                             break;
                         default:
