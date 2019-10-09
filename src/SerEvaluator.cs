@@ -576,18 +576,25 @@ namespace Ser.ConAai
 
                         //Read content from lib and content libary
                         logger.Debug("Get template data from qlik.");
-                        var uploadsteam = FindTemplatePath(qlikSession, configReport.Template);
-                        logger.Debug("Upload template data to rest service.");
-                        var serfilename = Path.GetFileName(configReport.Template.Input);
-                        var uploadResult = restClient.UploadAsync(serfilename, false, uploadsteam).Result;
-                        if (uploadResult.Success.Value)
+                        if (configReport.Template != null)
                         {
-                            logger.Debug($"Upload {uploadResult.OperationId.ToString()} successfully.");
-                            activeTask.FileUploadIds.Add(uploadResult.OperationId.Value);
+                            var uploadsteam = FindTemplatePath(qlikSession, configReport.Template);
+                            logger.Debug("Upload template data to rest service.");
+                            var serfilename = Path.GetFileName(configReport.Template.Input);
+                            var uploadResult = restClient.UploadAsync(serfilename, false, uploadsteam).Result;
+                            if (uploadResult.Success.Value)
+                            {
+                                logger.Debug($"Upload {uploadResult.OperationId.ToString()} successfully.");
+                                activeTask.FileUploadIds.Add(uploadResult.OperationId.Value);
+                            }
+                            else
+                                logger.Warn($"The Upload was failed. - Error: {uploadResult?.Error}");
+                            uploadsteam.Close();
                         }
                         else
-                            logger.Warn($"The Upload was failed. - Error: {uploadResult?.Error}");
-                        uploadsteam.Close();
+                        {
+                            logger.Debug("No Template found. - Use alternative mode.");
+                        }
                     }
                 }
 
