@@ -574,6 +574,12 @@ namespace Ser.ConAai
                             configReport.Connections.Add(newBearerConnection);
                         }
 
+                        //Check app Id
+                        var qrsHub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, activeTask.Session.Cookie);
+                        var qrsResult = qrsHub.SendRequestAsync("/app", HttpMethod.Get, null, $"Id eq {firstConnection.App}").Result;
+                        if(qrsResult == null || qrsResult == "[]")
+                            throw new Exception($"The app id {firstConnection.App} was not found. Please check the app id or the security rules.");
+
                         //Read content from lib and content libary
                         logger.Debug("Get template data from qlik.");
                         if (configReport.Template != null)
