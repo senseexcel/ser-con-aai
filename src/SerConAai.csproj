@@ -23,7 +23,7 @@
     <PackageReference Include="Hjson" Version="3.0.0" />
     <PackageReference Include="Markdig" Version="0.17.1" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
-    <PackageReference Include="NLog" Version="4.6.7" />
+    <PackageReference Include="NLog" Version="4.6.8" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.11" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.8.5" />
     <PackageReference Include="prometheus-net" Version="3.2.1" />
