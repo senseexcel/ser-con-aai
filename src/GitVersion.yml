@@ -1,10 +1,12 @@
 next-version: 1.4.1
-tag: ''
 major-version-bump-message: '\+semver:\s?(breaking|major)'
 minor-version-bump-message: '\+semver:\s?(feature|minor)'
 patch-version-bump-message: '\+semver:\s?(fix|patch)'
+assembly-informational-format: '{Major}.{Minor}.{Patch}-{Sha}'
 ignore:
   sha:
     - 29594dea8301605f91971b0e6eb332a4d4b8337f
     - bcd881094c9b401dc7fe5cedc650aa03bf9ab1b9
+
+
 #  regex: dependabot
