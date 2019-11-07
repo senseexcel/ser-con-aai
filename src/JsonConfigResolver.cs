@@ -44,51 +44,65 @@
             return parentToken;
         }
 
+        private void ResolveToken(JToken token)
+        {
+            switch (token.Type)
+            {
+                case JTokenType.Object:
+                    jsonBuilder.RemovePath(token.Path);
+                    if (token.Children().Count() > 0)
+                        InternalResolve(token);
+                    break;
+                case JTokenType.Property:
+                    PropertyName = (token as JProperty).Name;
+                    jsonBuilder.AppendPath(token.Path);
+                    InternalResolve(token);
+                    jsonBuilder.RemovePath(token.Path);
+                    break;
+                case JTokenType.String:
+                    var strValue = token.Value<string>();
+                    if (strValue == $"@{PropertyName}@")
+                    {
+                        var parentToken = GetParentToken();
+                        var replaceToken = newJsonObjectConfig.SelectToken(jsonBuilder.ToString());
+                        replaceToken.Replace(parentToken);
+                    }
+                    else if (strValue.StartsWith("="))
+                    {
+                        var newValue = strValue.Replace("$@(", "$(");
+                        var replaceToken = newJsonObjectConfig.SelectToken(jsonBuilder.ToString());
+                        replaceToken.Replace(newValue);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
         private void InternalResolve(JToken jsonObject)
         {
-            var children = jsonObject.Children();
-            foreach (var token in children)
+            if (jsonObject.HasValues)
             {
-                if (token.Type == JTokenType.Array)
+                var children = jsonObject.Children().ToList();
+                if (children.Count > 0)
                 {
-                    var jarray = token.ToObject<JArray>();
-                    foreach (var arrayToken in jarray.Children())
-                        InternalResolve(arrayToken);
-                }
-                else
-                {
-                    switch (token.Type)
+                    foreach (var token in children)
                     {
-                        case JTokenType.Object:
-                            jsonBuilder.RemovePath(token.Path);
-                            InternalResolve(token);
-                            break;
-                        case JTokenType.Property:
-                            PropertyName = (token as JProperty).Name;
-                            jsonBuilder.AppendPath(token.Path);
-                            InternalResolve(token);
-                            jsonBuilder.RemovePath(token.Path);
-                            break;
-                        case JTokenType.String:
-                            var strValue = token.Value<string>();
-                            if (strValue == $"@{PropertyName}@")
-                            {
-                                var parentToken = GetParentToken();
-                                var replaceToken = newJsonObjectConfig.SelectToken(jsonBuilder.ToString());
-                                replaceToken.Replace(parentToken);
-                            }
-                            else if (strValue.StartsWith("="))
-                            {
-                                var newValue = strValue.Replace("$@(", "$(");
-                                var replaceToken = newJsonObjectConfig.SelectToken(jsonBuilder.ToString());
-                                replaceToken.Replace(newValue);
-                            }
-                            break;
-                        default:
-                            break;
+                        if (token.Type == JTokenType.Array)
+                        {
+                            var jarray = token.ToObject<JArray>();
+                            foreach (var arrayToken in jarray.Children())
+                                InternalResolve(arrayToken);
+                        }
+                        else
+                        {
+                            ResolveToken(token);
+                        }
                     }
                 }
             }
+            else
+                ResolveToken(jsonObject);
         }
         #endregion
 
