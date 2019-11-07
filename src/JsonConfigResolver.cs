@@ -50,7 +50,8 @@
             {
                 case JTokenType.Object:
                     jsonBuilder.RemovePath(token.Path);
-                    InternalResolve(token);
+                    if (token.Children().Count() > 0)
+                        InternalResolve(token);
                     break;
                 case JTokenType.Property:
                     PropertyName = (token as JProperty).Name;
@@ -82,18 +83,21 @@
         {
             if (jsonObject.HasValues)
             {
-                var children = jsonObject.Children();
-                foreach (var token in children)
+                var children = jsonObject.Children().ToList();
+                if (children.Count > 0)
                 {
-                    if (token.Type == JTokenType.Array)
+                    foreach (var token in children)
                     {
-                        var jarray = token.ToObject<JArray>();
-                        foreach (var arrayToken in jarray.Children())
-                            InternalResolve(arrayToken);
-                    }
-                    else
-                    {
-                        ResolveToken(token);
+                        if (token.Type == JTokenType.Array)
+                        {
+                            var jarray = token.ToObject<JArray>();
+                            foreach (var arrayToken in jarray.Children())
+                                InternalResolve(arrayToken);
+                        }
+                        else
+                        {
+                            ResolveToken(token);
+                        }
                     }
                 }
             }
