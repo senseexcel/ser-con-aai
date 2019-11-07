@@ -1,7 +1,4 @@
 next-version: 1.4.1
-major-version-bump-message: '\+semver:\s?(breaking|major)'
-minor-version-bump-message: '\+semver:\s?(feature|minor)'
-patch-version-bump-message: '\+semver:\s?(fix|patch)'
 assembly-informational-format: '{Major}.{Minor}.{Patch}-{Sha}'
 ignore:
   sha:
