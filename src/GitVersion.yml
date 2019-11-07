@@ -1,5 +1,4 @@
 assembly-versioning-scheme: MajorMinorPatch
-mode: Mainline
 next-version: 1.4.1
 assembly-informational-format: '{Major}.{Minor}.{Patch}-{Sha}'
 ignore:
