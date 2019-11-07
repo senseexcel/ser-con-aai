@@ -1484,6 +1484,5 @@ namespace Ser.Engine.Rest.Client
             Result = result;
         }
     }
-
     #pragma warning restore
 }
