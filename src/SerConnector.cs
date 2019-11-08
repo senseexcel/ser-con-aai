@@ -158,8 +158,10 @@
                     logger.Warn($"The engine path \"{enginePath}\" does not exists.");
 
                 config.PackageVersions = VersionUtils.ReadAssemblyVersions(enginePath);
+                var fullVersion = JsonConvert.SerializeObject(config.PackageVersions);
                 foreach (var package in config.PackageVersions)
                     logger.Debug($"Assembly: {package.Name} / {package.Version}");
+                logger.Info($"FullVersion: {fullVersion}");
 
                 //check to generate certifiate and private key if not exists
                 var certFile = config?.Connection?.Credentials?.Cert ?? null;
