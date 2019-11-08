@@ -1,23 +1,12 @@
-﻿#region License
-/*
-Copyright (c) 2018 Konrad Mattheis und Martin Berthold
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
-#endregion
-
-namespace Ser.ConAai
+﻿namespace Ser.ConAai
 {
     #region Usings
-    using Newtonsoft.Json;
-    using Newtonsoft.Json.Serialization;
     using Q2g.HelperPem;
+    using Q2g.HelperQlik;
     using Q2g.HelperQrs;
     using System;
     using System.Collections.Generic;
     using System.Reflection;
-    using System.Text;
     #endregion
 
     public class VersionUtils
@@ -48,11 +37,13 @@ namespace Ser.ConAai
             {
                 var assemblys = new List<Assembly>()
                 {
-                   typeof(Distribute.Distribute).Assembly,
-                   typeof(SerEvaluator).Assembly,
-                   typeof(QlikQrsHub).Assembly,
                    typeof(TextCrypter).Assembly,
+                   typeof(QlikQrsHub).Assembly,
+                   typeof(ConnectionManager).Assembly,
+                   typeof(Distribute.Distribute).Assembly,
                    Assembly.LoadFile(enginePath),
+                   typeof(Ser.Engine.Rest.SerController).Assembly,
+                   typeof(SerEvaluator).Assembly
                 };
 
                 var results = new List<VersionInfo>();
