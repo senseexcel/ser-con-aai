@@ -568,6 +568,7 @@
                         //Check app Id
                         var qrsHub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, activeTask.Session.Cookie);
                         var qrsResult = qrsHub.SendRequestAsync("/app", HttpMethod.Get, null, $"Id eq {firstConnection.App}").Result;
+                        logger.Debug($"The QRS app result: {qrsResult}");
                         if(qrsResult == null || qrsResult == "[]")
                             throw new Exception($"The app id {firstConnection.App} was not found. Please check the app id or the security rules.");
 
