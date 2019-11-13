@@ -102,6 +102,9 @@
     <None Update="config.hjson.example">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="serconaai_packages.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
@@ -117,6 +120,7 @@
 
   <Target Name="GitVersion" BeforeTargets="AfterBuild">
     <Message Importance="High" Text="++++++ GitVersion: $(GitVersion_InformationalVersion) ++++++" />
+    <Exec Command="%HOMEPATH%\Documents\NutgetInfoTool\NugetInfo.exe %HOMEPATH%\.nuget\packages C:\Users\MBerthold\Documents\Entwicklung\SenseExcelReporting\ser-con-aai\src" />
   </Target>
-
+  
 </Project>
