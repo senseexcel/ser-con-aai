@@ -35,6 +35,7 @@
         public string AppVersion { get; private set; } = PlatformServices.Default.Application.ApplicationVersion;
         public string AppName { get; private set; } = PlatformServices.Default.Application.ApplicationName;
         public List<VersionInfo> PackageVersions { get; set; }
+        public string ExternalPackageJson { get; set; }
         #endregion
 
         public string GetCertPath()

@@ -384,7 +384,12 @@
                             logger.Debug("Status - Read all versions.");
                             statusResult.Versions = onDemandConfig.PackageVersions;
                         }
-
+                        else if(versions == "external")
+                        {
+                            logger.Debug("Status - Read external package versions.");
+                            statusResult.ExternalPackagesInfo = onDemandConfig.ExternalPackageJson;
+                        }
+                        
                         if (tasks == "all")
                         {
                             logger.Debug("Status - Get all tasks.");

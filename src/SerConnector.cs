@@ -158,6 +158,7 @@
                     logger.Warn($"The engine path \"{enginePath}\" does not exists.");
 
                 config.PackageVersions = VersionUtils.ReadAssemblyVersions(enginePath);
+                config.ExternalPackageJson = VersionUtils.GetExternalPackageJson();
                 var fullVersion = JsonConvert.SerializeObject(config.PackageVersions);
                 foreach (var package in config.PackageVersions)
                     logger.Debug($"Assembly: {package.Name} / {package.Version}");

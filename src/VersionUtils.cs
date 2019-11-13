@@ -1,11 +1,13 @@
 ﻿namespace Ser.ConAai
 {
+    using Newtonsoft.Json;
     #region Usings
     using Q2g.HelperPem;
     using Q2g.HelperQlik;
     using Q2g.HelperQrs;
     using System;
     using System.Collections.Generic;
+    using System.IO;
     using System.Reflection;
     #endregion
 
@@ -55,6 +57,25 @@
             catch (Exception ex)
             {
                 throw new Exception("Can´t read assembly version.", ex);
+            }
+        }
+
+        public static string GetExternalPackageJson()
+        {
+            try
+            {
+                var fullpath = Path.Combine(AppContext.BaseDirectory, "serconaai_packages.json");
+                if (File.Exists(fullpath))
+                {
+                    var json = File.ReadAllText(fullpath);
+                    var obj = JsonConvert.DeserializeObject(json);
+                    return JsonConvert.SerializeObject(obj);
+                }
+                return "[]";
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Can´t read external packages.", ex);
             }
         }
     }
