@@ -381,10 +381,16 @@
 
                         if (versions == "all")
                         {
-                            logger.Debug("Status - Read all versions.");
-                            statusResult.Versions = onDemandConfig.PackageVersions;
+                            //Renameing by script cleaning by consultions!!!
+                            logger.Debug("Status - Read main version.");
+                            statusResult.Version = onDemandConfig.PackageVersion;
                         }
-
+                        else if(versions == "packages")
+                        {
+                            logger.Debug("Status - Read external package versions.");
+                            statusResult.ExternalPackagesInfo = onDemandConfig.ExternalPackageJson;
+                        }
+                        
                         if (tasks == "all")
                         {
                             logger.Debug("Status - Get all tasks.");

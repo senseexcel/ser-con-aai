@@ -152,17 +152,16 @@
                 var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
                 var restTask = StartRestServer(arguments.ToArray());
 
-                //Read Assembly versions
-                var enginePath = SerUtilities.GetFullPathFromApp(Path.Combine(AppContext.BaseDirectory, "ser-engine.dll"));
-                if (!File.Exists(enginePath))
-                    logger.Warn($"The engine path \"{enginePath}\" does not exists.");
-
-                config.PackageVersions = VersionUtils.ReadAssemblyVersions(enginePath);
-                var fullVersion = JsonConvert.SerializeObject(config.PackageVersions);
-                foreach (var package in config.PackageVersions)
-                    logger.Debug($"Assembly: {package.Name} / {package.Version}");
-                logger.Info($"FullVersion: {fullVersion}");
-
+                //Get package versions from json file (msbuild)
+                //#############################################
+                config.PackageVersion = "4.1.5";
+                //#############################################
+                logger.Info($"MainVersion: {config.PackageVersion}");
+                config.ExternalPackageJson = VersionUtils.GetExternalPackageJson();
+                var packages = JArray.Parse(config.ExternalPackageJson);
+                foreach (var package in packages)
+                    logger.Info($"Package: {JsonConvert.SerializeObject(package)}");
+                
                 //check to generate certifiate and private key if not exists
                 var certFile = config?.Connection?.Credentials?.Cert ?? null;
                 certFile = SerUtilities.GetFullPathFromApp(certFile);
