@@ -1,5 +1,122 @@
 [
   {
+    "Id": "Ser.Api",
+    "Version": "3.6.0-b4414c754fa05eefe17c0c3907b9a40e11846d5a",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "SerApi",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "Q2gHelperPem",
+    "Version": "1.6.0-3ddc90fd67088299e35227196c118585d8fd7ce0",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "Q2gHelperPem",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "Q2gHelperQrs",
+    "Version": "1.7.0-0239ff8c6cb64d3e1b8872c74f008d25e7600e42",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "Q2gHelperQrs",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "Q2gHelperQlik",
+    "Version": "1.5.0-53be1265d3b8185a6b5f0bf03fcab063a5849ca9",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "Q2gHelperQlik",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "SerDistribute",
+    "Version": "2.6.0-b5edcbb1091479ab48b1d22a9fa8232b821c0bf9",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "SerDistribute",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "SerEngineRest",
+    "Version": "1.2.0-f7d0e6eb8cf5150446e79a33c9efbce6322fe410",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "SerEngineRest",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "Ser.Api",
+    "Version": "3.6.0-b4414c754fa05eefe17c0c3907b9a40e11846d5a",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "SerApi",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "Q2gHelperPem",
+    "Version": "1.6.0-3ddc90fd67088299e35227196c118585d8fd7ce0",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "Q2gHelperPem",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "Q2gHelperQrs",
+    "Version": "1.7.0-0239ff8c6cb64d3e1b8872c74f008d25e7600e42",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "Q2gHelperQrs",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "Q2gHelperQlik",
+    "Version": "1.5.0-53be1265d3b8185a6b5f0bf03fcab063a5849ca9",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "Q2gHelperQlik",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "SerDistribute",
+    "Version": "2.6.0-b5edcbb1091479ab48b1d22a9fa8232b821c0bf9",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "SerDistribute",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "SerEngineRest",
+    "Version": "1.2.0-f7d0e6eb8cf5150446e79a33c9efbce6322fe410",
+    "LicenseUrl": null,
+    "Authors": "akquinet finance & controlling GmbH",
+    "Description": "SerEngineRest",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
+    "Id": "Se-L",
+    "Version": "0.1.0-alpha.45+Branch.development.Sha.0881a5cf45c54e9cf4533d2aee6256d04853d2e9",
+    "LicenseUrl": null,
+    "Authors": "senseexcel",
+    "Description": "SE-L",
+    "ProjectUrl": null,
+    "LicenseType": null
+  },
+  {
     "Id": "enigma.net",
     "Version": "1.0.0",
     "LicenseUrl": null,

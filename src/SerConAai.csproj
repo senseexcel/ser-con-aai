@@ -120,7 +120,8 @@
 
   <Target Name="GitVersion" BeforeTargets="AfterBuild">
     <Message Importance="High" Text="++++++ GitVersion: $(GitVersion_InformationalVersion) ++++++" />
-    <Exec Command="%HOMEPATH%\Documents\NutgetInfoTool\NugetInfo.exe %HOMEPATH%\.nuget\packages C:\Users\MBerthold\Documents\Entwicklung\SenseExcelReporting\ser-con-aai\src" />
+    <Exec Command="%HOMEPATH%\Documents\NutgetInfoTool\NugetInfo.exe %HOMEPATH%\.nuget\packages C:\Users\MBerthold\Documents\Entwicklung\SenseExcelReporting\ser-con-aai\src netcoreapp3.0"/>
+    <Message Importance="High" Text="!!!!! CHANGE VERSION NUMBER in SerConnector.cs by Line 156 !!!!!" />
   </Target>
   
 </Project>
