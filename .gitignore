@@ -8,6 +8,7 @@
 *.user
 *.userosscache
 *.sln.docstates
+serconaai_packages.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
