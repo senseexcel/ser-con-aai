@@ -545,7 +545,7 @@
             foreach (JProperty child in children)
             {
                 resultText.Append($"{Environment.NewLine}{child.Name.ToUpperInvariant()}:");
-                resultText.Append($"{Environment.NewLine}--------------------------------------------------------------------");
+                resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
                 JArray array = child?.First as JArray;
                 if (array != null)
                 {
@@ -554,9 +554,10 @@
                         var objChildren = item.Children();
                         foreach (JProperty prop in objChildren)
                             resultText.Append($"{Environment.NewLine}{prop.Name.ToUpperInvariant()}: {prop.Value}");
+                        resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
                     }
                 }
-                resultText.Append($"{Environment.NewLine}--------------------------------------------------------------------");
+                resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
             }
             return resultText.ToString();
         }
