@@ -786,20 +786,32 @@
             }
         }
 
+        private bool IsJsonScript(string userJson)
+        {
+            var checkString = userJson.Replace("\r\n", "\n").ToLowerInvariant();
+            if (checkString.Contains("connections:\n{"))
+                return true;
+            return false;
+        }
+
         private SerConfig CreateEngineConfig(SessionInfo session, string userJson)
         {
             logger.Trace($"Parse user script: {userJson}");
             userJson = userJson?.Trim();
-            //Parse YAML
-            logger.Trace("Parse YAML");
-            var jsonStr = ConvertYamlToJson(userJson);
-            if (jsonStr == null)
+            var jsonStr = String.Empty;
+            if (IsJsonScript(userJson))
             {
-                //Parse HJSON
+                //Parse HJSON or JSON
                 logger.Trace("Parse HJSON");
                 jsonStr = ConvertHJsonToJson(userJson);
             }
-
+            else
+            {
+                //YAML
+                logger.Trace("Parse YAML");
+                jsonStr = ConvertYamlToJson(userJson);
+            }
+            
             if (jsonStr == null)
                 throw new Exception("Could not read user script.");
 
@@ -1045,7 +1057,13 @@
                     throw new TaskCanceledException("The build of the report was canceled by user.");
                 task.Status = status;
                 if (status != 2)
-                    throw new Exception("The report build process failed.");
+                {
+                    var engineException = new Exception("The report build process failed.");
+                    var firstJobResult = jobResults.FirstOrDefault(j => j.FirstException != null);
+                    if (firstJobResult != null)
+                        engineException = firstJobResult.FirstException;
+                    throw engineException;
+                }
                 sessionManager.MakeSocketFree(task?.Session ?? null);
 
                 //Download result files
@@ -1263,8 +1281,7 @@
             }
             catch (Exception ex)
             {
-                logger.Info(ex, "Could not normalize yaml, please check your script.");
-                return null;
+                throw new Exception($"Could not normalize yaml, please check your script. Error: {ex.Message}");
             }
         }
 
@@ -1278,8 +1295,7 @@
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "Could not normalize hjson, please check your script.");
-                return null;
+                throw new Exception($"Could not normalize hjson, please check your script. Error: {ex.Message}");
             }
         }
         #endregion
