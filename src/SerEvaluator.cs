@@ -42,6 +42,7 @@
             START = 1,
             STATUS = 2,
             STOP = 3,
+            RESULT = 4
         }
 
         public enum ConnectorState
@@ -85,7 +86,7 @@
             restClient.BaseUrl = baseUrl;
             sessionManager = new SessionManager();
             runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
-            Cleanup(); 
+            Cleanup();
         }
         #endregion
 
@@ -272,7 +273,7 @@
                              Name = nameof(SerFunction.STATUS),
                              Params =
                              {
-                                new Parameter { Name = "Request", DataType = DataType.String },
+                                new Parameter { Name = "TaskId", DataType = DataType.String },
                              },
                              ReturnType = DataType.String
                         },
@@ -283,7 +284,18 @@
                             Name = nameof(SerFunction.STOP),
                             Params =
                             {
-                               new Parameter { Name = "Request", DataType = DataType.String },
+                               new Parameter { Name = "TaskId", DataType = DataType.String },
+                            },
+                            ReturnType = DataType.String
+                        },
+                        new FunctionDefinition
+                        {
+                            FunctionId = 4,
+                            FunctionType = FunctionType.Scalar,
+                            Name = nameof(SerFunction.RESULT),
+                            Params =
+                            {
+                               new Parameter { Name = "TaskId", DataType = DataType.String },
                             },
                             ReturnType = DataType.String
                         }
@@ -385,12 +397,12 @@
                             logger.Debug("Status - Read main version.");
                             statusResult.Version = onDemandConfig.PackageVersion;
                         }
-                        else if(versions == "packages")
+                        else if (versions == "packages")
                         {
                             logger.Debug("Status - Read external package versions.");
                             statusResult.ExternalPackagesInfo = onDemandConfig.ExternalPackageJson;
                         }
-                        
+
                         if (tasks == "all")
                         {
                             logger.Debug("Status - Get all tasks.");
@@ -478,6 +490,30 @@
                         statusResult.Status = 4;
                         break;
                     #endregion
+                    case SerFunction.RESULT:
+                        {
+                            #region Result for Qlik
+                            logger.Debug($"Result - Get result for qlik task.");
+                            json = ConvertHJsonToJson(json);
+                            if (json != null)
+                            {
+                                jsonObject = JObject.Parse(json) ?? null;
+                                taskId = jsonObject?.taskId ?? null;
+                            }
+
+                            if (taskId.HasValue)
+                            {
+                                var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId.Value);
+                                if (currentTask.Value != null)
+                                {
+                                    var distibuteJson = currentTask.Value.Distribute;
+                                    var distibuteObject = JObject.Parse(distibuteJson);
+                                    statusResult.FormatedResult = GetFormatedJsonForQlik(distibuteObject);
+                                }
+                            }
+                            break;
+                            #endregion
+                        }
                     default:
                         throw new Exception($"Unknown function id {functionHeader.FunctionId}.");
                 }
@@ -502,6 +538,29 @@
         #endregion
 
         #region Private Functions
+        private string GetFormatedJsonForQlik(JObject distibute)
+        {
+            var resultText = new StringBuilder();
+            var children = distibute.Children();
+            foreach (JProperty child in children)
+            {
+                resultText.Append($"{Environment.NewLine}{child.Name.ToUpperInvariant()}:");
+                resultText.Append($"{Environment.NewLine}--------------------------------------------------------------------");
+                JArray array = child?.First as JArray;
+                if (array != null)
+                {
+                    foreach (JObject item in array)
+                    {
+                        var objChildren = item.Children();
+                        foreach (JProperty prop in objChildren)
+                            resultText.Append($"{Environment.NewLine}{prop.Name.ToUpperInvariant()}: {prop.Value}");
+                    }
+                }
+                resultText.Append($"{Environment.NewLine}--------------------------------------------------------------------");
+            }
+            return resultText.ToString();
+        }
+
         private OnDemandResult CreateReport(DomainUser qlikUser, string appId, string json)
         {
             ActiveTask activeTask = null;
@@ -575,7 +634,7 @@
                         var qrsHub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, activeTask.Session.Cookie);
                         var qrsResult = qrsHub.SendRequestAsync("/app", HttpMethod.Get, null, $"Id eq {firstConnection.App}").Result;
                         logger.Debug($"The QRS app result: {qrsResult}");
-                        if(qrsResult == null || qrsResult == "[]")
+                        if (qrsResult == null || qrsResult == "[]")
                             throw new Exception($"The app id {firstConnection.App} was not found. Please check the app id or the security rules.");
 
                         //Read content from lib and content libary
@@ -811,7 +870,7 @@
                 logger.Trace("Parse YAML");
                 jsonStr = ConvertYamlToJson(userJson);
             }
-            
+
             if (jsonStr == null)
                 throw new Exception("Could not read user script.");
 
