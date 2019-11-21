@@ -28,6 +28,7 @@
     using System.Text;
     using YamlDotNet.Serialization;
     using Ser.Engine.Rest;
+    using System.Text.RegularExpressions;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -849,8 +850,8 @@
         private bool IsJsonScript(string userJson)
         {
             var checkString = userJson.Replace("\r\n", "\n").ToLowerInvariant();
-            if (checkString.Contains("connections:\n{"))
-                return true;
+            if (Regex.IsMatch(checkString, "connections:[ ]*\n[ ]*{", RegexOptions.Singleline))
+                return true;;
             return false;
         }
 

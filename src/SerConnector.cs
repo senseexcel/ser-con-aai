@@ -154,7 +154,7 @@
 
                 //Get package versions from json file (msbuild)
                 //#############################################
-                config.PackageVersion = "4.1.6";
+                config.PackageVersion = "4.1.7";
                 //#############################################
                 logger.Info($"MainVersion: {config.PackageVersion}");
                 config.ExternalPackageJson = VersionUtils.GetExternalPackageJson();
