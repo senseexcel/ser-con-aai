@@ -851,7 +851,7 @@
         {
             var checkString = userJson.Replace("\r\n", "\n").ToLowerInvariant();
             if (Regex.IsMatch(checkString, "connections:[ ]*\n[ ]*{", RegexOptions.Singleline))
-                return true;;
+                return true; ;
             return false;
         }
 
@@ -1129,7 +1129,6 @@
 
                 //Download result files
                 var distJobresults = ConvertApiType<List<JobResult>>(jobResults);
-                var fileDataList = new List<JobResultFileData>();
                 foreach (var jobResult in distJobresults)
                 {
                     foreach (var jobReport in jobResult.Reports)
@@ -1142,13 +1141,7 @@
                             if (streamData != null)
                             {
                                 var buffer = GetStreamBuffer(streamData);
-                                var fileData = new JobResultFileData()
-                                {
-                                    Filename = filename,
-                                    Data = buffer,
-                                    TaskId = jobResult.TaskId
-                                };
-                                fileDataList.Add(fileData);
+                                jobReport.Data.Add(new ReportData() { Filename = filename, DownloadData = buffer });
                             }
                             else
                                 logger.Warn($"File {filename} for download not found.");
@@ -1158,7 +1151,7 @@
 
                 //Delivery
                 task.Message = "Delivery Report, Please wait...";
-                status = StartDeliveryTool(task, distJobresults, fileDataList);
+                status = StartDeliveryTool(task, distJobresults);
                 task.Status = status;
                 switch (status)
                 {
@@ -1272,14 +1265,14 @@
             }
         }
 
-        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults, List<JobResultFileData> fileDataList)
+        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
         {
             try
             {
                 var distribute = new Ser.Distribute.Distribute();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
-                var result = distribute.Run(jobResults, fileDataList, privateKeyFullname, task.CancelSource.Token);
+                var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
                 var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                 if (task.CancelSource.IsCancellationRequested)
                 {
