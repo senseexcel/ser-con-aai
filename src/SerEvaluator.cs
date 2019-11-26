@@ -850,8 +850,8 @@
         private bool IsJsonScript(string userJson)
         {
             var checkString = userJson.Replace("\r\n", "\n").ToLowerInvariant();
-            if (Regex.IsMatch(checkString, "connections:[ ]*\n[ ]*{", RegexOptions.Singleline))
-                return true; ;
+            if (Regex.IsMatch(checkString, "connections:[ \t]*\n[ \t]*{", RegexOptions.Singleline))
+                return true;
             return false;
         }
 
