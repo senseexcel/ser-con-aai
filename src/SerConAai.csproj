@@ -90,12 +90,6 @@
   </Choose>
 
   <ItemGroup>
-    <Compile Remove="Properties\PublishProfiles\**" />
-    <EmbeddedResource Remove="Properties\PublishProfiles\**" />
-    <None Remove="Properties\PublishProfiles\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Update="App.config">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -108,11 +102,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="Properties\PublishProfiles\DebugVersion.pubxml" />
-    <None Include="Properties\PublishProfiles\ReleaseVersion.pubxml" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Reference Include="SE-L">
       <HintPath>..\..\se-l\src\bin\Release\netcoreapp2.2\SE-L.dll</HintPath>
     </Reference>
@@ -121,7 +110,7 @@
   <Target Name="GitVersion" BeforeTargets="AfterBuild">
     <Message Importance="High" Text="++++++ GitVersion: $(GitVersion_InformationalVersion) ++++++" />
     <Exec Command="%HOMEPATH%\Documents\NutgetInfoTool\NugetInfo.exe %HOMEPATH%\.nuget\packages C:\Users\MBerthold\Documents\Entwicklung\SenseExcelReporting\ser-con-aai\src netcoreapp3.0" />
-    <Message Importance="High" Text="!!!!! CHANGE VERSION NUMBER in SerConnector.cs by Line 157 !!!!!" />
+    <Message Importance="High" Text="!!!!! CHANGE VERSION NUMBER in VersionUtils.cs by Line 33 !!!!!" />
   </Target>
   
 </Project>

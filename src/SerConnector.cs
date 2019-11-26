@@ -151,11 +151,7 @@
                 var rootContentFolder = SerUtilities.GetFullPathFromApp(config.WorkingDir);
                 var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
                 var restTask = StartRestServer(arguments.ToArray());
-
-                //Get package versions from json file (msbuild)
-                //#############################################
-                config.PackageVersion = "4.1.8";
-                //#############################################
+                config.PackageVersion = VersionUtils.GetMainVersion();
                 logger.Info($"MainVersion: {config.PackageVersion}");
                 config.ExternalPackageJson = VersionUtils.GetExternalPackageJson();
                 var packages = JArray.Parse(config.ExternalPackageJson);

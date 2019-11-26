@@ -26,5 +26,11 @@
                 throw new Exception("Can´t read external packages.", ex);
             }
         }
+
+        public static string GetMainVersion()
+        {
+            //Get package versions from json file (msbuild)
+            return "4.1.8";
+        }
     }
 }

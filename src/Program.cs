@@ -27,6 +27,13 @@
             try
             {
                 SetLoggerSettings();
+
+                if(args.Length > 0 && args[0] == "VersionNumber")
+                {
+                    File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "Version.txt"), VersionUtils.GetMainVersion());
+                    return;
+                }
+
                 ServiceRunner<SSEtoSER>.Run(config =>
                 {
                     config.SetDisplayName("Qlik Connector for SER");
