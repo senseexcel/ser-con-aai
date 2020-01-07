@@ -4,6 +4,8 @@
 // </auto-generated>
 //----------------------
 
+using System;
+
 namespace Ser.Engine.Rest.Client
 {
     #pragma warning disable
@@ -1180,7 +1182,10 @@ namespace Ser.Engine.Rest.Client
     
         [Newtonsoft.Json.JsonProperty("engineVersion", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public string EngineVersion { get; set; }
-    
+
+        [Newtonsoft.Json.JsonProperty("firstException", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public Exception FirstException { get; set; }
+
         [Newtonsoft.Json.JsonProperty("count", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public int? Count { get; set; }
     

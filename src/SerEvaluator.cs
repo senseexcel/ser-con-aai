@@ -28,6 +28,7 @@
     using System.Text;
     using YamlDotNet.Serialization;
     using Ser.Engine.Rest;
+    using System.Text.RegularExpressions;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -42,6 +43,7 @@
             START = 1,
             STATUS = 2,
             STOP = 3,
+            RESULT = 4
         }
 
         public enum ConnectorState
@@ -85,7 +87,7 @@
             restClient.BaseUrl = baseUrl;
             sessionManager = new SessionManager();
             runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
-            Cleanup(); 
+            Cleanup();
         }
         #endregion
 
@@ -272,7 +274,7 @@
                              Name = nameof(SerFunction.STATUS),
                              Params =
                              {
-                                new Parameter { Name = "Request", DataType = DataType.String },
+                                new Parameter { Name = "TaskId", DataType = DataType.String },
                              },
                              ReturnType = DataType.String
                         },
@@ -283,7 +285,18 @@
                             Name = nameof(SerFunction.STOP),
                             Params =
                             {
-                               new Parameter { Name = "Request", DataType = DataType.String },
+                               new Parameter { Name = "TaskId", DataType = DataType.String },
+                            },
+                            ReturnType = DataType.String
+                        },
+                        new FunctionDefinition
+                        {
+                            FunctionId = 4,
+                            FunctionType = FunctionType.Scalar,
+                            Name = nameof(SerFunction.RESULT),
+                            Params =
+                            {
+                               new Parameter { Name = "TaskId", DataType = DataType.String },
                             },
                             ReturnType = DataType.String
                         }
@@ -385,12 +398,12 @@
                             logger.Debug("Status - Read main version.");
                             statusResult.Version = onDemandConfig.PackageVersion;
                         }
-                        else if(versions == "packages")
+                        else if (versions == "packages")
                         {
                             logger.Debug("Status - Read external package versions.");
                             statusResult.ExternalPackagesInfo = onDemandConfig.ExternalPackageJson;
                         }
-                        
+
                         if (tasks == "all")
                         {
                             logger.Debug("Status - Get all tasks.");
@@ -478,6 +491,30 @@
                         statusResult.Status = 4;
                         break;
                     #endregion
+                    case SerFunction.RESULT:
+                        {
+                            #region Result for Qlik
+                            logger.Debug($"Result - Get result for qlik task.");
+                            json = ConvertHJsonToJson(json);
+                            if (json != null)
+                            {
+                                jsonObject = JObject.Parse(json) ?? null;
+                                taskId = jsonObject?.taskId ?? null;
+                            }
+
+                            if (taskId.HasValue)
+                            {
+                                var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId.Value);
+                                if (currentTask.Value != null)
+                                {
+                                    var distibuteJson = currentTask.Value.Distribute;
+                                    var distibuteObject = JObject.Parse(distibuteJson);
+                                    statusResult.FormatedResult = GetFormatedJsonForQlik(distibuteObject);
+                                }
+                            }
+                            break;
+                            #endregion
+                        }
                     default:
                         throw new Exception($"Unknown function id {functionHeader.FunctionId}.");
                 }
@@ -502,6 +539,30 @@
         #endregion
 
         #region Private Functions
+        private string GetFormatedJsonForQlik(JObject distibute)
+        {
+            var resultText = new StringBuilder();
+            var children = distibute.Children();
+            foreach (JProperty child in children)
+            {
+                resultText.Append($"{Environment.NewLine}{child.Name.ToUpperInvariant()}:");
+                resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
+                JArray array = child?.First as JArray;
+                if (array != null)
+                {
+                    foreach (JObject item in array)
+                    {
+                        var objChildren = item.Children();
+                        foreach (JProperty prop in objChildren)
+                            resultText.Append($"{Environment.NewLine}{prop.Name.ToUpperInvariant()}: {prop.Value}");
+                        resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
+                    }
+                }
+                resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
+            }
+            return resultText.ToString();
+        }
+
         private OnDemandResult CreateReport(DomainUser qlikUser, string appId, string json)
         {
             ActiveTask activeTask = null;
@@ -575,7 +636,7 @@
                         var qrsHub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, activeTask.Session.Cookie);
                         var qrsResult = qrsHub.SendRequestAsync("/app", HttpMethod.Get, null, $"Id eq {firstConnection.App}").Result;
                         logger.Debug($"The QRS app result: {qrsResult}");
-                        if(qrsResult == null || qrsResult == "[]")
+                        if (qrsResult == null || qrsResult == "[]")
                             throw new Exception($"The app id {firstConnection.App} was not found. Please check the app id or the security rules.");
 
                         //Read content from lib and content libary
@@ -786,18 +847,30 @@
             }
         }
 
+        private bool IsJsonScript(string userJson)
+        {
+            var checkString = userJson.Replace("\r\n", "\n").ToLowerInvariant();
+            if (Regex.IsMatch(checkString, "connections:[ \t]*\n[ \t]*{", RegexOptions.Singleline))
+                return true;
+            return false;
+        }
+
         private SerConfig CreateEngineConfig(SessionInfo session, string userJson)
         {
             logger.Trace($"Parse user script: {userJson}");
             userJson = userJson?.Trim();
-            //Parse YAML
-            logger.Trace("Parse YAML");
-            var jsonStr = ConvertYamlToJson(userJson);
-            if (jsonStr == null)
+            var jsonStr = String.Empty;
+            if (IsJsonScript(userJson))
             {
-                //Parse HJSON
+                //Parse HJSON or JSON
                 logger.Trace("Parse HJSON");
                 jsonStr = ConvertHJsonToJson(userJson);
+            }
+            else
+            {
+                //YAML
+                logger.Trace("Parse YAML");
+                jsonStr = ConvertYamlToJson(userJson);
             }
 
             if (jsonStr == null)
@@ -1045,12 +1118,17 @@
                     throw new TaskCanceledException("The build of the report was canceled by user.");
                 task.Status = status;
                 if (status != 2)
-                    throw new Exception("The report build process failed.");
+                {
+                    var engineException = new Exception("The report build process failed.");
+                    var firstJobResult = jobResults.FirstOrDefault(j => j.FirstException != null);
+                    if (firstJobResult != null)
+                        engineException = firstJobResult.FirstException;
+                    throw engineException;
+                }
                 sessionManager.MakeSocketFree(task?.Session ?? null);
 
                 //Download result files
                 var distJobresults = ConvertApiType<List<JobResult>>(jobResults);
-                var fileDataList = new List<JobResultFileData>();
                 foreach (var jobResult in distJobresults)
                 {
                     foreach (var jobReport in jobResult.Reports)
@@ -1063,13 +1141,7 @@
                             if (streamData != null)
                             {
                                 var buffer = GetStreamBuffer(streamData);
-                                var fileData = new JobResultFileData()
-                                {
-                                    Filename = filename,
-                                    Data = buffer,
-                                    TaskId = jobResult.TaskId
-                                };
-                                fileDataList.Add(fileData);
+                                jobReport.Data.Add(new ReportData() { Filename = filename, DownloadData = buffer });
                             }
                             else
                                 logger.Warn($"File {filename} for download not found.");
@@ -1079,7 +1151,7 @@
 
                 //Delivery
                 task.Message = "Delivery Report, Please wait...";
-                status = StartDeliveryTool(task, distJobresults, fileDataList);
+                status = StartDeliveryTool(task, distJobresults);
                 task.Status = status;
                 switch (status)
                 {
@@ -1193,14 +1265,14 @@
             }
         }
 
-        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults, List<JobResultFileData> fileDataList)
+        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
         {
             try
             {
                 var distribute = new Ser.Distribute.Distribute();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
-                var result = distribute.Run(jobResults, fileDataList, privateKeyFullname, task.CancelSource.Token);
+                var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
                 var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                 if (task.CancelSource.IsCancellationRequested)
                 {
@@ -1263,8 +1335,7 @@
             }
             catch (Exception ex)
             {
-                logger.Info(ex, "Could not normalize yaml, please check your script.");
-                return null;
+                throw new Exception($"Could not normalize yaml, please check your script. Error: {ex.Message}");
             }
         }
 
@@ -1278,8 +1349,7 @@
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "Could not normalize hjson, please check your script.");
-                return null;
+                throw new Exception($"Could not normalize hjson, please check your script. Error: {ex.Message}");
             }
         }
         #endregion

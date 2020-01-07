@@ -19,6 +19,7 @@
         public Guid? TaskId { get; set; }
         public string Log { get; set; }
         public string Distribute { get; set; }
+        public string FormatedResult { get; set; }
         public JArray Tasks { get; set; }
         public string Version { get; set; }
         public string ExternalPackagesInfo { get; set; }
