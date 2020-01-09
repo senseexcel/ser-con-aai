@@ -30,7 +30,7 @@
         public static string GetMainVersion()
         {
             //Get package versions from json file (msbuild)
-            return "4.5.2 BETA";
+            return "4.5.3 BETA";
         }
     }
 }
