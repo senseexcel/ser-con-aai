@@ -101,12 +101,6 @@
     </None>
   </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="SE-L">
-      <HintPath>..\..\se-l\src\bin\Release\netcoreapp2.2\SE-L.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
   <Target Name="GitVersion" BeforeTargets="AfterBuild">
     <Message Importance="High" Text="++++++ GitVersion: $(GitVersion_InformationalVersion) ++++++" />
     <Exec Command="%HOMEPATH%\Documents\NutgetInfoTool\NugetInfo.exe %HOMEPATH%\.nuget\packages C:\Users\MBerthold\Documents\Entwicklung\SenseExcelReporting\ser-con-aai\src netcoreapp3.0" />
