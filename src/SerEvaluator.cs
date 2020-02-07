@@ -72,6 +72,7 @@
         private Ser.Engine.Rest.Client.SerApiClient restClient;
         private ConcurrentDictionary<Guid, ActiveTask> runningTasks;
         private object threadObject = new object();
+        private bool runCleaning = false;
         #endregion
 
         #region Connstructor & Dispose
@@ -573,6 +574,13 @@
                 logger.Debug("Create Report");
                 logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
 
+                // Wait for cleaning process
+                while (runCleaning)
+                {
+                    logger.Debug("Wait for cleanup process...");
+                    Thread.Sleep(500);
+                }
+
                 activeTask = new ActiveTask()
                 {
                     Id = Guid.NewGuid(),
@@ -1064,8 +1072,6 @@
 
         private void CheckStatus(ActiveTask task)
         {
-            var cleanupPaths = new List<string>();
-
             try
             {
                 var status = task.Status;
@@ -1180,7 +1186,7 @@
             {
                 //Cleanup
                 sessionManager.MakeSocketFree(task?.Session ?? null);
-                FinishTask(task, cleanupPaths);
+                FinishTask(task);
                 LogManager.Flush();
             }
         }
@@ -1199,7 +1205,7 @@
             }
         }
 
-        private void FinishTask(ActiveTask task, List<string> cleanupPaths = null)
+        private void FinishTask(ActiveTask task)
         {
             try
             {
@@ -1207,41 +1213,37 @@
                 .Delay(onDemandConfig.CleanupTimeout)
                 .ContinueWith((_) =>
                 {
-                    logger.Debug($"Cleanup Process, Folder and Socket connection.");
-                    if (runningTasks.TryRemove(task.Id, out var taskResult))
-                        logger.Debug($"Remove task {task.Id} - Successfully.");
-                    sessionManager.MakeSocketFree(task?.Session ?? null);
-                    var deleteResult = restClient.DeleteFilesAsync(task.Id).Result;
-                    if (deleteResult.Success.Value)
-                        logger.Debug($"Delete task folder {task.Id} - Successfully.");
-                    else
-                        logger.Warn($"Delete task folder {task.Id} - Failed.");
-                    foreach (var guidItem in task.FileUploadIds)
+                    try
                     {
-                        deleteResult = restClient.DeleteFilesAsync(guidItem).Result;
+                        runCleaning = true;
+                        logger.Debug($"Cleanup Process, Folder and Socket connection.");
+                        if (runningTasks.TryRemove(task.Id, out var taskResult))
+                            logger.Debug($"Remove task {task.Id} - Successfully.");
+                        sessionManager.MakeSocketFree(task?.Session ?? null);
+                        var deleteResult = restClient.DeleteFilesAsync(task.Id).Result;
                         if (deleteResult.Success.Value)
-                            logger.Debug($"Delete file folder {guidItem} - Successfully.");
+                            logger.Debug($"Delete task folder {task.Id} - Successfully.");
                         else
-                            logger.Warn($"Delete file folder {guidItem} - Failed.");
-                    }
-
-                    if (cleanupPaths != null)
-                    {
-                        foreach (var cleanupPath in cleanupPaths)
+                            logger.Warn($"Delete task folder {task.Id} - Failed.");
+                        foreach (var guidItem in task.FileUploadIds)
                         {
-                            try
-                            {
-                                Directory.Delete(cleanupPath, true);
-                            }
-                            catch (Exception ex)
-                            {
-                                logger.Warn(ex, $"The folder {cleanupPath} could not remove.");
-                            }
+                            deleteResult = restClient.DeleteFilesAsync(guidItem).Result;
+                            if (deleteResult.Success.Value)
+                                logger.Debug($"Delete file folder {guidItem} - Successfully.");
+                            else
+                                logger.Warn($"Delete file folder {guidItem} - Failed.");
                         }
+                        task.Status = 0;
+                        logger.Debug($"Cleanup complete.");
                     }
-
-                    task.Status = 0;
-                    logger.Debug($"Cleanup complete.");
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, "Deletion failed");
+                    }
+                    finally
+                    {
+                        runCleaning = false;
+                    }
                 });
             }
             catch (Exception ex)
