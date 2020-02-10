@@ -72,7 +72,6 @@
         private Ser.Engine.Rest.Client.SerApiClient restClient;
         private ConcurrentDictionary<Guid, ActiveTask> runningTasks;
         private object threadObject = new object();
-        private bool runCleaning = false;
         #endregion
 
         #region Connstructor & Dispose
@@ -1241,10 +1240,6 @@
                     catch (Exception ex)
                     {
                         logger.Error(ex, "Deletion failed");
-                    }
-                    finally
-                    {
-                        runCleaning = false;
                     }
                 });
             }
