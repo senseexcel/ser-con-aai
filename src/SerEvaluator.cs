@@ -574,13 +574,6 @@
                 logger.Debug("Create Report");
                 logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
 
-                // Wait for cleaning process
-                while (runCleaning)
-                {
-                    logger.Debug("Wait for cleanup process...");
-                    Thread.Sleep(500);
-                }
-
                 activeTask = new ActiveTask()
                 {
                     Id = Guid.NewGuid(),
@@ -754,7 +747,7 @@
                 if (filterFile != null)
                 {
                     var data = DownloadFile(filterFile, session.Cookie);
-                    template.Input = Path.GetFileName(filterFile);
+                    template.Input = $"{Guid.NewGuid()}{Path.GetExtension(filterFile)}";
                     return new MemoryStream(data);
                 }
                 else
@@ -1225,13 +1218,6 @@
                 {
                     try
                     {
-                        runCleaning = true;
-                        if (!MakeCleanup())
-                        {
-                            runCleaning = false;
-                            FinishTask(task);
-                        }
-                        
                         logger.Debug($"Cleanup Process, Folder and Socket connection.");
                         if (runningTasks.TryRemove(task.Id, out var taskResult))
                             logger.Debug($"Remove task {task.Id} - Successfully.");
