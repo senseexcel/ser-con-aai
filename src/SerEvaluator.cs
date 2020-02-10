@@ -1205,6 +1205,16 @@
             }
         }
 
+        private bool MakeCleanup()
+        {
+            foreach (var task in runningTasks)
+            {
+                if (task.Value.Status == 1 || task.Value.Status == 2)
+                    return false;
+            }
+            return true;
+        }
+
         private void FinishTask(ActiveTask task)
         {
             try
@@ -1215,6 +1225,9 @@
                 {
                     try
                     {
+                        if (!MakeCleanup())
+                            FinishTask(task);
+                        
                         runCleaning = true;
                         logger.Debug($"Cleanup Process, Folder and Socket connection.");
                         if (runningTasks.TryRemove(task.Id, out var taskResult))
