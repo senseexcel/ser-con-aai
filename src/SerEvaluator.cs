@@ -1225,10 +1225,13 @@
                 {
                     try
                     {
-                        if (!MakeCleanup())
-                            FinishTask(task);
-                        
                         runCleaning = true;
+                        if (!MakeCleanup())
+                        {
+                            runCleaning = false;
+                            FinishTask(task);
+                        }
+                        
                         logger.Debug($"Cleanup Process, Folder and Socket connection.");
                         if (runningTasks.TryRemove(task.Id, out var taskResult))
                             logger.Debug($"Remove task {task.Id} - Successfully.");
