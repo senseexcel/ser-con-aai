@@ -140,6 +140,8 @@
             {
                 var qrsResult = await qrsHub.SendRequestAsync($"app/{appId}", HttpMethod.Get);
                 logger.Trace($"appResult:{qrsResult}");
+                if (qrsResult == null)
+                    throw new Exception($"The result of the QRS request 'app/{appId}' of is null.");
                 dynamic jObject = JObject.Parse(qrsResult);
                 string userDirectory = jObject?.owner?.userDirectory ?? null;
                 string userId = jObject?.owner?.userId ?? null;
@@ -153,7 +155,7 @@
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "The app owner could not found.");
+                logger.Error(ex, $"The owner of the app {appId} could not found.");
             }
             return resultUser;
         }
@@ -316,7 +318,7 @@
         {
             try
             {
-                logger.Debug("ExecuteFunction was called");
+                logger.Debug("ExecuteFunction was called.");
                 Thread.Sleep(200);
 
                 //Read function header
@@ -359,7 +361,7 @@
                         var qrsHub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
                         domainUser = await GetAppOwner(qrsHub, activeAppId);
                         if (domainUser == null)
-                            throw new Exception("The owner of the could not found.");
+                            throw new Exception("The owner of the App could not found.");
                     }
                     catch (Exception ex)
                     {
@@ -746,7 +748,7 @@
                 if (filterFile != null)
                 {
                     var data = DownloadFile(filterFile, session.Cookie);
-                    template.Input = Path.GetFileName(filterFile);
+                    template.Input = $"{Guid.NewGuid()}{Path.GetExtension(filterFile)}";
                     return new MemoryStream(data);
                 }
                 else
@@ -1064,8 +1066,6 @@
 
         private void CheckStatus(ActiveTask task)
         {
-            var cleanupPaths = new List<string>();
-
             try
             {
                 var status = task.Status;
@@ -1180,7 +1180,7 @@
             {
                 //Cleanup
                 sessionManager.MakeSocketFree(task?.Session ?? null);
-                FinishTask(task, cleanupPaths);
+                FinishTask(task);
                 LogManager.Flush();
             }
         }
@@ -1199,7 +1199,17 @@
             }
         }
 
-        private void FinishTask(ActiveTask task, List<string> cleanupPaths = null)
+        private bool MakeCleanup()
+        {
+            foreach (var task in runningTasks)
+            {
+                if (task.Value.Status == 1 || task.Value.Status == 2)
+                    return false;
+            }
+            return true;
+        }
+
+        private void FinishTask(ActiveTask task)
         {
             try
             {
@@ -1207,41 +1217,32 @@
                 .Delay(onDemandConfig.CleanupTimeout)
                 .ContinueWith((_) =>
                 {
-                    logger.Debug($"Cleanup Process, Folder and Socket connection.");
-                    if (runningTasks.TryRemove(task.Id, out var taskResult))
-                        logger.Debug($"Remove task {task.Id} - Successfully.");
-                    sessionManager.MakeSocketFree(task?.Session ?? null);
-                    var deleteResult = restClient.DeleteFilesAsync(task.Id).Result;
-                    if (deleteResult.Success.Value)
-                        logger.Debug($"Delete task folder {task.Id} - Successfully.");
-                    else
-                        logger.Warn($"Delete task folder {task.Id} - Failed.");
-                    foreach (var guidItem in task.FileUploadIds)
+                    try
                     {
-                        deleteResult = restClient.DeleteFilesAsync(guidItem).Result;
+                        logger.Debug($"Cleanup Process, Folder and Socket connection.");
+                        if (runningTasks.TryRemove(task.Id, out var taskResult))
+                            logger.Debug($"Remove task {task.Id} - Successfully.");
+                        sessionManager.MakeSocketFree(task?.Session ?? null);
+                        var deleteResult = restClient.DeleteFilesAsync(task.Id).Result;
                         if (deleteResult.Success.Value)
-                            logger.Debug($"Delete file folder {guidItem} - Successfully.");
+                            logger.Debug($"Delete task folder {task.Id} - Successfully.");
                         else
-                            logger.Warn($"Delete file folder {guidItem} - Failed.");
-                    }
-
-                    if (cleanupPaths != null)
-                    {
-                        foreach (var cleanupPath in cleanupPaths)
+                            logger.Warn($"Delete task folder {task.Id} - Failed.");
+                        foreach (var guidItem in task.FileUploadIds)
                         {
-                            try
-                            {
-                                Directory.Delete(cleanupPath, true);
-                            }
-                            catch (Exception ex)
-                            {
-                                logger.Warn(ex, $"The folder {cleanupPath} could not remove.");
-                            }
+                            deleteResult = restClient.DeleteFilesAsync(guidItem).Result;
+                            if (deleteResult.Success.Value)
+                                logger.Debug($"Delete file folder {guidItem} - Successfully.");
+                            else
+                                logger.Warn($"Delete file folder {guidItem} - Failed.");
                         }
+                        task.Status = 0;
+                        logger.Debug($"Cleanup complete.");
                     }
-
-                    task.Status = 0;
-                    logger.Debug($"Cleanup complete.");
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, "Deletion failed");
+                    }
                 });
             }
             catch (Exception ex)
