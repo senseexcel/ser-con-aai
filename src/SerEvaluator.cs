@@ -318,7 +318,7 @@
         {
             try
             {
-                logger.Debug("ExecuteFunction was called");
+                logger.Debug("ExecuteFunction was called.");
                 Thread.Sleep(200);
 
                 //Read function header
