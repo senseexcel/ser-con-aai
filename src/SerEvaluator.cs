@@ -140,6 +140,8 @@
             {
                 var qrsResult = await qrsHub.SendRequestAsync($"app/{appId}", HttpMethod.Get);
                 logger.Trace($"appResult:{qrsResult}");
+                if (qrsResult == null)
+                    throw new Exception($"The result of the QRS request 'app/{appId}' of is null.");
                 dynamic jObject = JObject.Parse(qrsResult);
                 string userDirectory = jObject?.owner?.userDirectory ?? null;
                 string userId = jObject?.owner?.userId ?? null;
@@ -153,7 +155,7 @@
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "The app owner could not found.");
+                logger.Error(ex, $"The owner of the app {appId} could not found.");
             }
             return resultUser;
         }
@@ -359,7 +361,7 @@
                         var qrsHub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
                         domainUser = await GetAppOwner(qrsHub, activeAppId);
                         if (domainUser == null)
-                            throw new Exception("The owner of the could not found.");
+                            throw new Exception("The owner of the App could not found.");
                     }
                     catch (Exception ex)
                     {
