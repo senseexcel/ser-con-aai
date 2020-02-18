@@ -37,7 +37,7 @@
                 ServiceRunner<SSEtoSER>.Run(config =>
                 {
                     config.SetDisplayName("Qlik Connector for SER");
-                    config.SetDescription("Sense Excel Reporting Connector Service");
+                    config.SetDescription("AnalyticsGate Reporting Service");
                     var name = config.GetDefaultName();
                     config.Service(serviceConfig =>
                     {
