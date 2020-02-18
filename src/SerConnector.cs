@@ -168,7 +168,7 @@
                     }
                     else
                     {
-                        logger.Warn($"No correct server uri in config found - run in alternative mode.");
+                        logger.Info($">>> Write the correct server uri '{serverUri?.AbsoluteUri?.Trim('/')}' in the config file - run in alternative mode. <<<");
                         configObject.connection.serverUri = serverUri;
                     }
                 }
