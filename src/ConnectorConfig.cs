@@ -15,7 +15,7 @@
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
                 NamingStrategyType = typeof(CamelCaseNamingStrategy))]
-    public class SerOnDemandConfig
+    public class ConnectorConfig
     {
         #region Logger
         private static readonly Logger logger = LogManager.GetCurrentClassLogger();

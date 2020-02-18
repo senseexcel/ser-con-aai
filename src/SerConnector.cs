@@ -18,10 +18,9 @@
     using PeterKottas.DotNetCore.WindowsService.Base;
     using Q2g.HelperPem;
     using System.Net;
-    using Q2g.HelperQrs;
     using System.Threading.Tasks;
     using System.Threading;
-    using System.Net.Http;
+    using Q2g.HelperQlik;
     #endregion
 
     public class SSEtoSER : MicroService, IMicroService
@@ -35,8 +34,13 @@
         private SerEvaluator serEvaluator;
         private CancellationTokenSource cts;
         private delegate IPHostEntry GetHostEntryHandler(string name);
-        private SerOnDemandConfig config;
         #endregion
+
+        public SSEtoSER()
+        {
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+            ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
+        }
 
         #region Private Methods
         private static void CreateCertificate(string certFile, string privateKeyFile)
@@ -56,53 +60,73 @@
             }
         }
 
-        private Task CheckQlikConnection(Uri fallbackUri = null)
+        private Uri QlikConnectionCheck(string configJson, string serverUrl)
         {
-            return Task.Run(() =>
+            try
             {
-                try
-                {
-                    var connection = config.Connection;
-                    if (fallbackUri != null)
-                        connection.ServerUri = fallbackUri;
+                dynamic configObject = JObject.Parse(configJson);
+                var serverUri = new Uri($"{serverUrl}/ser");
+                configObject.connection.serverUri = serverUri;
+                ConnectorConfig connectorConfig = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
 
-                    var qlikUser = new DomainUser("INTERNAL\\ser_scheduler");
-                    var taskManager = new SessionManager();
-                    var session = taskManager.GetSession(connection, qlikUser, connection.App);
-                    if (session?.Cookie != null)
-                    {
-                        logger.Info("The connection to Qlik Sense was successful.");
-                        if (fallbackUri != null)
-                            logger.Warn($"Run in alternative mode with Uri \"{fallbackUri.AbsoluteUri}\".");
-                        return true;
-                    }
-
-                    logger.Error("NO PROXY CONNECTION TO QLIK SENSE!!!");
-                    if (fallbackUri == null)
-                    {
-                        logger.Warn("The right configuration is missing.");
-                        var alternativeUris = ConnectionFallbackHelper.AlternativeUris ?? new List<Uri>();
-                        foreach (var alternativeUri in alternativeUris)
-                        {
-                            logger.Warn($"Test uri \"{alternativeUri.AbsoluteUri}\" for alternative mode.");
-                            CheckQlikConnection(alternativeUri);
-                        }
-                    }
-                    return true;
-                }
-                catch (Exception ex)
+                var qlikUser = new DomainUser("INTERNAL\\ser_scheduler");
+                var taskManager = new SessionManager();
+                var session = taskManager.GetSession(connectorConfig.Connection, qlikUser, null);
+                if (session?.Cookie != null)
                 {
-                    logger.Error(ex, "Connection check failed.");
-                    return false;
+                    logger.Info("The connection to Qlik Sense was successful.");
+                    return serverUri;
                 }
-            }).ContinueWith((preTask) =>
+                return null;
+            }
+            catch (Exception ex)
             {
-                if (!preTask.Result)
+                logger.Error(ex, "The connection check to qlik has an error");
+                return null;
+            }
+        }
+
+        private Uri CheckAlternativeUris(string configJson)
+        {
+            try
+            {
+                // Check with hostname of the server
+                var fullQualifiedHostname = ServerUtils.GetFullQualifiedHostname(2000);
+                logger.Info($"Check server uri with hostname \"{fullQualifiedHostname}\".");
+                var result = QlikConnectionCheck(configJson, $"https://{fullQualifiedHostname}");
+                if (result != null)
+                    return result;
+
+                // Check with alternative txt
+                var alternativeTxtPath = Path.Combine(AppContext.BaseDirectory, "alternativdns.txt");
+                if (File.Exists(alternativeTxtPath))
                 {
-                    Thread.Sleep(30000);
-                    CheckQlikConnection();
+                    var content = File.ReadAllText(alternativeTxtPath)?.Trim();
+                    logger.Info($"Check server uri \"{content}\" with alternative dns.");
+                    result = QlikConnectionCheck(configJson, content);
+                    if (result != null)
+                        return result;
                 }
-            });
+
+                logger.Debug("Search for certificat domain.");
+                var alternativeUris = ConnectionFallbackHelper.AlternativeUris ?? new List<Uri>();
+                foreach (var alternativeUri in alternativeUris)
+                {
+                    logger.Info($"Check server uri \"{alternativeUri.AbsoluteUri}\" with certificate domain.");
+                    // Check with cert dns
+                    result = QlikConnectionCheck(configJson, alternativeUri.AbsoluteUri.Trim('/'));
+                    if (result != null)
+                        return result;
+                }
+
+                logger.Error("NO PROXY CONNECTION TO QLIK SENSE!!!");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Connection check failed.");
+                return null;
+            }
         }
 
         private Task StartRestServer(string[] arguments)
@@ -130,22 +154,26 @@
                         throw new Exception($"config file {configPath} not found.");
                 }
 
+                logger.Debug($"Read conncetor config file from '{configPath}'.");
                 var json = HjsonValue.Load(configPath).ToString();
-                var configObject = JObject.Parse(json);
-
-                //Gernerate virtual config for default values
-                var fullQualifiedHostname = ServerUtils.GetFullQualifiedHostname(2000);
-                var vconnection = new SerOnDemandConfig()
+                dynamic configObject = JObject.Parse(json);
+                var serverUriObj = configObject?.connection?.serverUri;
+                if (serverUriObj == null)
                 {
-                    Connection = new SerConnection()
+                    var serverUri = CheckAlternativeUris(json);
+                    if (serverUri == null)
                     {
-                        ServerUri = new Uri($"https://{fullQualifiedHostname}/ser")
+                        logger.Error("No connection to qlik found. - Please edit the right url in the connector config.");
+                        return;
                     }
-                };
-                var virtConnection = JObject.Parse(JsonConvert.SerializeObject(vconnection, Formatting.Indented));
-                virtConnection.Merge(configObject);
-                config = JsonConvert.DeserializeObject<SerOnDemandConfig>(virtConnection.ToString());
-                logger.Debug($"ServerUri: {config.Connection.ServerUri}");
+                    else
+                    {
+                        logger.Warn($"No correct server uri in config found - run in alternative mode.");
+                        configObject.connection.serverUri = serverUri;
+                    }
+                }
+
+                var config = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
 
                 //Start Rest Service
                 var rootContentFolder = SerUtilities.GetFullPathFromApp(config.WorkingDir);
@@ -157,7 +185,7 @@
                 var packages = JArray.Parse(config.ExternalPackageJson);
                 foreach (var package in packages)
                     logger.Info($"Package: {JsonConvert.SerializeObject(package)}");
-                
+
                 //check to generate certifiate and private key if not exists
                 var certFile = config?.Connection?.Credentials?.Cert ?? null;
                 certFile = SerUtilities.GetFullPathFromApp(certFile);
@@ -177,9 +205,6 @@
                 logger.Debug("Service running...");
                 logger.Debug($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}");
                 logger.Debug($"Server start...");
-
-                logger.Debug($"Check qlik connection...");
-                CheckQlikConnection();
 
                 using (serEvaluator = new SerEvaluator(config))
                 {

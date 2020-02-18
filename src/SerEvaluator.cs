@@ -67,7 +67,7 @@
         #endregion
 
         #region Properties & Variables
-        private static SerOnDemandConfig onDemandConfig;
+        private static ConnectorConfig onDemandConfig;
         private SessionManager sessionManager;
         private Ser.Engine.Rest.Client.SerApiClient restClient;
         private ConcurrentDictionary<Guid, ActiveTask> runningTasks;
@@ -75,7 +75,7 @@
         #endregion
 
         #region Connstructor & Dispose
-        public SerEvaluator(SerOnDemandConfig config)
+        public SerEvaluator(ConnectorConfig config)
         {
             onDemandConfig = config;
             ValidationCallback.Connection = config.Connection;
