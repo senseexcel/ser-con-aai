@@ -6,7 +6,7 @@
     <IncludeOpenAPIAnalyzers>true</IncludeOpenAPIAnalyzers>
     <RootNamespace>Ser.ConAai</RootNamespace>
     <Authors>akquinet finance &amp; controlling GmbH</Authors>
-    <Copyright>Copyright (c) 2019</Copyright>
+    <Copyright>Copyright (c) 2020</Copyright>
     <Company>akquinet finance &amp; controlling GmbH</Company>
     <Configuration>Release</Configuration>
     <Version>$(GitVersion_InformationalVersion)</Version>
