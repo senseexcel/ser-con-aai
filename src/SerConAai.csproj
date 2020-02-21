@@ -6,7 +6,7 @@
     <IncludeOpenAPIAnalyzers>true</IncludeOpenAPIAnalyzers>
     <RootNamespace>Ser.ConAai</RootNamespace>
     <Authors>akquinet finance &amp; controlling GmbH</Authors>
-    <Copyright>Copyright (c) 2019</Copyright>
+    <Copyright>Copyright (c) $([System.DateTime]::Today.ToString('yyyy'))</Copyright>
     <Company>akquinet finance &amp; controlling GmbH</Company>
     <Configuration>Release</Configuration>
     <Version>$(GitVersion_InformationalVersion)</Version>
@@ -103,7 +103,7 @@
 
   <Target Name="GitVersion" BeforeTargets="AfterBuild">
     <Message Importance="High" Text="++++++ GitVersion: $(GitVersion_InformationalVersion) ++++++" />
-    <Exec Command="%HOMEPATH%\Documents\NutgetInfoTool\NugetInfo.exe %HOMEPATH%\.nuget\packages C:\Users\MBerthold\Documents\Entwicklung\SenseExcelReporting\ser-con-aai\src netcoreapp3.1" />
+    <Exec Command="%HOMEPATH%\Documents\DevTools\nugetinfo\NugetInfo.exe %HOMEPATH%\.nuget\packages C:\Users\MBerthold\Documents\Entwicklung\SenseExcelReporting\ser-con-aai\src netcoreapp3.1" />
     <Message Importance="High" Text="!!!!! CHANGE VERSION NUMBER in VersionUtils.cs by Line 33 !!!!!" />
   </Target>
   
