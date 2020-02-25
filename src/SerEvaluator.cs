@@ -4,8 +4,6 @@
     using System;
     using System.Collections.Generic;
     using System.Collections.Concurrent;
-    using System.IO.Compression;
-    using System.Diagnostics;
     using System.Linq;
     using System.Net;
     using System.Net.Http;
@@ -27,9 +25,7 @@
     using static Qlik.Sse.Connector;
     using System.Text;
     using YamlDotNet.Serialization;
-    using Ser.Engine.Rest;
     using System.Text.RegularExpressions;
-    using Connection = Qlik.EngineAPI.Connection;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
