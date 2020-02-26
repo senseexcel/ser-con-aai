@@ -157,6 +157,21 @@
                 logger.Debug($"Read conncetor config file from '{configPath}'.");
                 var json = HjsonValue.Load(configPath).ToString();
                 dynamic configObject = JObject.Parse(json);
+
+                // Check to generate certifiate and private key if not exists
+                var certFile = configObject?.connection?.credentials?.cert?.ToString() ?? null;
+                certFile = SerUtilities.GetFullPathFromApp(certFile);
+                if (!File.Exists(certFile))
+                {
+                    var privateKeyFile = configObject?.connection?.credentials?.privateKey.ToString() ?? null;
+                    privateKeyFile = SerUtilities.GetFullPathFromApp(privateKeyFile);
+                    if (File.Exists(privateKeyFile))
+                        privateKeyFile = null;
+
+                    CreateCertificate(certFile, privateKeyFile);
+                }
+
+                // Find the right server uri
                 var serverUriObj = configObject?.connection?.serverUri;
                 if (serverUriObj == null)
                 {
@@ -185,19 +200,6 @@
                 var packages = JArray.Parse(config.ExternalPackageJson);
                 foreach (var package in packages)
                     logger.Info($"Package: {JsonConvert.SerializeObject(package)}");
-
-                //check to generate certifiate and private key if not exists
-                var certFile = config?.Connection?.Credentials?.Cert ?? null;
-                certFile = SerUtilities.GetFullPathFromApp(certFile);
-                if (!File.Exists(certFile))
-                {
-                    var privateKeyFile = config?.Connection?.Credentials?.PrivateKey ?? null;
-                    privateKeyFile = SerUtilities.GetFullPathFromApp(privateKeyFile);
-                    if (File.Exists(privateKeyFile))
-                        privateKeyFile = null;
-
-                    CreateCertificate(certFile, privateKeyFile);
-                }
 
                 logger.Debug($"Plattfom: {config.OS}");
                 logger.Debug($"Architecture: {config.Architecture}");
