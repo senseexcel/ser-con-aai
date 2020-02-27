@@ -4,8 +4,6 @@
     using System;
     using System.Collections.Generic;
     using System.Collections.Concurrent;
-    using System.IO.Compression;
-    using System.Diagnostics;
     using System.Linq;
     using System.Net;
     using System.Net.Http;
@@ -27,7 +25,6 @@
     using static Qlik.Sse.Connector;
     using System.Text;
     using YamlDotNet.Serialization;
-    using Ser.Engine.Rest;
     using System.Text.RegularExpressions;
     #endregion
 
@@ -609,9 +606,11 @@
                         Value = qlikSession.Cookie.Value
                     }
                 };
-                var qlikConnection = ConnectionManager.NewConnection(fullConnectionConfig);
+                var qlikConnection = ConnectionManager.NewConnection(fullConnectionConfig, true);
                 if (qlikConnection == null)
+                {
                     throw new Exception("No Websocket connection to Qlik.");
+                }
                 else
                 {
                     qlikSession.QlikConn = qlikConnection;
@@ -635,10 +634,9 @@
                         }
 
                         //Check app Id
-                        var qrsHub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, activeTask.Session.Cookie);
-                        var qrsResult = qrsHub.SendRequestAsync("/app", HttpMethod.Get, null, $"Id eq {firstConnection.App}").Result;
-                        logger.Debug($"The QRS app result: {qrsResult}");
-                        if (qrsResult == null || qrsResult == "[]")
+                        var appList = Q2g.HelperQlik.Connection.PossibleApps;
+                        var activeApp = appList.FirstOrDefault(a => a.qDocId == firstConnection.App);
+                        if (activeApp == null)
                             throw new Exception($"The app id {firstConnection.App} was not found. Please check the app id or the security rules.");
 
                         //Read content from lib and content libary
