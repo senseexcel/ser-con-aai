@@ -617,9 +617,13 @@
                     activeTask.Session = qlikSession;
                 }
 
-                //create full engine config
+                // Create full engine config
                 logger.Debug("Create ser engine full config.");
                 var newEngineConfig = CreateEngineConfig(qlikSession, json);
+
+                // Remove emtpy Tasks without report infos
+                newEngineConfig.Tasks.RemoveAll(t => t.Reports.Count == 0);
+
                 foreach (var configTask in newEngineConfig.Tasks)
                 {
                     foreach (var configReport in configTask.Reports)
