@@ -25,7 +25,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
     <PackageReference Include="NLog" Version="4.6.8" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.11" />
-    <PackageReference Include="Portable.BouncyCastle" Version="1.8.5.2" />
+    <PackageReference Include="Portable.BouncyCastle" Version="1.8.6" />
     <PackageReference Include="prometheus-net" Version="3.4.0" />
     <PackageReference Include="prometheus-net.AspNetCore" Version="3.4.0" />
     <PackageReference Include="qlik-engineapi" Version="0.3.0-alpha0015" />
@@ -43,19 +43,19 @@
       </PropertyGroup>
       <ItemGroup>
         <Reference Include="Ser.Api">
-          <HintPath>..\..\ser-api-nuget\src\bin\Release\$(TargetFramework)\SerApi.dll</HintPath>
+          <HintPath>..\..\ser-api\src\bin\Release\$(TargetFramework)\SerApi.dll</HintPath>
         </Reference>
         <Reference Include="Q2gHelperPem">
-          <HintPath>..\..\q2g-helper-pem-nuget\src\bin\Release\$(TargetFramework)\Q2gHelperPem.dll</HintPath>
+          <HintPath>..\..\q2g-helper-pem\src\bin\Release\$(TargetFramework)\Q2gHelperPem.dll</HintPath>
         </Reference>
         <Reference Include="Q2gHelperQrs">
-          <HintPath>..\..\q2g-helper-qrs-nuget\src\bin\Release\$(TargetFramework)\Q2gHelperQrs.dll</HintPath>
+          <HintPath>..\..\q2g-helper-qrs\src\bin\Release\$(TargetFramework)\Q2gHelperQrs.dll</HintPath>
         </Reference>
         <Reference Include="Q2g.HelperQlik">
-          <HintPath>..\..\q2g-helper-qlik-nuget\src\bin\Release\$(TargetFramework)\Q2gHelperQlik.dll</HintPath>
+          <HintPath>..\..\q2g-helper-qlik\src\bin\Release\$(TargetFramework)\Q2gHelperQlik.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Distribute">
-          <HintPath>..\..\ser-distribute-nuget\src\bin\Release\$(TargetFramework)\SerDistribute.dll</HintPath>
+          <HintPath>..\..\ser-distribute\src\bin\Release\$(TargetFramework)\SerDistribute.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Engine.Rest">
           <HintPath>..\..\ser-engine-rest\src\bin\Release\$(TargetFramework)\SerEngineRest.dll</HintPath>
@@ -68,19 +68,19 @@
       </PropertyGroup>
       <ItemGroup>
         <Reference Include="Ser.Api">
-          <HintPath>..\..\ser-api-nuget\src\bin\Debug\$(TargetFramework)\SerApi.dll</HintPath>
+          <HintPath>..\..\ser-api\src\bin\Debug\$(TargetFramework)\SerApi.dll</HintPath>
         </Reference>
         <Reference Include="Q2gHelperPem">
-          <HintPath>..\..\q2g-helper-pem-nuget\src\bin\Debug\$(TargetFramework)\Q2gHelperPem.dll</HintPath>
+          <HintPath>..\..\q2g-helper-pem\src\bin\Debug\$(TargetFramework)\Q2gHelperPem.dll</HintPath>
         </Reference>
         <Reference Include="Q2gHelperQrs">
-          <HintPath>..\..\q2g-helper-qrs-nuget\src\bin\Debug\$(TargetFramework)\Q2gHelperQrs.dll</HintPath>
+          <HintPath>..\..\q2g-helper-qrs\src\bin\Debug\$(TargetFramework)\Q2gHelperQrs.dll</HintPath>
         </Reference>
         <Reference Include="Q2g.HelperQlik">
-          <HintPath>..\..\q2g-helper-qlik-nuget\src\bin\Debug\$(TargetFramework)\Q2gHelperQlik.dll</HintPath>
+          <HintPath>..\..\q2g-helper-qlik\src\bin\Debug\$(TargetFramework)\Q2gHelperQlik.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Distribute">
-          <HintPath>..\..\ser-distribute-nuget\src\bin\Debug\$(TargetFramework)\SerDistribute.dll</HintPath>
+          <HintPath>..\..\ser-distribute\src\bin\Debug\$(TargetFramework)\SerDistribute.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Engine.Rest">
           <HintPath>..\..\ser-engine-rest\src\bin\Debug\$(TargetFramework)\SerEngineRest.dll</HintPath>
