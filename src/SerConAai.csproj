@@ -103,7 +103,7 @@
 
   <Target Name="GitVersion" BeforeTargets="AfterBuild">
     <Message Importance="High" Text="++++++ GitVersion: $(GitVersion_InformationalVersion) ++++++" />
-    <Exec Command="%HOMEPATH%\Documents\DevTools\nugetinfo\NugetInfo.exe %HOMEPATH%\.nuget\packages C:\Users\MBerthold\Documents\Entwicklung\SenseExcelReporting\ser-con-aai\src netcoreapp3.1" />
+    <Exec Command="%HOMEPATH%\Documents\DevTools\nugetinfo\NugetInfo.exe %HOMEPATH%\.nuget\packages C:\Users\MBerthold\Documents\Entwicklung\Reporting\ser-con-aai\src netcoreapp3.1" />
     <Message Importance="High" Text="!!!!! CHANGE VERSION NUMBER in VersionUtils.cs by Line 33 !!!!!" />
   </Target>
   
