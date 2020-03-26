@@ -10,9 +10,9 @@
     using System.Security.Cryptography.X509Certificates;
     using NLog;
     using Q2g.HelperPem;
+    using Q2g.HelperQlik;
     using Q2g.HelperQrs;
     using Ser.Api;
-    using Q2g.HelperQlik;
     #endregion
 
     public class SessionManager
@@ -100,9 +100,9 @@
             try
             {
                 var cert = new X509Certificate2();
-                var certPath = SerUtilities.GetFullPathFromApp(connection.Credentials.Cert);
+                var certPath = HelperUtilities.GetFullPathFromApp(connection.Credentials.Cert);
                 logger.Debug($"CERTPATH: {certPath}");
-                var privateKey = SerUtilities.GetFullPathFromApp(connection.Credentials.PrivateKey);
+                var privateKey = HelperUtilities.GetFullPathFromApp(connection.Credentials.PrivateKey);
                 logger.Debug($"PRIVATEKEY: {privateKey}");
                 cert = cert.LoadPem(certPath, privateKey);
                 var claims = new[]

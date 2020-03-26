@@ -16,7 +16,6 @@
     using Newtonsoft.Json.Linq;
     using NLog;
     using Ser.Api;
-    using Ser.Distribute;
     using Q2g.HelperQrs;
     using Q2g.HelperPem;
     using Qlik.EngineAPI;
@@ -595,7 +594,7 @@
 
                 //connect to qlik app
                 logger.Debug("Connect to Qlik over websocket.");
-                var fullConnectionConfig = new ConnectionConfig
+                var fullConnectionConfig = new SerConnection
                 {
                     App = qlikSession.AppId,
                     ServerUri = onDemandConfig.Connection.ServerUri,
@@ -740,7 +739,7 @@
 
         private Stream FindTemplatePath(SessionInfo session, SerTemplate template)
         {
-            var result = UriUtils.NormalizeUri(template.Input);
+            var result = HelperUtilities.NormalizeUri(template.Input);
             var templateUri = result.Item1;
             if (templateUri.Scheme.ToLowerInvariant() == "content")
             {
@@ -950,7 +949,7 @@
                         // For file access
                         lock (threadObject)
                         {
-                            var path = SerUtilities.GetFullPathFromApp(privateKey);
+                            var path = HelperUtilities.GetFullPathFromApp(privateKey);
                             var crypter = new TextCrypter(path);
                             var value = report?.template?.outputPassword ?? null;
                             if (value != null)
@@ -1274,7 +1273,7 @@
             {
                 var distribute = new Ser.Distribute.Distribute();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
-                var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
+                var privateKeyFullname = HelperUtilities.GetFullPathFromApp(privateKeyPath);
                 var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
                 var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                 if (task.CancelSource.IsCancellationRequested)

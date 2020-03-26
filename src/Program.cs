@@ -8,9 +8,6 @@
     using System;
     using System.IO;
     using System.Linq;
-    using System.Net;
-    using System.Reflection;
-    using System.Text;
     using System.Xml;
     #endregion
 
@@ -28,7 +25,7 @@
             {
                 SetLoggerSettings();
 
-                if(args.Length > 0 && args[0] == "VersionNumber")
+                if (args.Length > 0 && args[0] == "VersionNumber")
                 {
                     File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "Version.txt"), VersionUtils.GetMainVersion());
                     return;

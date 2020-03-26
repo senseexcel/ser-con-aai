@@ -7,10 +7,8 @@
     using NLog;
     using Ser.Api;
     using System;
-    using System.Collections.Generic;
     using System.IO;
     using System.Runtime.InteropServices;
-    using System.Text;
     #endregion
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,

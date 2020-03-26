@@ -8,7 +8,6 @@
     using Qlik.Sse;
     using System;
     using System.IO;
-    using System.Linq;
     using System.Security.Cryptography.X509Certificates;
     using Hjson;
     using Ser.Api;
@@ -91,7 +90,7 @@
             try
             {
                 // Check with hostname of the server
-                var fullQualifiedHostname = ServerUtils.GetFullQualifiedHostname(2000);
+                var fullQualifiedHostname = HelperUtilities.GetFullQualifiedHostname(2000);
                 logger.Info($"Check server uri with hostname \"{fullQualifiedHostname}\".");
                 var result = QlikConnectionCheck(configJson, $"https://{fullQualifiedHostname}");
                 if (result != null)
@@ -160,11 +159,11 @@
 
                 // Check to generate certifiate and private key if not exists
                 var certFile = configObject?.connection?.credentials?.cert?.ToString() ?? null;
-                certFile = SerUtilities.GetFullPathFromApp(certFile);
+                certFile = HelperUtilities.GetFullPathFromApp(certFile);
                 if (!File.Exists(certFile))
                 {
                     var privateKeyFile = configObject?.connection?.credentials?.privateKey.ToString() ?? null;
-                    privateKeyFile = SerUtilities.GetFullPathFromApp(privateKeyFile);
+                    privateKeyFile = HelperUtilities.GetFullPathFromApp(privateKeyFile);
                     if (File.Exists(privateKeyFile))
                         privateKeyFile = null;
 
@@ -191,7 +190,7 @@
                 var config = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
 
                 //Start Rest Service
-                var rootContentFolder = SerUtilities.GetFullPathFromApp(config.WorkingDir);
+                var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
                 var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
                 var restTask = StartRestServer(arguments.ToArray());
                 config.PackageVersion = VersionUtils.GetMainVersion();
