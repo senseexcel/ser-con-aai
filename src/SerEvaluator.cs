@@ -1196,7 +1196,7 @@
             catch (Exception ex)
             {
                 logger.Error(ex, "Convert type failed.");
-                return default(T);
+                return default;
             }
         }
 
