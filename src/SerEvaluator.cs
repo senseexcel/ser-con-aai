@@ -954,7 +954,7 @@
                             var value = report?.template?.outputPassword ?? null;
                             if (value != null)
                             {
-                                string password = value.Value<string>();
+                                string password = value.ToString();
                                 if (Convert.TryFromBase64String(password, new Span<byte>(), out var base64Result))
                                     report.template.outputPassword = crypter.DecryptText(password);
                                 else
