@@ -745,6 +745,7 @@
             {
                 var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, session.AppId, session.QlikConn.CurrentApp, result.Item2);
                 logger.Debug($"File count in content library: {contentFiles?.Count}");
+
                 var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(templateUri.AbsolutePath));
                 if (filterFile != null)
                 {
