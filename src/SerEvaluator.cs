@@ -763,7 +763,7 @@
                 var connUrl = session.QlikConn.CurrentApp.GetConnectionsAsync()
                     .ContinueWith<string>((connections) =>
                     {
-                        var libResult = connections.Result.FirstOrDefault(n => n.qName.ToLowerInvariant() == result.Item2) ?? null;
+                        var libResult = connections.Result.FirstOrDefault(n => n.qName == result.Item2) ?? null;
                         if (libResult == null)
                             return null;
                         var libPath = libResult?.qConnectionString?.ToString();
@@ -859,15 +859,6 @@
             if (Regex.IsMatch(checkString, "connections:[ \t]*\n[ \t]*{", RegexOptions.Singleline))
                 return true;
             return false;
-        }
-
-        private bool IsBase64String(string value)
-        {
-            byte[] buffer = new byte[((value.Length * 3) + 3) / 4 -
-            (value.Length > 0 && value[value.Length - 1] == '=' ?
-            value.Length > 1 && value[value.Length - 2] == '=' ?
-            2 : 1 : 0)];
-            return Convert.TryFromBase64String(value, buffer, out _);
         }
 
         private SerConfig CreateEngineConfig(SessionInfo session, string userJson)
@@ -970,7 +961,8 @@
                                 string password = value.ToString();
                                 if (value.Type == JTokenType.Boolean)
                                     password = password.ToLowerInvariant();
-                                if (IsBase64String(password))
+                                bool useBase64Password = report?.template?.useBase64Password ?? false;
+                                if (useBase64Password == true)
                                     report.template.outputPassword = crypter.DecryptText(password);
                                 else
                                     report.template.outputPassword = password;
