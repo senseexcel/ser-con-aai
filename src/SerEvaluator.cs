@@ -745,8 +745,10 @@
             {
                 var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, session.AppId, session.QlikConn.CurrentApp, result.Item2);
                 logger.Debug($"File count in content library: {contentFiles?.Count}");
-
-                var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(templateUri.AbsolutePath));
+                var modyPath = templateUri.AbsolutePath;
+                modyPath = modyPath.Replace("(", "%28");
+                modyPath = modyPath.Replace(")", "%29");
+                var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(modyPath));
                 if (filterFile != null)
                 {
                     var data = DownloadFile(filterFile, session.Cookie);
@@ -775,7 +777,7 @@
                     throw new Exception($"No path in content library found.");
                 else
                 {
-                    template.Input = Path.GetFileName(connUrl);
+                    template.Input = Uri.EscapeDataString(Path.GetFileName(connUrl));
                     return File.OpenRead(connUrl);
                 }
             }
