@@ -858,6 +858,15 @@
             return false;
         }
 
+        private bool IsBase64String(string value)
+        {
+            byte[] buffer = new byte[((value.Length * 3) + 3) / 4 -
+            (value.Length > 0 && value[value.Length - 1] == '=' ?
+            value.Length > 1 && value[value.Length - 2] == '=' ?
+            2 : 1 : 0)];
+            return Convert.TryFromBase64String(value, buffer, out _);
+        }
+
         private SerConfig CreateEngineConfig(SessionInfo session, string userJson)
         {
             logger.Trace($"Parse user script: {userJson}");
@@ -926,7 +935,6 @@
                     report.connections = new JArray(newUserConnections);
                     if (report.distribute is JObject distribute)
                     {
-                        //JObject distribute = report.distribute;
                         var children = distribute?.Children().Children()?.ToList() ?? new List<JToken>();
                         foreach (dynamic child in children)
                         {
@@ -952,10 +960,14 @@
                             var path = HelperUtilities.GetFullPathFromApp(privateKey);
                             var crypter = new TextCrypter(path);
                             var value = report?.template?.outputPassword ?? null;
+                            if (value == null)
+                                value = report?.template?.outputpassword ?? null;
                             if (value != null)
                             {
                                 string password = value.ToString();
-                                if (Convert.TryFromBase64String(password, new Span<byte>(), out var base64Result))
+                                if (value.Type == JTokenType.Boolean)
+                                    password = password.ToLowerInvariant();
+                                if (IsBase64String(password))
                                     report.template.outputPassword = crypter.DecryptText(password);
                                 else
                                     report.template.outputPassword = password;
