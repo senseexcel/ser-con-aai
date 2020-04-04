@@ -1128,9 +1128,10 @@
                 if (status != 2)
                 {
                     var engineException = new Exception("The report build process failed.");
-                    var firstJobResult = jobResults.FirstOrDefault(j => j.FirstException != null);
+                    var lastResult = restClient.TaskWithIdAsync(task.Id).Result;
+                    var firstJobResult = lastResult?.Results?.FirstOrDefault(j => j?.Exception != null) ?? null;
                     if (firstJobResult != null)
-                        engineException = firstJobResult.FirstException;
+                        engineException = new Exception(firstJobResult.Exception.FullMessage.Replace("\r\n", " -> "));
                     throw engineException;
                 }
                 sessionManager.MakeSocketFree(task?.Session ?? null);
