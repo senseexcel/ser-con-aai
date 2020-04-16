@@ -756,7 +756,7 @@
                     return new MemoryStream(data);
                 }
                 else
-                    throw new Exception($"No file in app library found.");
+                    throw new Exception($"No file in content library found.");
             }
             else if (templateUri.Scheme.ToLowerInvariant() == "lib")
             {
