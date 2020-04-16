@@ -743,7 +743,7 @@
             var templateUri = result.Item1;
             if (templateUri.Scheme.ToLowerInvariant() == "content")
             {
-                var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, session.AppId, session.QlikConn.CurrentApp, result.Item2);
+                var contentFiles = GetLibraryContent(session.QlikConn.CurrentApp, result.Item2);
                 logger.Debug($"File count in content library: {contentFiles?.Count}");
                 var modyPath = templateUri.AbsolutePath;
                 modyPath = modyPath.Replace("(", "%28");
@@ -763,7 +763,7 @@
                 var connUrl = session.QlikConn.CurrentApp.GetConnectionsAsync()
                     .ContinueWith<string>((connections) =>
                     {
-                        var libResult = connections.Result.FirstOrDefault(n => n.qName == result.Item2) ?? null;
+                        var libResult = connections.Result.FirstOrDefault(n => n.qName.ToLowerInvariant() == result.Item2) ?? null;
                         if (libResult == null)
                             return null;
                         var libPath = libResult?.qConnectionString?.ToString();
@@ -774,7 +774,7 @@
                     }).Result;
 
                 if (connUrl == null)
-                    throw new Exception($"No path in content library found.");
+                    throw new Exception($"No path in lib library found.");
                 else
                 {
                     template.Input = Uri.EscapeDataString(Path.GetFileName(connUrl));
@@ -986,7 +986,7 @@
             return libContent.qItems.Select(u => u.qUrl).ToList();
         }
 
-        private List<string> GetLibraryContent(Uri serverUri, string appId, IDoc app, string contentName = "")
+        private List<string> GetLibraryContent(IDoc app, string contentName = "")
         {
             try
             {
