@@ -20,15 +20,15 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="GitVersionTask" Version="5.2.4" PrivateAssets="All" />
     <PackageReference Include="Google.Protobuf" Version="3.11.4" />
-    <PackageReference Include="Grpc" Version="2.27.0" />
-    <PackageReference Include="Grpc.Core" Version="2.27.0" />
-    <PackageReference Include="Grpc.Tools" Version="2.27.0">
+    <PackageReference Include="Grpc" Version="2.28.1" />
+    <PackageReference Include="Grpc.Core" Version="2.28.1" />
+    <PackageReference Include="Grpc.Tools" Version="2.28.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Hjson" Version="3.0.0" />
     <PackageReference Include="ImpromptuInterface" Version="7.0.1" />
-    <PackageReference Include="Markdig" Version="0.18.3" />
+    <PackageReference Include="Markdig" Version="0.20.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
     <PackageReference Include="NLog" Version="4.7.0" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.11" />
@@ -39,7 +39,7 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.5.0" />
     <PackageReference Include="System.Interactive.Async" Version="4.1.1" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="4.7.0" />
-    <PackageReference Include="YamlDotNet" Version="8.1.0" />
+    <PackageReference Include="YamlDotNet" Version="8.1.1" />
   </ItemGroup>
 
   <Choose>
