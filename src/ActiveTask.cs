@@ -3,12 +3,8 @@
     #region Usings
     using Newtonsoft.Json;
     using Newtonsoft.Json.Serialization;
-    using Qlik.EngineAPI;
-    using Ser.Api;
     using System;
     using System.Collections.Generic;
-    using System.Net;
-    using enigma;
     using Newtonsoft.Json.Linq;
     using System.Threading;
     #endregion

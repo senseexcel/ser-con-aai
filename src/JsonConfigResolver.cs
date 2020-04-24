@@ -9,7 +9,6 @@
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using NLog;
-    using Ser.Api;
     #endregion
 
     public class JsonConfigResolver

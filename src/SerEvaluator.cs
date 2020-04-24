@@ -16,7 +16,6 @@
     using Newtonsoft.Json.Linq;
     using NLog;
     using Ser.Api;
-    using Ser.Distribute;
     using Q2g.HelperQrs;
     using Q2g.HelperPem;
     using Qlik.EngineAPI;
@@ -595,7 +594,7 @@
 
                 //connect to qlik app
                 logger.Debug("Connect to Qlik over websocket.");
-                var fullConnectionConfig = new ConnectionConfig
+                var fullConnectionConfig = new SerConnection
                 {
                     App = qlikSession.AppId,
                     ServerUri = onDemandConfig.Connection.ServerUri,
@@ -740,13 +739,16 @@
 
         private Stream FindTemplatePath(SessionInfo session, SerTemplate template)
         {
-            var result = UriUtils.NormalizeUri(template.Input);
+            var result = HelperUtilities.NormalizeUri(template.Input);
             var templateUri = result.Item1;
             if (templateUri.Scheme.ToLowerInvariant() == "content")
             {
-                var contentFiles = GetLibraryContent(onDemandConfig.Connection.ServerUri, session.AppId, session.QlikConn.CurrentApp, result.Item2);
+                var contentFiles = GetLibraryContent(session.QlikConn.CurrentApp, result.Item2);
                 logger.Debug($"File count in content library: {contentFiles?.Count}");
-                var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(templateUri.AbsolutePath));
+                var modyPath = templateUri.AbsolutePath;
+                modyPath = modyPath.Replace("(", "%28");
+                modyPath = modyPath.Replace(")", "%29");
+                var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(modyPath));
                 if (filterFile != null)
                 {
                     var data = DownloadFile(filterFile, session.Cookie);
@@ -754,7 +756,7 @@
                     return new MemoryStream(data);
                 }
                 else
-                    throw new Exception($"No file in app library found.");
+                    throw new Exception($"No file in content library found.");
             }
             else if (templateUri.Scheme.ToLowerInvariant() == "lib")
             {
@@ -772,10 +774,10 @@
                     }).Result;
 
                 if (connUrl == null)
-                    throw new Exception($"No path in content library found.");
+                    throw new Exception($"No path in lib library found.");
                 else
                 {
-                    template.Input = Path.GetFileName(connUrl);
+                    template.Input = Uri.EscapeDataString(Path.GetFileName(connUrl));
                     return File.OpenRead(connUrl);
                 }
             }
@@ -927,7 +929,6 @@
                     report.connections = new JArray(newUserConnections);
                     if (report.distribute is JObject distribute)
                     {
-                        //JObject distribute = report.distribute;
                         var children = distribute?.Children().Children()?.ToList() ?? new List<JToken>();
                         foreach (dynamic child in children)
                         {
@@ -950,13 +951,18 @@
                         // For file access
                         lock (threadObject)
                         {
-                            var path = SerUtilities.GetFullPathFromApp(privateKey);
+                            var path = HelperUtilities.GetFullPathFromApp(privateKey);
                             var crypter = new TextCrypter(path);
                             var value = report?.template?.outputPassword ?? null;
+                            if (value == null)
+                                value = report?.template?.outputpassword ?? null;
                             if (value != null)
                             {
-                                string password = value.Value<string>();
-                                if (Convert.TryFromBase64String(password, new Span<byte>(), out var base64Result))
+                                string password = value.ToString();
+                                if (value.Type == JTokenType.Boolean)
+                                    password = password.ToLowerInvariant();
+                                bool useBase64Password = report?.template?.useBase64Password ?? false;
+                                if (useBase64Password == true)
                                     report.template.outputPassword = crypter.DecryptText(password);
                                 else
                                     report.template.outputPassword = password;
@@ -980,7 +986,7 @@
             return libContent.qItems.Select(u => u.qUrl).ToList();
         }
 
-        private List<string> GetLibraryContent(Uri serverUri, string appId, IDoc app, string contentName = "")
+        private List<string> GetLibraryContent(IDoc app, string contentName = "")
         {
             try
             {
@@ -1122,9 +1128,10 @@
                 if (status != 2)
                 {
                     var engineException = new Exception("The report build process failed.");
-                    var firstJobResult = jobResults.FirstOrDefault(j => j.FirstException != null);
+                    var lastResult = restClient.TaskWithIdAsync(task.Id).Result;
+                    var firstJobResult = lastResult?.Results?.FirstOrDefault(j => j?.Exception != null) ?? null;
                     if (firstJobResult != null)
-                        engineException = firstJobResult.FirstException;
+                        engineException = new Exception(firstJobResult.Exception.FullMessage.Replace("\r\n", " -> "));
                     throw engineException;
                 }
                 sessionManager.MakeSocketFree(task?.Session ?? null);
@@ -1197,7 +1204,7 @@
             catch (Exception ex)
             {
                 logger.Error(ex, "Convert type failed.");
-                return default(T);
+                return default;
             }
         }
 
@@ -1274,7 +1281,7 @@
             {
                 var distribute = new Ser.Distribute.Distribute();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
-                var privateKeyFullname = SerUtilities.GetFullPathFromApp(privateKeyPath);
+                var privateKeyFullname = HelperUtilities.GetFullPathFromApp(privateKeyPath);
                 var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
                 var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                 if (task.CancelSource.IsCancellationRequested)

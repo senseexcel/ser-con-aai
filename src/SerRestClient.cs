@@ -1183,8 +1183,8 @@ namespace Ser.Engine.Rest.Client
         [Newtonsoft.Json.JsonProperty("engineVersion", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public string EngineVersion { get; set; }
 
-        [Newtonsoft.Json.JsonProperty("firstException", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public Exception FirstException { get; set; }
+        [Newtonsoft.Json.JsonProperty("exception", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public ReportException Exception { get; set; }
 
         [Newtonsoft.Json.JsonProperty("count", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public int? Count { get; set; }
@@ -1203,7 +1203,17 @@ namespace Ser.Engine.Rest.Client
         }
     
     }
-    
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "9.13.22.0 (Newtonsoft.Json v12.0.0.0)")]
+    public partial class ReportException
+    {
+        [Newtonsoft.Json.JsonProperty("fullMessage", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string FullMessage { get; set; }
+
+        [Newtonsoft.Json.JsonProperty("stackTrace", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string StackTrace { get; set; }
+    }
+
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "9.13.22.0 (Newtonsoft.Json v12.0.0.0)")]
     public partial class Report 
     {

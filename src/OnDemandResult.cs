@@ -2,12 +2,9 @@
 {
     #region Usings
     using System;
-    using System.Collections.Generic;
-    using System.Text;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using Newtonsoft.Json.Serialization;
-    using Ser.Api;
     #endregion
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
