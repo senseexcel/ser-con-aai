@@ -89,6 +89,8 @@
         {
             try
             {
+                logger.Info("Connecting with Qlik Sense...");
+
                 // Check with hostname of the server
                 var fullQualifiedHostname = HelperUtilities.GetFullQualifiedHostname(2000);
                 logger.Info($"Check server uri with hostname \"{fullQualifiedHostname}\".");
@@ -118,7 +120,7 @@
                         return result;
                 }
 
-                logger.Error("NO PROXY CONNECTION TO QLIK SENSE!!!");
+                logger.Error("NO CONNECTION TO QLIK SENSE!!!");
                 return null;
             }
             catch (Exception ex)
@@ -126,6 +128,21 @@
                 logger.Error(ex, "Connection check failed.");
                 return null;
             }
+        }
+
+        private Task<Uri> CheckQlikConnection(string json)
+        {
+            return Task.Run<Uri>(() =>
+            {
+                var serverUri = CheckAlternativeUris(json);
+                while (serverUri == null)
+                {
+                    logger.Error("There is no connection to Qlik. Please edit the right url in the connector config. The connection to qlik is checked every 20 seconds.");
+                    Thread.Sleep(20000);
+                    serverUri = CheckAlternativeUris(json);
+                }
+                return serverUri;
+            }, cts.Token);
         }
 
         private Task StartRestServer(string[] arguments)
@@ -174,17 +191,9 @@
                 var serverUriObj = configObject?.connection?.serverUri;
                 if (serverUriObj == null)
                 {
-                    var serverUri = CheckAlternativeUris(json);
-                    if (serverUri == null)
-                    {
-                        logger.Error("No connection to qlik found. - Please edit the right url in the connector config.");
-                        return;
-                    }
-                    else
-                    {
-                        logger.Info($">>> Write the correct server uri '{serverUri?.AbsoluteUri?.Trim('/')}' in the config file - run in alternative mode. <<<");
-                        configObject.connection.serverUri = serverUri;
-                    }
+                    var serverUri = CheckQlikConnection(json).Result;
+                    logger.Info($">>> Write the correct server uri '{serverUri?.AbsoluteUri?.Trim('/')}' in the config file - run in alternative mode. <<<");
+                    configObject.connection.serverUri = serverUri;
                 }
 
                 var config = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
