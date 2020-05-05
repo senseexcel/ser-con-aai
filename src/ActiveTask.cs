@@ -23,6 +23,7 @@
         public JObject JobJson { get; set; }
         public bool Stoppable { get; set; }
         public bool Stopped { get; set; }
+        public DateTime? LastQlikCall { get; set; }
         public CancellationTokenSource CancelSource { get; set; }
     }
 }

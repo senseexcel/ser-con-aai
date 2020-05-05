@@ -83,7 +83,7 @@
             restClient.BaseUrl = baseUrl;
             sessionManager = new SessionManager();
             runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
-            Cleanup();
+            Cleanup(); 
         }
         #endregion
 
@@ -417,6 +417,7 @@
                                 statusResult.Distribute = currentTask.Value.Distribute;
                                 statusResult.Status = currentTask.Value.Status;
                                 statusResult.Log = currentTask.Value.Message;
+                                currentTask.Value.LastQlikCall = DateTime.Now;
                             }
                             else
                             {
@@ -471,20 +472,8 @@
                         }
                         else if (taskId.HasValue)
                         {
-                            var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId.Value);
-                            if (currentTask.Value != null)
-                            {
-                                currentTask.Value?.CancelSource?.Cancel();
-                                var stopResult = restClient.StopTasksAsync(currentTask.Value.Id).Result;
-                                if (stopResult.Success.Value)
-                                    logger.Debug($"The task {currentTask.Value.Id} was stopped.");
-                                else
-                                    logger.Debug($"The task {currentTask.Value.Id} could not stopped.");
-                                FinishTask(currentTask.Value);
-                                statusResult.Log = $"Task {currentTask.Value?.Id} was stoppt.";
-                                currentTask.Value.Stopped = true;
-                                currentTask.Value.Status = 4;
-                            }
+                            StopTask(taskId.Value);
+                            statusResult.Log = $"Task {taskId.Value} was stoppt.";
                         }
                         statusResult.Status = 4;
                         break;
@@ -537,6 +526,25 @@
         #endregion
 
         #region Private Functions
+        private void StopTask(Guid taskId)
+        {
+            var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId);
+            if (currentTask.Value != null && !currentTask.Value.Stopped)
+            {
+                currentTask.Value?.CancelSource?.Cancel();
+                var stopResult = restClient.StopTasksAsync(currentTask.Value.Id).Result;
+                if (stopResult.Success.Value)
+                {
+                    logger.Debug($"The task {currentTask.Value.Id} was stopped.");
+                    FinishTask(currentTask.Value);
+                    currentTask.Value.Stopped = true;
+                    currentTask.Value.Status = 4;
+                }
+                else
+                    logger.Debug($"The task {currentTask.Value.Id} could not stopped.");
+            }
+        }
+
         private string GetFormatedJsonForQlik(JObject distibute)
         {
             var resultText = new StringBuilder();
@@ -1083,8 +1091,18 @@
                 while (status != 2)
                 {
                     logger.Trace("CheckStatus - Wait for finished tasks.");
+                    
+                    if(task.LastQlikCall != null)
+                    {
+                        var timeSpan = DateTime.Now - task.LastQlikCall.Value;
+                        if (timeSpan.TotalSeconds > 5)
+                        {
+                            StopTask(task.Id);
+                            throw new TaskCanceledException("The build of the report was canceled by user.");
+                        }
+                    }
 
-                    Thread.Sleep(1000);
+                    Thread.Sleep(3000);
                     if (task.Status == -1 || task.Status == 0 || status == -1)
                         break;
 
