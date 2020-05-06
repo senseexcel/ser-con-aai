@@ -25,6 +25,7 @@
     using System.Text;
     using YamlDotNet.Serialization;
     using System.Text.RegularExpressions;
+    using Ser.Distribute;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -83,7 +84,7 @@
             restClient.BaseUrl = baseUrl;
             sessionManager = new SessionManager();
             runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
-            Cleanup(); 
+            Cleanup();
         }
         #endregion
 
@@ -1091,8 +1092,8 @@
                 while (status != 2)
                 {
                     logger.Trace("CheckStatus - Wait for finished tasks.");
-                    
-                    if(task.LastQlikCall != null)
+
+                    if (task.LastQlikCall != null)
                     {
                         var timeSpan = DateTime.Now - task.LastQlikCall.Value;
                         if (timeSpan.TotalSeconds > 5)
@@ -1178,18 +1179,8 @@
 
                 //Delivery
                 task.Message = "Delivery Report, Please wait...";
-                status = StartDeliveryTool(task, distJobresults);
-                task.Status = status;
-                switch (status)
-                {
-                    case 3:
-                        logger.Debug("The delivery was successfully.");
-                        break;
-                    case 4:
-                        throw new TaskCanceledException("The delivery was canceled by user.");
-                    default:
-                        throw new Exception("The delivery process failed.");
-                }
+                StartDeliveryTool(task, distJobresults);
+                task.Status = 3;
             }
             catch (TaskCanceledException ex)
             {
@@ -1199,7 +1190,7 @@
             }
             catch (Exception ex)
             {
-                task.Message = ex.Message;
+                task.Message = GetCompleteMessage(ex);
                 task.Status = -1;
                 logger.Error(ex, "The status check has detected a processing error.");
             }
@@ -1210,6 +1201,18 @@
                 FinishTask(task);
                 LogManager.Flush();
             }
+        }
+
+        private string GetCompleteMessage(Exception exception)
+        {
+            var x = exception?.InnerException ?? null;
+            var msg = new StringBuilder(exception?.Message);
+            while (x != null)
+            {
+                msg.Append($"{Environment.NewLine}{x.Message}");
+                x = x.InnerException;
+            }
+            return msg.ToString()?.Replace("\r\n", " -> ");
         }
 
         private T ConvertApiType<T>(object value)
@@ -1293,37 +1296,33 @@
             }
         }
 
-        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
+        private void StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
         {
             try
             {
-                var distribute = new Ser.Distribute.Distribute();
+                var distribute = new DistributeManager();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = HelperUtilities.GetFullPathFromApp(privateKeyPath);
                 var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
-                var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                 if (task.CancelSource.IsCancellationRequested)
+                    throw new TaskCanceledException("The delivery was canceled by user.");
+
+                if (result != null)
                 {
-                    logger.Debug("Distribute is canceled by user.");
-                    return 4;
-                }
-                else if (result != null)
-                {
+                    var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                     logger.Debug($"Distribute result: {result}");
                     logger.Info($"{xmlResult}");
                     task.Distribute = result;
-                    return 3;
+                    logger.Debug("The delivery was successfully.");
                 }
                 else
                 {
-                    logger.Error("The distribute has errors.");
-                    return -1;
+                    throw new Exception(distribute.ErrorMessage);
                 }
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "The distribute was failed.");
-                return -1;
+                throw new Exception("The delivery process failed.", ex);
             }
         }
 
