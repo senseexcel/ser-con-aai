@@ -1195,7 +1195,7 @@
             {
                 task.Message = ex.Message;
                 task.Status = 4;
-                logger.Error(ex, "The status check was canceled by user.");
+                logger.Error(ex, "The process was canceled by user.");
             }
             catch (Exception ex)
             {
