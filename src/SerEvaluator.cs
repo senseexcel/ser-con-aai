@@ -988,7 +988,6 @@
             return serConfiguration;
         }
 
-
         private List<string> GetLibraryContentInternal(IDoc app, string qName)
         {
             var libContent = app.GetLibraryContentAsync(qName).Result;
