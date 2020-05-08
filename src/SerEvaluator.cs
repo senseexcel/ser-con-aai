@@ -1095,7 +1095,7 @@
                     if (task.LastQlikCall != null)
                     {
                         var timeSpan = DateTime.Now - task.LastQlikCall.Value;
-                        if (timeSpan.TotalSeconds > 5)
+                        if (timeSpan.TotalSeconds > 10)
                         {
                             StopTask(task.Id);
                             throw new TaskCanceledException("The build of the report was canceled by user.");
