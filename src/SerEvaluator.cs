@@ -25,6 +25,7 @@
     using System.Text;
     using YamlDotNet.Serialization;
     using System.Text.RegularExpressions;
+    using Ser.Distribute;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -144,7 +145,7 @@
                 if (!String.IsNullOrEmpty(userDirectory) && !String.IsNullOrEmpty(userId))
                 {
                     resultUser = new DomainUser($"{userDirectory}\\{userId}");
-                    logger.Debug($"Found app owner: {resultUser.ToString()}");
+                    logger.Debug($"Found app owner: {resultUser}");
                 }
                 else
                     logger.Error($"No user directory {userDirectory} or user id {userId} found.");
@@ -417,6 +418,7 @@
                                 statusResult.Distribute = currentTask.Value.Distribute;
                                 statusResult.Status = currentTask.Value.Status;
                                 statusResult.Log = currentTask.Value.Message;
+                                currentTask.Value.LastQlikCall = DateTime.Now;
                             }
                             else
                             {
@@ -471,20 +473,8 @@
                         }
                         else if (taskId.HasValue)
                         {
-                            var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId.Value);
-                            if (currentTask.Value != null)
-                            {
-                                currentTask.Value?.CancelSource?.Cancel();
-                                var stopResult = restClient.StopTasksAsync(currentTask.Value.Id).Result;
-                                if (stopResult.Success.Value)
-                                    logger.Debug($"The task {currentTask.Value.Id} was stopped.");
-                                else
-                                    logger.Debug($"The task {currentTask.Value.Id} could not stopped.");
-                                FinishTask(currentTask.Value);
-                                statusResult.Log = $"Task {currentTask.Value?.Id} was stoppt.";
-                                currentTask.Value.Stopped = true;
-                                currentTask.Value.Status = 4;
-                            }
+                            StopTask(taskId.Value);
+                            statusResult.Log = $"Task {taskId.Value} was stoppt.";
                         }
                         statusResult.Status = 4;
                         break;
@@ -537,6 +527,25 @@
         #endregion
 
         #region Private Functions
+        private void StopTask(Guid taskId)
+        {
+            var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId);
+            if (currentTask.Value != null && !currentTask.Value.Stopped)
+            {
+                currentTask.Value?.CancelSource?.Cancel();
+                var stopResult = restClient.StopTasksAsync(currentTask.Value.Id).Result;
+                if (stopResult.Success.Value)
+                {
+                    logger.Debug($"The task {currentTask.Value.Id} was stopped.");
+                    FinishTask(currentTask.Value);
+                    currentTask.Value.Stopped = true;
+                    currentTask.Value.Status = 4;
+                }
+                else
+                    logger.Debug($"The task {currentTask.Value.Id} could not stopped.");
+            }
+        }
+
         private string GetFormatedJsonForQlik(JObject distibute)
         {
             var resultText = new StringBuilder();
@@ -979,7 +988,6 @@
             return serConfiguration;
         }
 
-
         private List<string> GetLibraryContentInternal(IDoc app, string qName)
         {
             var libContent = app.GetLibraryContentAsync(qName).Result;
@@ -1084,7 +1092,17 @@
                 {
                     logger.Trace("CheckStatus - Wait for finished tasks.");
 
-                    Thread.Sleep(1000);
+                    if (task.LastQlikCall != null)
+                    {
+                        var timeSpan = DateTime.Now - task.LastQlikCall.Value;
+                        if (timeSpan.TotalSeconds > 5)
+                        {
+                            StopTask(task.Id);
+                            throw new TaskCanceledException("The build of the report was canceled by user.");
+                        }
+                    }
+
+                    Thread.Sleep(1500);
                     if (task.Status == -1 || task.Status == 0 || status == -1)
                         break;
 
@@ -1160,28 +1178,18 @@
 
                 //Delivery
                 task.Message = "Delivery Report, Please wait...";
-                status = StartDeliveryTool(task, distJobresults);
-                task.Status = status;
-                switch (status)
-                {
-                    case 3:
-                        logger.Debug("The delivery was successfully.");
-                        break;
-                    case 4:
-                        throw new TaskCanceledException("The delivery was canceled by user.");
-                    default:
-                        throw new Exception("The delivery process failed.");
-                }
+                StartDeliveryTool(task, distJobresults);
+                task.Status = 3;
             }
             catch (TaskCanceledException ex)
             {
                 task.Message = ex.Message;
                 task.Status = 4;
-                logger.Error(ex, "The status check was canceled by user.");
+                logger.Error(ex, "The process was canceled by user.");
             }
             catch (Exception ex)
             {
-                task.Message = ex.Message;
+                task.Message = GetCompleteMessage(ex);
                 task.Status = -1;
                 logger.Error(ex, "The status check has detected a processing error.");
             }
@@ -1192,6 +1200,18 @@
                 FinishTask(task);
                 LogManager.Flush();
             }
+        }
+
+        private string GetCompleteMessage(Exception exception)
+        {
+            var x = exception?.InnerException ?? null;
+            var msg = new StringBuilder(exception?.Message);
+            while (x != null)
+            {
+                msg.Append($"{Environment.NewLine}{x.Message}");
+                x = x.InnerException;
+            }
+            return msg.ToString()?.Replace("\r\n", " -> ");
         }
 
         private T ConvertApiType<T>(object value)
@@ -1275,37 +1295,33 @@
             }
         }
 
-        private int StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
+        private void StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
         {
             try
             {
-                var distribute = new Ser.Distribute.Distribute();
+                var distribute = new DistributeManager();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = HelperUtilities.GetFullPathFromApp(privateKeyPath);
                 var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
-                var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                 if (task.CancelSource.IsCancellationRequested)
+                    throw new TaskCanceledException("The delivery was canceled by user.");
+
+                if (result != null)
                 {
-                    logger.Debug("Distribute is canceled by user.");
-                    return 4;
-                }
-                else if (result != null)
-                {
+                    var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                     logger.Debug($"Distribute result: {result}");
                     logger.Info($"{xmlResult}");
                     task.Distribute = result;
-                    return 3;
+                    logger.Debug("The delivery was successfully.");
                 }
                 else
                 {
-                    logger.Error("The distribute has errors.");
-                    return -1;
+                    throw new Exception(distribute.ErrorMessage);
                 }
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "The distribute was failed.");
-                return -1;
+                throw new Exception("The delivery process failed.", ex);
             }
         }
 
