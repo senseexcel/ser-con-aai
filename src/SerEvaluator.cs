@@ -145,7 +145,7 @@
                 if (!String.IsNullOrEmpty(userDirectory) && !String.IsNullOrEmpty(userId))
                 {
                     resultUser = new DomainUser($"{userDirectory}\\{userId}");
-                    logger.Debug($"Found app owner: {resultUser.ToString()}");
+                    logger.Debug($"Found app owner: {resultUser}");
                 }
                 else
                     logger.Error($"No user directory {userDirectory} or user id {userId} found.");
@@ -1102,7 +1102,7 @@
                         }
                     }
 
-                    Thread.Sleep(3000);
+                    Thread.Sleep(1500);
                     if (task.Status == -1 || task.Status == 0 || status == -1)
                         break;
 
