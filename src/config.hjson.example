@@ -4,10 +4,10 @@
   # This allows to have a more human readable and understandable
   # json config with commenst,...
 
-  # Use performance analyser
+  # Analysis of the performance (Attention slower process)
   # usePerfomanceAnalyzer: false
 
-  # The time until the engine is aborted
+  # The time in sec until the engine is aborted
   # stopTimeout: 10
 
   # Creating a temporary directory for the report process
