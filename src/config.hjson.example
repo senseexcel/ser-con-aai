@@ -7,6 +7,9 @@
   # Creating a temporary directory for the report process
   workingDir: %temp%\senseexelreporting
 
+  # The time until the engine is aborted
+  stopTimeout: 10
+
   # Host binding on gRPC Server
   bindingHost: localhost
 

@@ -21,6 +21,7 @@
 
         #region Properties
         public string WorkingDir { get; set; }
+        public int StopTimeout { get; set; } = 10;
         public int BindingPort { get; set; } = 50059;
         public string BindingHost { get; set; } = "localhost";
         public string RestServiceUrl { get; set; } = "http://localhost:40263";
