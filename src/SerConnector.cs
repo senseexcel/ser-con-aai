@@ -201,6 +201,8 @@
                 }
 
                 var config = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
+                if (config.StopTimeout < 5)
+                    config.StopTimeout = 5;
 
                 //Start Rest Service
                 var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
