@@ -93,7 +93,7 @@
             {
                 Analyser = new PerfomanceAnalyser(new AnalyserOptions()
                 {
-                    AnalyserFolder = SystemGeneral.GetLogFileName("file")
+                    AnalyserFolder = Path.GetDirectoryName(SystemGeneral.GetLogFileName("file"))
                 });
             }
         }
@@ -1221,7 +1221,7 @@
                 sessionManager.MakeSocketFree(task?.Session ?? null);
                 FinishTask(task);
                 LogManager.Flush();
-                Analyser.Stop();
+                Analyser?.Stop();
             }
         }
 
