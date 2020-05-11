@@ -8,7 +8,7 @@
   workingDir: %temp%\senseexelreporting
 
   # The time until the engine is aborted
-  stopTimeout: 10
+  # stopTimeout: 10
 
   # Host binding on gRPC Server
   bindingHost: localhost
