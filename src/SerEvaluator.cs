@@ -1217,7 +1217,7 @@
             finally
             {
                 //Cleanup
-                Analyser?.SaveCheckPoints("connector");
+                Analyser?.SaveCheckPoints("Connector");
                 sessionManager.MakeSocketFree(task?.Session ?? null);
                 FinishTask(task);
                 LogManager.Flush();
