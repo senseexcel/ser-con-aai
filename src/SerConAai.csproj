@@ -64,6 +64,9 @@
         <Reference Include="Ser.Distribute">
           <HintPath>..\..\ser-distribute\src\bin\Release\$(TargetFramework)\SerDistribute.dll</HintPath>
         </Reference>
+        <Reference Include="SerSystem">
+          <HintPath>..\..\ser-system\src\bin\Release\netcoreapp3.1\SerSystem.dll</HintPath>
+        </Reference>
         <Reference Include="Ser.Engine.Rest">
           <HintPath>..\..\ser-engine-rest\src\bin\Release\$(TargetFramework)\SerEngineRest.dll</HintPath>
         </Reference>
@@ -97,6 +100,9 @@
         </Reference>
         <Reference Include="Ser.Distribute">
           <HintPath>..\..\ser-distribute\src\bin\Debug\$(TargetFramework)\SerDistribute.dll</HintPath>
+        </Reference>
+        <Reference Include="SerSystem">
+          <HintPath>..\..\ser-system\src\bin\Debug\netcoreapp3.1\SerSystem.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Engine.Rest">
           <HintPath>..\..\ser-engine-rest\src\bin\Debug\$(TargetFramework)\SerEngineRest.dll</HintPath>
