@@ -590,6 +590,7 @@
             {
                 logger.Debug("Create Report");
                 logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
+                Analyser?.ClearCheckPoints();
                 Analyser?.Start();
                 Analyser?.SetCheckPoint("CreateReport", "Start report generation");
 
@@ -962,13 +963,6 @@
                             var connection = child.connections ?? null;
                             if (connection?.ToString() == "@CONFIGCONNECTION@")
                                 child.connections = new JArray(newUserConnections);
-                            var childProp = (child as JObject).Parent as JProperty;
-                            if (childProp?.Name == "hub")
-                            {
-                                var hubOwner = child.owner ?? null;
-                                if (hubOwner == null)
-                                    child.owner = session.User.ToString();
-                            }
                         }
                     }
 
@@ -1325,7 +1319,13 @@
                 var distribute = new DistributeManager();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = HelperUtilities.GetFullPathFromApp(privateKeyPath);
-                var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
+                var distibuteOptions = new DistibuteOptions()
+                {
+                    SessionUser = task.Session.User,
+                    CancelToken = task.CancelSource.Token,
+                    PrivateKeyPath = privateKeyFullname
+                };
+                var result = distribute.Run(jobResults, distibuteOptions);
                 if (task.CancelSource.IsCancellationRequested)
                     throw new TaskCanceledException("The delivery was canceled by user.");
 
