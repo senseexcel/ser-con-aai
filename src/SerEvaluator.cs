@@ -91,6 +91,7 @@
 
             if (onDemandConfig.UsePerfomanceAnalyzer)
             {
+                logger.Info("Use perfomance analyser.");
                 Analyser = new PerfomanceAnalyser(new AnalyserOptions()
                 {
                     AnalyserFolder = Path.GetDirectoryName(SystemGeneral.GetLogFileName("file"))
