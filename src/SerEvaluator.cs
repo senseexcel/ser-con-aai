@@ -962,7 +962,9 @@
                         foreach (dynamic child in children)
                         {
                             var connection = child.connections ?? null;
-                            if (connection?.ToString() == "@CONFIGCONNECTION@")
+                            if(connection == null)
+                                child.connections = new JArray(newUserConnections);
+                            else if (connection?.ToString() == "@CONFIGCONNECTION@")
                                 child.connections = new JArray(newUserConnections);
                         }
                     }
