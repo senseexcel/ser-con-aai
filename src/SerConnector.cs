@@ -32,6 +32,7 @@
         private Server server;
         private SerEvaluator serEvaluator;
         private CancellationTokenSource cts;
+        private bool IsFristStart = false;
         private delegate IPHostEntry GetHostEntryHandler(string name);
         #endregion
 
@@ -135,6 +136,8 @@
             return Task.Run<Uri>(() =>
             {
                 var serverUri = CheckAlternativeUris(json);
+                if (IsFristStart)
+                    return serverUri;
                 while (serverUri == null)
                 {
                     logger.Error("There is no connection to Qlik. Please edit the right url in the connector config. The connection to qlik is checked every 20 seconds.");
@@ -185,6 +188,7 @@
                         privateKeyFile = null;
 
                     CreateCertificate(certFile, privateKeyFile);
+                    IsFristStart = true;
                 }
 
                 // Find the right server uri
@@ -197,6 +201,8 @@
                 }
 
                 var config = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
+                if (config.StopTimeout < 5)
+                    config.StopTimeout = 5;
 
                 //Start Rest Service
                 var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);

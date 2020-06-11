@@ -26,6 +26,8 @@
     using YamlDotNet.Serialization;
     using System.Text.RegularExpressions;
     using Ser.Distribute;
+    using Ser.Diagnostics;
+    using Ser.Gerneral;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -69,6 +71,7 @@
         private Ser.Engine.Rest.Client.SerApiClient restClient;
         private ConcurrentDictionary<Guid, ActiveTask> runningTasks;
         private object threadObject = new object();
+        private PerfomanceAnalyser Analyser;
         #endregion
 
         #region Connstructor & Dispose
@@ -85,6 +88,15 @@
             sessionManager = new SessionManager();
             runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
             Cleanup();
+
+            if (onDemandConfig.UsePerfomanceAnalyzer)
+            {
+                logger.Info("Use perfomance analyser.");
+                Analyser = new PerfomanceAnalyser(new AnalyserOptions()
+                {
+                    AnalyserFolder = Path.GetDirectoryName(SystemGeneral.GetLogFileName("file"))
+                });
+            }
         }
         #endregion
 
@@ -579,6 +591,9 @@
             {
                 logger.Debug("Create Report");
                 logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
+                Analyser?.ClearCheckPoints();
+                Analyser?.Start();
+                Analyser?.SetCheckPoint("CreateReport", "Start report generation");
 
                 activeTask = new ActiveTask()
                 {
@@ -590,7 +605,6 @@
                 };
 
                 MappedDiagnosticsLogicalContext.Set("jobId", activeTask.Id.ToString());
-                logger.Info($"<user>{qlikUser.ToString()}</user>");
 
                 //task to list
                 runningTasks.TryAdd(activeTask.Id, activeTask);
@@ -603,6 +617,7 @@
 
                 //connect to qlik app
                 logger.Debug("Connect to Qlik over websocket.");
+                Analyser?.SetCheckPoint("CreateReport", "Connect to Qlik");
                 var fullConnectionConfig = new SerConnection
                 {
                     App = qlikSession.AppId,
@@ -627,6 +642,7 @@
 
                 // Create full engine config
                 logger.Debug("Create ser engine full config.");
+                Analyser?.SetCheckPoint("CreateReport", "Gernerate Config Json");
                 var newEngineConfig = CreateEngineConfig(qlikSession, json);
 
                 // Remove emtpy Tasks without report infos
@@ -672,6 +688,9 @@
                         {
                             logger.Debug("No Template found. - Use alternative mode.");
                         }
+
+                        // Perfomance Analyser for the Engine
+                        configReport.General.UsePerfomanceAnalyzer = onDemandConfig.UsePerfomanceAnalyzer;
                     }
                 }
 
@@ -681,6 +700,7 @@
                 activeTask.JobJson = jobJson;
 
                 //Use the connector in the same App, than wait for data reload
+                Analyser?.SetCheckPoint("CreateReport", "Start connector reporting task");
                 var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)?.SelectMany(r => r.Connections)?.FirstOrDefault(c => c.App == qlikSession.AppId) ?? null;
                 Task.Run(() => WaitForDataLoad(activeTask, qlikSession, scriptConnection));
                 return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
@@ -942,15 +962,10 @@
                         foreach (dynamic child in children)
                         {
                             var connection = child.connections ?? null;
-                            if (connection?.ToString() == "@CONFIGCONNECTION@")
+                            if(connection == null)
                                 child.connections = new JArray(newUserConnections);
-                            var childProp = (child as JObject).Parent as JProperty;
-                            if (childProp?.Name == "hub")
-                            {
-                                var hubOwner = child.owner ?? null;
-                                if (hubOwner == null)
-                                    child.owner = session.User.ToString();
-                            }
+                            else if (connection?.ToString() == "@CONFIGCONNECTION@")
+                                child.connections = new JArray(newUserConnections);
                         }
                     }
 
@@ -1091,11 +1106,12 @@
                 while (status != 2)
                 {
                     logger.Trace("CheckStatus - Wait for finished tasks.");
+                    Analyser?.SetCheckPoint("CheckStatus", "Wait for Engine");
 
                     if (task.LastQlikCall != null)
                     {
                         var timeSpan = DateTime.Now - task.LastQlikCall.Value;
-                        if (timeSpan.TotalSeconds > 5)
+                        if (timeSpan.TotalSeconds > onDemandConfig.StopTimeout)
                         {
                             StopTask(task.Id);
                             throw new TaskCanceledException("The build of the report was canceled by user.");
@@ -1177,8 +1193,10 @@
                 }
 
                 //Delivery
+                Analyser?.SetCheckPoint("CheckStatus", "Start Delivery of reports");
                 task.Message = "Delivery Report, Please wait...";
                 StartDeliveryTool(task, distJobresults);
+                Analyser?.SetCheckPoint("CheckStatus", "Report(s) finished");
                 task.Status = 3;
             }
             catch (TaskCanceledException ex)
@@ -1196,9 +1214,11 @@
             finally
             {
                 //Cleanup
+                Analyser?.SaveCheckPoints("Connector");
                 sessionManager.MakeSocketFree(task?.Session ?? null);
                 FinishTask(task);
                 LogManager.Flush();
+                Analyser?.Stop();
             }
         }
 
@@ -1302,15 +1322,19 @@
                 var distribute = new DistributeManager();
                 var privateKeyPath = onDemandConfig.Connection.Credentials.PrivateKey;
                 var privateKeyFullname = HelperUtilities.GetFullPathFromApp(privateKeyPath);
-                var result = distribute.Run(jobResults, privateKeyFullname, task.CancelSource.Token);
+                var distibuteOptions = new DistibuteOptions()
+                {
+                    SessionUser = task.Session.User,
+                    CancelToken = task.CancelSource.Token,
+                    PrivateKeyPath = privateKeyFullname
+                };
+                var result = distribute.Run(jobResults, distibuteOptions);
                 if (task.CancelSource.IsCancellationRequested)
                     throw new TaskCanceledException("The delivery was canceled by user.");
 
                 if (result != null)
                 {
-                    var xmlResult = JsonConvert.DeserializeXNode(result, "distributeresult");
                     logger.Debug($"Distribute result: {result}");
-                    logger.Info($"{xmlResult}");
                     task.Distribute = result;
                     logger.Debug("The delivery was successfully.");
                 }
