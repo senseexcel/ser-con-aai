@@ -32,7 +32,7 @@
         private Server server;
         private SerEvaluator serEvaluator;
         private CancellationTokenSource cts;
-        private bool IsFristStart = false;
+        private dynamic ConfigObject = null;
         private delegate IPHostEntry GetHostEntryHandler(string name);
         #endregion
 
@@ -131,20 +131,20 @@
             }
         }
 
-        private Task<Uri> CheckQlikConnection(string json)
+        private Task CheckQlikConnection(string json)
         {
-            return Task.Run<Uri>(() =>
+            return Task.Run(() =>
             {
                 var serverUri = CheckAlternativeUris(json);
-                if (IsFristStart)
-                    return serverUri;
                 while (serverUri == null)
                 {
-                    logger.Error("There is no connection to Qlik. Please edit the right url in the connector config. The connection to qlik is checked every 20 seconds.");
+                    logger.Error("There is no connection to Qlik.");
+                    logger.Error("Please edit the right url in the connector config and check the qlik services.");
+                    logger.Error("The connection to qlik is checked every 20 seconds.");
                     Thread.Sleep(20000);
                     serverUri = CheckAlternativeUris(json);
                 }
-                return serverUri;
+                StartupConnector(serverUri);
             }, cts.Token);
         }
 
@@ -154,6 +154,52 @@
             {
                 Ser.Engine.Rest.Program.Main(arguments);
             }, cts.Token);
+        }
+
+        private void StartupConnector(Uri serverUri)
+        {
+            // Find the right server uri
+            var serverUriObj = ConfigObject?.connection?.serverUri;
+            if (serverUriObj == null)
+            {
+                logger.Info($">>> Write the correct server uri '{serverUri?.AbsoluteUri?.Trim('/')}' in the config file - run in alternative mode. <<<");
+                ConfigObject.connection.serverUri = serverUri;
+            }
+
+            var config = JsonConvert.DeserializeObject<ConnectorConfig>(ConfigObject.ToString());
+            if (config.StopTimeout < 5)
+                config.StopTimeout = 5;
+
+            //Start Rest Service
+            var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
+            var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
+            var restTask = StartRestServer(arguments.ToArray());
+            config.PackageVersion = VersionUtils.GetMainVersion();
+            logger.Info($"MainVersion: {config.PackageVersion}");
+            config.ExternalPackageJson = VersionUtils.GetExternalPackageJson();
+            var packages = JArray.Parse(config.ExternalPackageJson);
+            foreach (var package in packages)
+                logger.Info($"Package: {JsonConvert.SerializeObject(package)}");
+
+            logger.Debug($"Plattfom: {config.OS}");
+            logger.Debug($"Architecture: {config.Architecture}");
+            logger.Debug($"Framework: {config.Framework}");
+            logger.Debug("Service running...");
+            logger.Debug($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}");
+            logger.Debug($"Server start...");
+
+            using (serEvaluator = new SerEvaluator(config))
+            {
+                server = new Server()
+                {
+                    Services = { Connector.BindService(serEvaluator) },
+                    Ports = { new ServerPort(config.BindingHost, config.BindingPort, ServerCredentials.Insecure) },
+                };
+
+                server.Start();
+                logger.Info($"gRPC listening on port {config.BindingPort} on Host {config.BindingHost}");
+                logger.Info($"Ready...");
+            }
         }
         #endregion
 
@@ -175,65 +221,23 @@
 
                 logger.Debug($"Read conncetor config file from '{configPath}'.");
                 var json = HjsonValue.Load(configPath).ToString();
-                dynamic configObject = JObject.Parse(json);
+                ConfigObject = JObject.Parse(json);
 
                 // Check to generate certifiate and private key if not exists
-                var certFile = configObject?.connection?.credentials?.cert?.ToString() ?? null;
+                var certFile = ConfigObject?.connection?.credentials?.cert?.ToString() ?? null;
                 certFile = HelperUtilities.GetFullPathFromApp(certFile);
                 if (!File.Exists(certFile))
                 {
-                    var privateKeyFile = configObject?.connection?.credentials?.privateKey.ToString() ?? null;
+                    var privateKeyFile = ConfigObject?.connection?.credentials?.privateKey.ToString() ?? null;
                     privateKeyFile = HelperUtilities.GetFullPathFromApp(privateKeyFile);
                     if (File.Exists(privateKeyFile))
                         privateKeyFile = null;
 
                     CreateCertificate(certFile, privateKeyFile);
-                    IsFristStart = true;
                 }
 
-                // Find the right server uri
-                var serverUriObj = configObject?.connection?.serverUri;
-                if (serverUriObj == null)
-                {
-                    var serverUri = CheckQlikConnection(json).Result;
-                    logger.Info($">>> Write the correct server uri '{serverUri?.AbsoluteUri?.Trim('/')}' in the config file - run in alternative mode. <<<");
-                    configObject.connection.serverUri = serverUri;
-                }
-
-                var config = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
-                if (config.StopTimeout < 5)
-                    config.StopTimeout = 5;
-
-                //Start Rest Service
-                var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
-                var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
-                var restTask = StartRestServer(arguments.ToArray());
-                config.PackageVersion = VersionUtils.GetMainVersion();
-                logger.Info($"MainVersion: {config.PackageVersion}");
-                config.ExternalPackageJson = VersionUtils.GetExternalPackageJson();
-                var packages = JArray.Parse(config.ExternalPackageJson);
-                foreach (var package in packages)
-                    logger.Info($"Package: {JsonConvert.SerializeObject(package)}");
-
-                logger.Debug($"Plattfom: {config.OS}");
-                logger.Debug($"Architecture: {config.Architecture}");
-                logger.Debug($"Framework: {config.Framework}");
-                logger.Debug("Service running...");
-                logger.Debug($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}");
-                logger.Debug($"Server start...");
-
-                using (serEvaluator = new SerEvaluator(config))
-                {
-                    server = new Server()
-                    {
-                        Services = { Connector.BindService(serEvaluator) },
-                        Ports = { new ServerPort(config.BindingHost, config.BindingPort, ServerCredentials.Insecure) },
-                    };
-
-                    server.Start();
-                    logger.Info($"gRPC listening on port {config.BindingPort} on Host {config.BindingHost}");
-                    logger.Info($"Ready...");
-                }
+                // Wait for connection to Qlik
+                CheckQlikConnection(json);
             }
             catch (Exception ex)
             {
