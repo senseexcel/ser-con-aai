@@ -28,6 +28,7 @@
     using Ser.Distribute;
     using Ser.Diagnostics;
     using Ser.Gerneral;
+    using System.Web;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -768,6 +769,7 @@
 
         private Stream FindTemplatePath(SessionInfo session, SerTemplate template)
         {
+            template.Input = HttpUtility.UrlDecode(template.Input);
             var result = HelperUtilities.NormalizeUri(template.Input);
             var templateUri = result.Item1;
             if (templateUri.Scheme.ToLowerInvariant() == "content")

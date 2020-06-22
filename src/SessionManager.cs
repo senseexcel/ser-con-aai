@@ -51,7 +51,7 @@
                 newUri.Path += "/sense/app";
                 logger.Debug($"ConnectUri: {connectUri}");
                 var fullConnectUri = newUri.Uri;
-                logger.Debug($"Full ConnectUri: {fullConnectUri}");
+                logger.Debug($"Connection to uri: {fullConnectUri}");
                 var cookieContainer = new CookieContainer();
                 var connectionHandler = new HttpClientHandler
                 {

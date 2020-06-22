@@ -18,7 +18,7 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="GitVersionTask" Version="5.3.5" PrivateAssets="All" />
+    <PackageReference Include="GitVersionTask" Version="5.3.6" PrivateAssets="All" />
     <PackageReference Include="Google.Protobuf" Version="3.12.3" />
     <PackageReference Include="Grpc" Version="2.29.0" />
     <PackageReference Include="Grpc.Core" Version="2.29.0" />
