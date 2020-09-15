@@ -65,17 +65,23 @@
             try
             {
                 dynamic configObject = JObject.Parse(configJson);
-                var serverUri = new Uri($"{serverUrl}/ser");
+                var serverUri = new Uri($"{serverUrl}");
+                if (!serverUrl.EndsWith("/ser"))
+                    serverUri = new Uri($"{serverUrl}/ser");
                 configObject.connection.serverUri = serverUri;
                 ConnectorConfig connectorConfig = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
 
                 var qlikUser = new DomainUser("INTERNAL\\ser_scheduler");
                 var taskManager = new SessionManager();
                 var session = taskManager.GetSession(connectorConfig.Connection, qlikUser, null);
+
                 if (session?.Cookie != null)
                 {
-                    logger.Info("The connection to Qlik Sense was successful.");
-                    return serverUri;
+                    if (SessionManager.ValidateSession(session))
+                    {
+                        logger.Info("The connection to Qlik Sense was successful.");
+                        return serverUri;
+                    }
                 }
                 return null;
             }
@@ -90,16 +96,11 @@
         {
             try
             {
+                Uri result = null;
                 logger.Info("Connecting with Qlik Sense...");
 
-                // Check with hostname of the server
-                var fullQualifiedHostname = HelperUtilities.GetFullQualifiedHostname(2000);
-                logger.Info($"Check server uri with hostname \"{fullQualifiedHostname}\".");
-                var result = QlikConnectionCheck(configJson, $"https://{fullQualifiedHostname}");
-                if (result != null)
-                    return result;
-
                 // Check with alternative txt
+                logger.Debug("Take from alternativdns.txt.");
                 var alternativeTxtPath = Path.Combine(AppContext.BaseDirectory, "alternativdns.txt");
                 if (File.Exists(alternativeTxtPath))
                 {
@@ -108,6 +109,13 @@
                     result = QlikConnectionCheck(configJson, content);
                     if (result != null)
                         return result;
+                }
+
+                logger.Debug("Take from config.hjson.");
+                var tt = QlikConnectionCheck(configJson, ConfigObject.connection.serverUri.ToString());
+                if (tt != null)
+                {
+                    return tt;
                 }
 
                 logger.Debug("Search for certificat domain.");
@@ -120,6 +128,14 @@
                     if (result != null)
                         return result;
                 }
+
+                // Check with hostname of the server
+                logger.Debug("Take from Machine name.");
+                var fullQualifiedHostname = HelperUtilities.GetFullQualifiedHostname(2000);
+                logger.Info($"Check server uri with hostname \"{fullQualifiedHostname}\".");
+                result = QlikConnectionCheck(configJson, $"https://{fullQualifiedHostname}");
+                if (result != null)
+                    return result;
 
                 logger.Error("NO CONNECTION TO QLIK SENSE!!!");
                 return null;

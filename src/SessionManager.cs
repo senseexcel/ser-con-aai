@@ -27,7 +27,7 @@
         #endregion
 
         #region Private Methods
-        private bool ValidateSession(SessionInfo sessionInfo)
+        public static bool ValidateSession(SessionInfo sessionInfo)
         {
             try
             {
