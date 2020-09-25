@@ -62,8 +62,12 @@
 
         private Uri QlikConnectionCheck(string configJson, string serverUrl)
         {
+
             try
             {
+                logger.Debug($"Trying Url: {serverUrl}");
+                if (string.IsNullOrEmpty(serverUrl))
+                    return null;
                 dynamic configObject = JObject.Parse(configJson);
                 var serverUri = new Uri($"{serverUrl}");
                 if (!serverUrl.EndsWith("/ser"))
@@ -100,8 +104,8 @@
                 logger.Info("Connecting with Qlik Sense...");
 
                 // Check with alternative txt
-                logger.Debug("Take from alternativdns.txt.");
                 var alternativeTxtPath = Path.Combine(AppContext.BaseDirectory, "alternativdns.txt");
+                logger.Debug($"Take from alternativdns.txt. from {alternativeTxtPath}");
                 if (File.Exists(alternativeTxtPath))
                 {
                     var content = File.ReadAllText(alternativeTxtPath)?.Trim();
@@ -112,7 +116,7 @@
                 }
 
                 logger.Debug("Take from config.hjson.");
-                var tt = QlikConnectionCheck(configJson, ConfigObject.connection.serverUri.ToString());
+                var tt = QlikConnectionCheck(configJson, ConfigObject?.connection?.serverUri?.ToString() ?? "");
                 if (tt != null)
                 {
                     return tt;
