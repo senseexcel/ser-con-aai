@@ -65,8 +65,8 @@
 
             try
             {
-                logger.Debug($"Trying Url: {serverUrl}");
-                if (string.IsNullOrEmpty(serverUrl))
+                logger.Debug($"Use Url: {serverUrl}");
+                if (String.IsNullOrEmpty(serverUrl))
                     return null;
                 dynamic configObject = JObject.Parse(configJson);
                 var serverUri = new Uri($"{serverUrl}");
