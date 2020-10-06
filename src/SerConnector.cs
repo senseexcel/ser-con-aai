@@ -78,14 +78,10 @@
                 var qlikUser = new DomainUser("INTERNAL\\ser_scheduler");
                 var taskManager = new SessionManager();
                 var session = taskManager.GetSession(connectorConfig.Connection, qlikUser, null);
-
                 if (session?.Cookie != null)
                 {
-                    if (SessionManager.ValidateSession(session))
-                    {
-                        logger.Info("The connection to Qlik Sense was successful.");
-                        return serverUri;
-                    }
+                    logger.Info("The connection to Qlik Sense was successful.");
+                    return serverUri;
                 }
                 return null;
             }
