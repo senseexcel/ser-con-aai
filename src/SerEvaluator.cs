@@ -509,8 +509,11 @@
                                 if (currentTask.Value != null)
                                 {
                                     var distibuteJson = currentTask.Value.Distribute;
-                                    var distibuteObject = JObject.Parse(distibuteJson);
-                                    statusResult.FormatedResult = GetFormatedJsonForQlik(distibuteObject);
+                                    if (distibuteJson != null)
+                                    {
+                                        var distibuteObject = JObject.Parse(distibuteJson);
+                                        statusResult.FormatedResult = GetFormatedJsonForQlik(distibuteObject);
+                                    }
                                 }
                             }
                             break;
