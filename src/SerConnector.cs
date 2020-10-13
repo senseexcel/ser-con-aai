@@ -75,6 +75,7 @@
                 configObject.connection.serverUri = serverUri;
                 ConnectorConfig connectorConfig = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
 
+                ValidationCallback.Connection = connectorConfig.Connection;
                 var qlikUser = new DomainUser("INTERNAL\\ser_scheduler");
                 var taskManager = new SessionManager();
                 var session = taskManager.GetSession(connectorConfig.Connection, qlikUser, null);
