@@ -101,7 +101,7 @@
 
                 // Check with alternative txt
                 var alternativeTxtPath = Path.Combine(AppContext.BaseDirectory, "alternativdns.txt");
-                logger.Debug($"Take from alternativdns.txt. from {alternativeTxtPath}");
+                logger.Debug($"Take from 'alternativdns.txt'. from {alternativeTxtPath}");
                 if (File.Exists(alternativeTxtPath))
                 {
                     var content = File.ReadAllText(alternativeTxtPath)?.Trim();
@@ -112,13 +112,11 @@
                 }
 
                 logger.Debug("Take from config.hjson.");
-                var tt = QlikConnectionCheck(configJson, ConfigObject?.connection?.serverUri?.ToString() ?? "");
-                if (tt != null)
-                {
-                    return tt;
-                }
+                result = QlikConnectionCheck(configJson, ConfigObject?.connection?.serverUri?.ToString() ?? "");
+                if (result != null)
+                    return result;
 
-                logger.Debug("Search for certificat domain.");
+                logger.Debug("Search for certificate domain.");
                 var alternativeUris = ConnectionFallbackHelper.AlternativeUris ?? new List<Uri>();
                 foreach (var alternativeUri in alternativeUris)
                 {
