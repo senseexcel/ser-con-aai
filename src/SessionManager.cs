@@ -24,13 +24,13 @@
         #region Variables & Properties
         private readonly List<SessionInfo> Sessions = new List<SessionInfo>();
         private readonly object threadObject = new object();
-        public SessionManager Manager { get; private set; }
+        public JwtSessionManager Manager { get; private set; }
         #endregion
 
         #region Constructor
         public SessionHelper()
         {
-            Manager = new SessionManager();
+            Manager = new JwtSessionManager();
         }
         #endregion
 
