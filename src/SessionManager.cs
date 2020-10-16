@@ -70,7 +70,9 @@
                     }
                 }
 
-                return Manager.CreateNewSession(connection, qlikUser, appId);
+                var sessionInfo = Manager.CreateNewSession(connection, qlikUser, appId);
+                Sessions.Add(sessionInfo);
+                return sessionInfo;
             }
             catch (Exception ex)
             {
