@@ -7,6 +7,7 @@
     using System.Collections.Generic;
     using Newtonsoft.Json.Linq;
     using System.Threading;
+    using Q2g.HelperQlik;
     #endregion
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,

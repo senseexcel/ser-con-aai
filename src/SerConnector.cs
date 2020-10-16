@@ -77,7 +77,7 @@
 
                 ValidationCallback.Connection = connectorConfig.Connection;
                 var qlikUser = new DomainUser("INTERNAL\\ser_scheduler");
-                var taskManager = new SessionManager();
+                var taskManager = new SessionHelper();
                 var session = taskManager.GetSession(connectorConfig.Connection, qlikUser, null);
                 if (session?.Cookie != null)
                 {
@@ -188,7 +188,7 @@
             //Start Rest Service
             var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
             var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
-            var restTask = StartRestServer(arguments.ToArray());
+            StartRestServer(arguments.ToArray());
             config.PackageVersion = VersionUtils.GetMainVersion();
             logger.Info($"MainVersion: {config.PackageVersion}");
             config.ExternalPackageJson = VersionUtils.GetExternalPackageJson();
