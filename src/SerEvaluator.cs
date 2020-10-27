@@ -844,7 +844,6 @@
                 switch (type)
                 {
                     case QlikCredentialType.JWT:
-                    case QlikCredentialType.HEADER:
                         conn.Credentials = new SerCredentials()
                         {
                             Type = type,
@@ -858,13 +857,6 @@
                             Type = type,
                             Key = session.Cookie?.Name ?? null,
                             Value = session.Cookie?.Value ?? null
-                        };
-                        break;
-                    case QlikCredentialType.CERTIFICATE:
-                        conn.Credentials = new SerCredentials()
-                        {
-                            Type = type,
-                            Cert = onDemandConfig?.Connection?.Credentials?.Cert ?? null
                         };
                         break;
                     default:
