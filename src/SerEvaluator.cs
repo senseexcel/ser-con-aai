@@ -511,7 +511,7 @@
                                     var distibuteJson = currentTask.Value.Distribute;
                                     if (distibuteJson != null)
                                     {
-                                        var distibuteObject = JObject.Parse(distibuteJson);
+                                        var distibuteObject = JArray.Parse(distibuteJson);
                                         statusResult.FormatedResult = GetFormatedJsonForQlik(distibuteObject);
                                     }
                                 }
@@ -562,24 +562,16 @@
             }
         }
 
-        private string GetFormatedJsonForQlik(JObject distibute)
+        private string GetFormatedJsonForQlik(JArray distibuteArray)
         {
-            var resultText = new StringBuilder();
-            var children = distibute.Children();
-            foreach (JProperty child in children)
+            var resultText = new StringBuilder(">>>");
+            resultText.Append($"{Environment.NewLine}{Environment.NewLine}{"Distibute Results".ToUpperInvariant()}:");
+            resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
+            foreach (JObject item in distibuteArray)
             {
-                resultText.Append($"{Environment.NewLine}{child.Name.ToUpperInvariant()}:");
-                resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
-                if (child?.First is JArray array)
-                {
-                    foreach (JObject item in array)
-                    {
-                        var objChildren = item.Children();
-                        foreach (JProperty prop in objChildren)
-                            resultText.Append($"{Environment.NewLine}{prop.Name.ToUpperInvariant()}: {prop.Value}");
-                        resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
-                    }
-                }
+                var objChildren = item.Children();
+                foreach (JProperty prop in objChildren)
+                    resultText.Append($"{Environment.NewLine}{prop.Name.ToUpperInvariant()}: {prop.Value}");
                 resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
             }
             return resultText.ToString();
@@ -660,7 +652,7 @@
                         if (firstConnection != null)
                         {
                             logger.Debug("Create bearer connection.");
-                            var newBearerConnection = CreateConnection(QlikCredentialType.HEADER, qlikSession, firstConnection.App);
+                            var newBearerConnection = CreateConnection(QlikCredentialType.JWT, qlikSession, firstConnection.App);
                             configReport.Connections.Add(newBearerConnection);
                         }
 
@@ -956,7 +948,7 @@
                         foreach (dynamic child in children)
                         {
                             var connection = child.connections ?? null;
-                            if(connection == null)
+                            if (connection == null)
                                 child.connections = new JArray(newUserConnections);
                             else if (connection?.ToString() == "@CONFIGCONNECTION@")
                                 child.connections = new JArray(newUserConnections);
