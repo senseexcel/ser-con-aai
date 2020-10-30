@@ -29,6 +29,7 @@
     using Ser.Diagnostics;
     using Ser.Gerneral;
     using System.Web;
+    using Ser.Engine.Rest;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
