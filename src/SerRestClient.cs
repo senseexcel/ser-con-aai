@@ -1357,7 +1357,9 @@ namespace Ser.Engine.Rest.Client
     
         [System.Runtime.Serialization.EnumMember(Value = @"RETRYERROR")]
         RETRYERROR = 4,
-    
+
+        [System.Runtime.Serialization.EnumMember(Value = @"INACTIVE")]
+        INACTIVE = 5,
     }
     
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "9.13.22.0 (Newtonsoft.Json v12.0.0.0)")]

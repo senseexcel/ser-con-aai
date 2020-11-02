@@ -1106,7 +1106,7 @@
                     }
 
                     Thread.Sleep(1500);
-                    if (task.Status == -1 || task.Status == 0 || status == -1)
+                    if (task.Status == -1 || task.Status == 0 || status <= -1)
                         break;
 
                     if (status == 1)
@@ -1122,7 +1122,13 @@
                                 if (finishResults.Count == jobResults.Count)
                                     status = 2;
                                 else
-                                    status = -1;
+                                {
+                                    var inactiveResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.INACTIVE).ToList();
+                                    if (inactiveResults.Count == jobResults.Count)
+                                        status = -2;
+                                    else
+                                        status = -1;
+                                }
                             }
                             else if (runningResults.Count > 0 || jobResults.Count(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS) == jobResults.Count)
                             {
@@ -1133,6 +1139,10 @@
                                 var errorResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ERROR).ToList();
                                 if (errorResults.Count == jobResults.Count)
                                     status = -1;
+
+                                var inactiveResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.INACTIVE).ToList();
+                                if (inactiveResults.Count == jobResults.Count)
+                                    status = -2;
                             }
                         }
                         else
@@ -1149,6 +1159,11 @@
                 if (status != 2)
                 {
                     var engineException = new Exception("The report build process failed.");
+                    if (status == -2)
+                    {
+                        task.Status = -1;
+                        engineException = new Exception("The Task was inactive.");
+                    }
                     var lastResult = restClient.TaskWithIdAsync(task.Id).Result;
                     var firstJobResult = lastResult?.Results?.FirstOrDefault(j => j?.Exception != null) ?? null;
                     if (firstJobResult != null)
