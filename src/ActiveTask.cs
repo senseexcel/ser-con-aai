@@ -14,6 +14,7 @@
                 NamingStrategyType = typeof(CamelCaseNamingStrategy))]
     public class ActiveTask
     {
+        #region Properties
         public string Distribute { get; set; }
         public int Status { get; set; }
         public Guid Id { get; set; }
@@ -26,5 +27,6 @@
         public bool Stopped { get; set; }
         public DateTime? LastQlikCall { get; set; }
         public CancellationTokenSource CancelSource { get; set; }
+        #endregion
     }
 }
