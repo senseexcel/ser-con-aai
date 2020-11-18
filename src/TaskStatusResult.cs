@@ -9,7 +9,7 @@
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
                 NamingStrategyType = typeof(CamelCaseNamingStrategy))]
-    public class OnDemandResult
+    public class TaskStatusResponse
     {
         #region Properties
         public int Status { get; set; }
@@ -17,9 +17,10 @@
         public string Log { get; set; }
         public string Distribute { get; set; }
         public string FormatedResult { get; set; }
-        public JArray Tasks { get; set; }
         public string Version { get; set; }
         public string ExternalPackagesInfo { get; set; }
+        public JObject JobResult { get; set; }
+
         #endregion
 
         public override string ToString()

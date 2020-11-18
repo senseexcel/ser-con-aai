@@ -71,7 +71,7 @@
         private static ConnectorConfig onDemandConfig;
         private readonly SessionHelper sessionHelper;
         private readonly Engine.Rest.Client.SerApiClient restClient;
-        private readonly ConcurrentDictionary<Guid, ActiveTask> runningTasks;
+        private readonly ConcurrentDictionary<Guid, ManagedJobTask> runningTasks;
         private readonly object threadObject = new object();
         private readonly PerfomanceAnalyser Analyser;
         #endregion
@@ -88,7 +88,7 @@
             var baseUrl = $"{config.RestServiceUrl}{baseUri.PathAndQuery}";
             restClient.BaseUrl = baseUrl;
             sessionHelper = new SessionHelper();
-            runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
+            runningTasks = new ConcurrentDictionary<Guid, ManagedJobTask>();
             Cleanup();
 
             if (onDemandConfig.UsePerfomanceAnalyzer)
@@ -171,7 +171,7 @@
             return resultUser;
         }
 
-        private async Task<bool> HasReadRights(QlikQrsHub qrsHub, ActiveTask task)
+        private async Task<bool> HasReadRights(QlikQrsHub qrsHub, ManagedJobTask task)
         {
             try
             {
@@ -202,7 +202,7 @@
             }
         }
 
-        private JObject CreateTaskResult(ActiveTask task)
+        private JObject CreateTaskResult(ManagedJobTask task)
         {
             return JObject.FromObject(new
             {
@@ -214,7 +214,7 @@
             });
         }
 
-        private async Task<JArray> GetAllowedTasks(List<ActiveTask> activeTasks, DomainUser user, string appId)
+        private async Task<JArray> GetAllowedTasks(List<ManagedJobTask> activeTasks, DomainUser user, string appId)
         {
             var results = new JArray();
             try
@@ -346,11 +346,11 @@
                 logger.Debug($"Qlik DomainUser from header: {commonHeader?.UserId}");
                 var domainUser = new DomainUser(commonHeader?.UserId);
 
+                //Very important code line
                 await context.WriteResponseHeadersAsync(new Metadata { { "qlik-cache", "no-store" } });
 
-                var statusResult = new OnDemandResult() { Status = 0 };
                 var row = GetParameter(requestStream);
-                var json = GetParameterValue(0, row);
+                var userJson = GetParameterValue(0, row);
 
                 var functionCall = (SerFunction)functionHeader.FunctionId;
                 logger.Debug($"Function id: {functionCall}");
@@ -380,19 +380,98 @@
                     }
                 }
 
+                if (functionCall == SerFunction.START)
+                {
+                    #region Function call SER.START
+                    logger.Trace("Start report creating...");
+                    CreateReport(domainUser, activeAppId, userJson);
+                    logger.Trace("Report creating was started...");
+                    #endregion
+                }
+                else if(functionCall == SerFunction.STOP)
+                {
+                    #region Function call SER.STOP
+                    var request = GetStatusRequest(userJson);
+                    var response = new TaskStatusResponse();
+                    if (request.TaskMode == "all")
+                    {
+                        logger.Debug("Stop - All tasks.");
+                        response.Log = "Stop all tasks.";
+                        if (runningTasks.Count == 0)
+                            logger.Warn("No Tasks to stop");
+
+                        foreach (var runningTask in runningTasks)
+                        {
+                            if (runningTask.Value?.Stoppable ?? false)
+                            {
+                                runningTask.Value?.CancelSource?.Cancel();
+                                var stopResult = restClient.StopTasksAsync(runningTask.Value.Id).Result;
+                                if (stopResult.Success.Value)
+                                {
+                                    runningTask.Value.Message = "The Task was stopped by user.";
+                                    runningTask.Value.Status = 4;
+                                    runningTask.Value.Stopped = true;
+                                    FinishTask(runningTask.Value);
+                                }
+                                else
+                                {
+                                    logger.Debug("All tasks could not stopped.");
+                                    response.Log = "All tasks could not stopped.";
+                                }
+                            }
+                        }
+                    }
+                    else if (request.ManagedTaskId != null)
+                    {
+                        StopTask(new Guid(request.ManagedTaskId));
+                        response.Log = $"Task {request.ManagedTaskId} was stoppt.";
+                    }
+                    response.Status = 4;
+                    #endregion
+                }
+                else if(functionCall == SerFunction.RESULT)
+                {
+                    #region Function call SER.RESULT
+                    logger.Debug($"Result - Get result for qlik task.");
+                    var request = GetStatusRequest(userJson);
+                    var response = new TaskStatusResponse();
+                    if (request.ManagedTaskId != null)
+                    {
+                        var managedTaskId = new Guid(request.ManagedTaskId);
+                        var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == managedTaskId);
+                        if (currentTask.Value != null)
+                        {
+                            var distibuteJson = currentTask.Value.Distribute;
+                            if (distibuteJson != null)
+                            {
+                                var distibuteObject = JArray.Parse(distibuteJson);
+                                response.FormatedResult = GetFormatedJsonForQlik(distibuteObject);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        logger.Debug("No Taskid ");
+                    }
+                    #endregion
+                }
+                else if(functionCall == SerFunction.STATUS)
+                {
+
+                }
+                else
+                {
+
+                }
+
                 Guid? taskId = null;
                 string versions = null;
-                string tasks = null;
+                string taskMode = null;
                 string log = null;
                 dynamic jsonObject;
 
                 switch (functionCall)
                 {
-                    case SerFunction.START:
-                        logger.Trace("Create report start");
-                        statusResult = CreateReport(domainUser, activeAppId, json);
-                        logger.Trace("Create report end");
-                        break;
                     case SerFunction.STATUS:
                         #region Status
                         json = ConvertHJsonToJson(json);
@@ -401,13 +480,12 @@
                             jsonObject = JObject.Parse(json);
                             taskId = jsonObject?.taskId ?? null;
                             versions = jsonObject?.versions ?? null;
-                            tasks = jsonObject.tasks ?? null;
+                            taskMode = jsonObject.tasks ?? null;
                             log = jsonObject.log ?? null;
                         }
 
                         if (versions == "all")
                         {
-                            //Renameing by script cleaning by consultions!!!
                             logger.Debug("Status - Read main version.");
                             statusResult.Version = onDemandConfig.PackageVersion;
                         }
@@ -417,10 +495,10 @@
                             statusResult.ExternalPackagesInfo = onDemandConfig.ExternalPackageJson;
                         }
 
-                        if (tasks == "all")
+                        if (taskMode == "all")
                         {
                             logger.Debug("Status - Get all tasks.");
-                            var activeTasks = runningTasks.Values?.ToArray().ToList() ?? new List<ActiveTask>();
+                            var activeTasks = runningTasks.Values?.ToArray().ToList() ?? new List<ManagedJobTask>();
                             statusResult.Tasks = GetAllowedTasks(activeTasks, domainUser, activeAppId).Result;
                         }
                         else if (taskId.HasValue)
@@ -447,78 +525,11 @@
                         }
                         break;
                     #endregion
-                    case SerFunction.STOP:
-                        #region Stop
-                        json = ConvertHJsonToJson(json);
-                        if (json != null)
-                        {
-                            jsonObject = JObject.Parse(json) ?? null;
-                            taskId = jsonObject?.taskId ?? null;
-                            tasks = jsonObject.tasks ?? null;
-                        }
-
-                        if (tasks == "all")
-                        {
-                            logger.Debug("Stop - All tasks.");
-                            statusResult.Log = "Stop all tasks.";
-                            if (runningTasks.Count == 0)
-                                logger.Warn("No Tasks to stop");
-
-                            foreach (var runningTask in runningTasks)
-                            {
-                                if (runningTask.Value?.Stoppable ?? false)
-                                {
-                                    runningTask.Value?.CancelSource?.Cancel();
-                                    var stopResult = restClient.StopTasksAsync(runningTask.Value.Id).Result;
-                                    if (stopResult.Success.Value)
-                                    {
-                                        runningTask.Value.Message = "The Task was stopped by user.";
-                                        runningTask.Value.Status = 4;
-                                        runningTask.Value.Stopped = true;
-                                        FinishTask(runningTask.Value);
-                                    }
-                                    else
-                                    {
-                                        logger.Debug("All tasks could not stopped.");
-                                        statusResult.Log = "All tasks could not stopped.";
-                                    }
-                                }
-                            }
-                        }
-                        else if (taskId.HasValue)
-                        {
-                            StopTask(taskId.Value);
-                            statusResult.Log = $"Task {taskId.Value} was stoppt.";
-                        }
-                        statusResult.Status = 4;
-                        break;
-                    #endregion
+                   
+                      
                     case SerFunction.RESULT:
                         {
-                            #region Result for Qlik
-                            logger.Debug($"Result - Get result for qlik task.");
-                            json = ConvertHJsonToJson(json);
-                            if (json != null)
-                            {
-                                jsonObject = JObject.Parse(json) ?? null;
-                                taskId = jsonObject?.taskId ?? null;
-                            }
-
-                            if (taskId.HasValue)
-                            {
-                                var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId.Value);
-                                if (currentTask.Value != null)
-                                {
-                                    var distibuteJson = currentTask.Value.Distribute;
-                                    if (distibuteJson != null)
-                                    {
-                                        var distibuteObject = JArray.Parse(distibuteJson);
-                                        statusResult.FormatedResult = GetFormatedJsonForQlik(distibuteObject);
-                                    }
-                                }
-                            }
-                            break;
-                            #endregion
+                            
                         }
                     default:
                         throw new Exception($"Unknown function id {functionHeader.FunctionId}.");
@@ -530,7 +541,7 @@
             catch (Exception ex)
             {
                 logger.Error(ex, $"ExecuteFunction - {ex.Message}");
-                await responseStream.WriteAsync(GetResult(new OnDemandResult()
+                await responseStream.WriteAsync(GetResult(new TaskStatusResult()
                 {
                     Log = ex.Message,
                     Status = -1
@@ -541,9 +552,36 @@
                 LogManager.Flush();
             }
         }
-        #endregion
 
         #region Private Functions
+        private TaskStatusRequest GetStatusRequest(string json)
+        {
+            json = ConvertHJsonToJson(json);
+            var result = new TaskStatusRequest();
+            if (json != null)
+            {
+                dynamic jsonObject = JObject.Parse(json);
+                result.ManagedTaskId = jsonObject?.taskId ?? null;
+                result.VersionMode = jsonObject?.versions ?? null;
+                result.TaskMode = jsonObject.tasks ?? null;
+            }
+            return result;
+        }
+
+        private string ConvertHJsonToJson(string json)
+        {
+            try
+            {
+                if (!String.IsNullOrEmpty(json))
+                    return HjsonValue.Parse(json).ToString();
+                return null;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Could not normalize hjson, please check your script. Error: {ex.Message}");
+            }
+        }
+
         private void StopTask(Guid taskId)
         {
             var currentTask = runningTasks.ToArray().FirstOrDefault(t => t.Key == taskId);
@@ -578,9 +616,9 @@
             return resultText.ToString();
         }
 
-        private OnDemandResult CreateReport(DomainUser qlikUser, string appId, string json)
+        private void CreateReport(DomainUser qlikUser, string appId, string json)
         {
-            ActiveTask activeTask = null;
+            ManagedJobTask activeTask = null;
             SessionInfo qlikSession = null;
 
             try
@@ -591,7 +629,7 @@
                 Analyser?.Start();
                 Analyser?.SetCheckPoint("CreateReport", "Start report generation");
 
-                activeTask = new ActiveTask()
+                activeTask = new ManagedJobTask()
                 {
                     Id = Guid.NewGuid(),
                     CancelSource = new CancellationTokenSource(),
@@ -699,7 +737,7 @@
                 Analyser?.SetCheckPoint("CreateReport", "Start connector reporting task");
                 var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)?.SelectMany(r => r.Connections)?.FirstOrDefault(c => c.App == qlikSession.AppId) ?? null;
                 Task.Run(() => WaitForDataLoad(activeTask, qlikSession, scriptConnection));
-                return new OnDemandResult() { TaskId = activeTask.Id, Status = 1 };
+                //return new TaskStatusResult() { TaskId = activeTask.Id, Status = 1 };
             }
             catch (Exception ex)
             {
@@ -718,7 +756,7 @@
                 else
                     sessionHelper.Manager.MakeSocketFree(activeTask?.Session ?? null);
                 logger.Error(ex, "The report could not create.");
-                return new OnDemandResult() { TaskId = activeTask?.Id, Status = activeTask?.Status ?? -1, Log = activeTask?.Message };
+                //return new TaskStatusResult() { TaskId = activeTask?.Id, Status = activeTask?.Status ?? -1, Log = activeTask?.Message };
             }
         }
 
@@ -732,7 +770,7 @@
             return jobJson;
         }
 
-        private void WaitForDataLoad(ActiveTask task, SessionInfo session, Ser.Api.SerConnection configConn)
+        private void WaitForDataLoad(ManagedJobTask task, SessionInfo session, Ser.Api.SerConnection configConn)
         {
             var scriptApp = configConn?.App;
             var timeout = configConn?.RetryTimeout ?? 0;
@@ -746,7 +784,7 @@
                 if (createTaskResult.Success.Value)
                 {
                     logger.Debug($"Task was started {createTaskResult?.OperationId}.");
-                    var statusThread = new Thread(() => CheckStatus(task))
+                    var statusThread = new Thread(() => CheckRunningTasks())
                     {
                         IsBackground = true
                     };
@@ -1082,7 +1120,7 @@
             return bufferList.ToArray();
         }
 
-        private void CheckStatus(ActiveTask task)
+        private void CheckRunningTasks()
         {
             try
             {
@@ -1260,7 +1298,7 @@
             return true;
         }
 
-        private void FinishTask(ActiveTask task)
+        private void FinishTask(ManagedJobTask task)
         {
             try
             {
@@ -1317,7 +1355,7 @@
             }
         }
 
-        private void StartDeliveryTool(ActiveTask task, List<JobResult> jobResults)
+        private void StartDeliveryTool(ManagedJobTask task, List<JobResult> jobResults)
         {
             try
             {
@@ -1386,20 +1424,6 @@
             catch (Exception ex)
             {
                 throw new Exception($"Could not normalize yaml, please check your script. Error: {ex.Message}");
-            }
-        }
-
-        private string ConvertHJsonToJson(string json)
-        {
-            try
-            {
-                if (!String.IsNullOrEmpty(json))
-                    return HjsonValue.Parse(json).ToString();
-                return null;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Could not normalize hjson, please check your script. Error: {ex.Message}");
             }
         }
         #endregion

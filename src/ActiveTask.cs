@@ -12,7 +12,7 @@
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
                 NamingStrategyType = typeof(CamelCaseNamingStrategy))]
-    public class ActiveTask
+    public class ManagedJobTask
     {
         #region Properties
         public string Distribute { get; set; }
