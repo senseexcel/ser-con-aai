@@ -68,7 +68,11 @@
                     }
                     else if (strValue.StartsWith("="))
                     {
+                        // Replacement - Resolve for the Engine not in Qlik Script.
                         var newValue = strValue.Replace("$@(", "$(");
+                        // Replacement - GRPC fix for char "$".
+                        newValue = Regex.Replace(newValue, "chr\\(36\\)\\&", "$", RegexOptions.IgnoreCase);
+
                         var replaceToken = newJsonObjectConfig.SelectToken(jsonBuilder.ToString());
                         replaceToken.Replace(newValue);
                     }

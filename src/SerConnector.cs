@@ -65,8 +65,8 @@
 
             try
             {
-                logger.Debug($"Trying Url: {serverUrl}");
-                if (string.IsNullOrEmpty(serverUrl))
+                logger.Debug($"Use Url: {serverUrl}");
+                if (String.IsNullOrEmpty(serverUrl))
                     return null;
                 dynamic configObject = JObject.Parse(configJson);
                 var serverUri = new Uri($"{serverUrl}");
@@ -75,8 +75,9 @@
                 configObject.connection.serverUri = serverUri;
                 ConnectorConfig connectorConfig = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
 
+                ValidationCallback.Connection = connectorConfig.Connection;
                 var qlikUser = new DomainUser("INTERNAL\\ser_scheduler");
-                var taskManager = new SessionManager();
+                var taskManager = new SessionHelper();
                 var session = taskManager.GetSession(connectorConfig.Connection, qlikUser, null);
                 if (session?.Cookie != null)
                 {
@@ -101,7 +102,7 @@
 
                 // Check with alternative txt
                 var alternativeTxtPath = Path.Combine(AppContext.BaseDirectory, "alternativdns.txt");
-                logger.Debug($"Take from alternativdns.txt. from {alternativeTxtPath}");
+                logger.Debug($"Take from 'alternativdns.txt'. from {alternativeTxtPath}");
                 if (File.Exists(alternativeTxtPath))
                 {
                     var content = File.ReadAllText(alternativeTxtPath)?.Trim();
@@ -112,13 +113,11 @@
                 }
 
                 logger.Debug("Take from config.hjson.");
-                var tt = QlikConnectionCheck(configJson, ConfigObject?.connection?.serverUri?.ToString() ?? "");
-                if (tt != null)
-                {
-                    return tt;
-                }
+                result = QlikConnectionCheck(configJson, ConfigObject?.connection?.serverUri?.ToString() ?? "");
+                if (result != null)
+                    return result;
 
-                logger.Debug("Search for certificat domain.");
+                logger.Debug("Search for certificate domain.");
                 var alternativeUris = ConnectionFallbackHelper.AlternativeUris ?? new List<Uri>();
                 foreach (var alternativeUri in alternativeUris)
                 {
@@ -189,7 +188,7 @@
             //Start Rest Service
             var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
             var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
-            var restTask = StartRestServer(arguments.ToArray());
+            StartRestServer(arguments.ToArray());
             config.PackageVersion = VersionUtils.GetMainVersion();
             logger.Info($"MainVersion: {config.PackageVersion}");
             config.ExternalPackageJson = VersionUtils.GetExternalPackageJson();

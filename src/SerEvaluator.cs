@@ -29,6 +29,7 @@
     using Ser.Diagnostics;
     using Ser.Gerneral;
     using System.Web;
+    using Ser.Engine.Rest;
     #endregion
 
     public class SerEvaluator : ConnectorBase, IDisposable
@@ -68,11 +69,11 @@
 
         #region Properties & Variables
         private static ConnectorConfig onDemandConfig;
-        private SessionManager sessionManager;
-        private Ser.Engine.Rest.Client.SerApiClient restClient;
-        private ConcurrentDictionary<Guid, ActiveTask> runningTasks;
-        private object threadObject = new object();
-        private PerfomanceAnalyser Analyser;
+        private readonly SessionHelper sessionHelper;
+        private readonly Engine.Rest.Client.SerApiClient restClient;
+        private readonly ConcurrentDictionary<Guid, ActiveTask> runningTasks;
+        private readonly object threadObject = new object();
+        private readonly PerfomanceAnalyser Analyser;
         #endregion
 
         #region Connstructor & Dispose
@@ -86,7 +87,7 @@
             var baseUri = new Uri(restClient.BaseUrl);
             var baseUrl = $"{config.RestServiceUrl}{baseUri.PathAndQuery}";
             restClient.BaseUrl = baseUrl;
-            sessionManager = new SessionManager();
+            sessionHelper = new SessionHelper();
             runningTasks = new ConcurrentDictionary<Guid, ActiveTask>();
             Cleanup();
 
@@ -174,7 +175,7 @@
         {
             try
             {
-                logger.Debug($"Search for read right of user {task.Session.User.ToString()}");
+                logger.Debug($"Search for read right of user {task.Session.User}");
                 var parameter = CreateAuditMatrixParameters(task.Session.User);
                 var contentData = Encoding.UTF8.GetBytes(parameter.ToString());
                 var data = new ContentData()
@@ -218,7 +219,7 @@
             var results = new JArray();
             try
             {
-                var session = sessionManager.GetSession(onDemandConfig.Connection, user, appId);
+                var session = sessionHelper.GetSession(onDemandConfig.Connection, user, appId);
                 var qrsHub = new QlikQrsHub(session.ConnectUri, session.Cookie);
                 foreach (var activeTask in activeTasks)
                 {
@@ -229,7 +230,7 @@
                     var appOwner = await GetAppOwner(qrsHub, activeTask.Session.AppId);
                     if (appOwner != null && appOwner.ToString() == activeTask.Session.User.ToString())
                     {
-                        logger.Debug($"The app owner {appOwner.ToString()} for task list found.");
+                        logger.Debug($"The app owner {appOwner} for task list found.");
                         activeTask.Stoppable = true;
                         results.Add(CreateTaskResult(activeTask));
                     }
@@ -362,10 +363,10 @@
                 {
                     try
                     {
-                        logger.Debug($"Qlik Service user: {domainUser.ToString()}");
+                        logger.Debug($"Qlik Service user: {domainUser}");
                         domainUser = new DomainUser("INTERNAL\\ser_scheduler");
-                        logger.Debug($"Change to ser service user: {domainUser.ToString()}");
-                        var tmpsession = sessionManager.GetSession(onDemandConfig.Connection, domainUser, activeAppId);
+                        logger.Debug($"Change to ser service user: {domainUser}");
+                        var tmpsession = sessionHelper.GetSession(onDemandConfig.Connection, domainUser, activeAppId);
                         if (tmpsession == null)
                             throw new Exception("No session cookie generated. (Qlik Task)");
                         var qrsHub = new QlikQrsHub(onDemandConfig.Connection.ServerUri, tmpsession.Cookie);
@@ -509,8 +510,11 @@
                                 if (currentTask.Value != null)
                                 {
                                     var distibuteJson = currentTask.Value.Distribute;
-                                    var distibuteObject = JObject.Parse(distibuteJson);
-                                    statusResult.FormatedResult = GetFormatedJsonForQlik(distibuteObject);
+                                    if (distibuteJson != null)
+                                    {
+                                        var distibuteObject = JArray.Parse(distibuteJson);
+                                        statusResult.FormatedResult = GetFormatedJsonForQlik(distibuteObject);
+                                    }
                                 }
                             }
                             break;
@@ -559,25 +563,16 @@
             }
         }
 
-        private string GetFormatedJsonForQlik(JObject distibute)
+        private string GetFormatedJsonForQlik(JArray distibuteArray)
         {
-            var resultText = new StringBuilder();
-            var children = distibute.Children();
-            foreach (JProperty child in children)
+            var resultText = new StringBuilder(">>>");
+            resultText.Append($"{Environment.NewLine}{Environment.NewLine}{"Distibute Results".ToUpperInvariant()}:");
+            resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
+            foreach (JObject item in distibuteArray)
             {
-                resultText.Append($"{Environment.NewLine}{child.Name.ToUpperInvariant()}:");
-                resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
-                JArray array = child?.First as JArray;
-                if (array != null)
-                {
-                    foreach (JObject item in array)
-                    {
-                        var objChildren = item.Children();
-                        foreach (JProperty prop in objChildren)
-                            resultText.Append($"{Environment.NewLine}{prop.Name.ToUpperInvariant()}: {prop.Value}");
-                        resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
-                    }
-                }
+                var objChildren = item.Children();
+                foreach (JProperty prop in objChildren)
+                    resultText.Append($"{Environment.NewLine}{prop.Name.ToUpperInvariant()}: {prop.Value}");
                 resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
             }
             return resultText.ToString();
@@ -612,7 +607,7 @@
 
                 //get qlik session over jwt
                 logger.Debug("Get qlik session over jwt.");
-                qlikSession = sessionManager.GetSession(onDemandConfig.Connection, qlikUser, appId);
+                qlikSession = sessionHelper.GetSession(onDemandConfig.Connection, qlikUser, appId);
                 if (qlikSession == null)
                     throw new Exception("No session cookie generated (check qmc settings or connector config).");
 
@@ -658,7 +653,7 @@
                         if (firstConnection != null)
                         {
                             logger.Debug("Create bearer connection.");
-                            var newBearerConnection = CreateConnection(QlikCredentialType.HEADER, qlikSession, firstConnection.App);
+                            var newBearerConnection = CreateConnection(QlikCredentialType.JWT, qlikSession, firstConnection.App);
                             configReport.Connections.Add(newBearerConnection);
                         }
 
@@ -678,7 +673,7 @@
                             var uploadResult = restClient.UploadAsync(serfilename, false, uploadsteam).Result;
                             if (uploadResult.Success.Value)
                             {
-                                logger.Debug($"Upload {uploadResult.OperationId.ToString()} successfully.");
+                                logger.Debug($"Upload {uploadResult.OperationId} successfully.");
                                 activeTask.FileUploadIds.Add(uploadResult.OperationId.Value);
                             }
                             else
@@ -721,7 +716,7 @@
                     activeTask.Message = ex.Message;
                 }
                 else
-                    sessionManager.MakeSocketFree(activeTask?.Session ?? null);
+                    sessionHelper.Manager.MakeSocketFree(activeTask?.Session ?? null);
                 logger.Error(ex, "The report could not create.");
                 return new OnDemandResult() { TaskId = activeTask?.Id, Status = activeTask?.Status ?? -1, Log = activeTask?.Message };
             }
@@ -820,11 +815,9 @@
 
         private byte[] DownloadFile(string relUrl, Cookie cookie)
         {
-            using (var webClient = new WebClient())
-            {
-                webClient.Headers.Add(HttpRequestHeader.Cookie, $"{cookie.Name}={cookie.Value}");
-                return webClient.DownloadData($"{onDemandConfig.Connection.ServerUri.AbsoluteUri}{relUrl}");
-            }
+            using var webClient = new WebClient();
+            webClient.Headers.Add(HttpRequestHeader.Cookie, $"{cookie.Name}={cookie.Value}");
+            return webClient.DownloadData($"{onDemandConfig.Connection.ServerUri.AbsoluteUri}{relUrl}");
         }
 
         private SerConnection CreateConnection(QlikCredentialType type, SessionInfo session, string dataAppId = null)
@@ -833,7 +826,7 @@
             {
                 logger.Debug("Create new connection.");
                 var mainConnection = onDemandConfig.Connection;
-                var token = sessionManager.GetToken(session.User, mainConnection, TimeSpan.FromMinutes(30));
+                var token = sessionHelper.Manager.GetToken(session.User, mainConnection, TimeSpan.FromMinutes(30));
                 logger.Debug($"Bearer Token: {token}");
 
                 var conn = new SerConnection()
@@ -844,7 +837,6 @@
                 switch (type)
                 {
                     case QlikCredentialType.JWT:
-                    case QlikCredentialType.HEADER:
                         conn.Credentials = new SerCredentials()
                         {
                             Type = type,
@@ -858,13 +850,6 @@
                             Type = type,
                             Key = session.Cookie?.Name ?? null,
                             Value = session.Cookie?.Value ?? null
-                        };
-                        break;
-                    case QlikCredentialType.CERTIFICATE:
-                        conn.Credentials = new SerCredentials()
-                        {
-                            Type = type,
-                            Cert = onDemandConfig?.Connection?.Credentials?.Cert ?? null
                         };
                         break;
                     default:
@@ -896,7 +881,7 @@
         {
             logger.Trace($"Parse user script: {userJson}");
             userJson = userJson?.Trim();
-            var jsonStr = String.Empty;
+            string jsonStr;
             if (IsJsonScript(userJson))
             {
                 //Parse HJSON or JSON
@@ -964,7 +949,7 @@
                         foreach (dynamic child in children)
                         {
                             var connection = child.connections ?? null;
-                            if(connection == null)
+                            if (connection == null)
                                 child.connections = new JArray(newUserConnections);
                             else if (connection?.ToString() == "@CONFIGCONNECTION@")
                                 child.connections = new JArray(newUserConnections);
@@ -1121,7 +1106,7 @@
                     }
 
                     Thread.Sleep(1500);
-                    if (task.Status == -1 || task.Status == 0 || status == -1)
+                    if (task.Status == -1 || task.Status == 0 || status <= -1)
                         break;
 
                     if (status == 1)
@@ -1137,7 +1122,13 @@
                                 if (finishResults.Count == jobResults.Count)
                                     status = 2;
                                 else
-                                    status = -1;
+                                {
+                                    var inactiveResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.INACTIVE).ToList();
+                                    if (inactiveResults.Count == jobResults.Count)
+                                        status = -2;
+                                    else
+                                        status = -1;
+                                }
                             }
                             else if (runningResults.Count > 0 || jobResults.Count(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS) == jobResults.Count)
                             {
@@ -1148,6 +1139,10 @@
                                 var errorResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ERROR).ToList();
                                 if (errorResults.Count == jobResults.Count)
                                     status = -1;
+
+                                var inactiveResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.INACTIVE).ToList();
+                                if (inactiveResults.Count == jobResults.Count)
+                                    status = -2;
                             }
                         }
                         else
@@ -1164,13 +1159,18 @@
                 if (status != 2)
                 {
                     var engineException = new Exception("The report build process failed.");
+                    if (status == -2)
+                    {
+                        task.Status = -1;
+                        engineException = new Exception("The Task was inactive.");
+                    }
                     var lastResult = restClient.TaskWithIdAsync(task.Id).Result;
                     var firstJobResult = lastResult?.Results?.FirstOrDefault(j => j?.Exception != null) ?? null;
                     if (firstJobResult != null)
                         engineException = new Exception(firstJobResult.Exception.FullMessage.Replace("\r\n", " -> "));
                     throw engineException;
                 }
-                sessionManager.MakeSocketFree(task?.Session ?? null);
+                sessionHelper.Manager.MakeSocketFree(task?.Session ?? null);
 
                 //Download result files
                 var distJobresults = ConvertApiType<List<JobResult>>(jobResults);
@@ -1217,7 +1217,7 @@
             {
                 //Cleanup
                 Analyser?.SaveCheckPoints("Connector");
-                sessionManager.MakeSocketFree(task?.Session ?? null);
+                sessionHelper.Manager.MakeSocketFree(task?.Session ?? null);
                 FinishTask(task);
                 LogManager.Flush();
                 Analyser?.Stop();
@@ -1273,7 +1273,7 @@
                         logger.Debug($"Cleanup Process, Folder and Socket connection.");
                         if (runningTasks.TryRemove(task.Id, out var taskResult))
                             logger.Debug($"Remove task {task.Id} - Successfully.");
-                        sessionManager.MakeSocketFree(task?.Session ?? null);
+                        sessionHelper.Manager.MakeSocketFree(task?.Session ?? null);
                         var deleteResult = restClient.DeleteFilesAsync(task.Id).Result;
                         if (deleteResult.Success.Value)
                             logger.Debug($"Delete task folder {task.Id} - Successfully.");
@@ -1378,12 +1378,10 @@
                 if (String.IsNullOrEmpty(yaml))
                     return null;
 
-                using (TextReader sr = new StringReader(yaml))
-                {
-                    var deserializer = new Deserializer();
-                    var yamlConfig = deserializer.Deserialize(sr);
-                    return JsonConvert.SerializeObject(yamlConfig);
-                }
+                using TextReader sr = new StringReader(yaml);
+                var deserializer = new Deserializer();
+                var yamlConfig = deserializer.Deserialize(sr);
+                return JsonConvert.SerializeObject(yamlConfig);
             }
             catch (Exception ex)
             {
