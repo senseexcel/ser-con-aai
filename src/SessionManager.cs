@@ -71,7 +71,8 @@
                 }
 
                 var sessionInfo = Manager.CreateNewSession(connection, qlikUser, appId);
-                Sessions.Add(sessionInfo);
+                if (sessionInfo != null)
+                    Sessions.Add(sessionInfo);
                 return sessionInfo;
             }
             catch (Exception ex)
