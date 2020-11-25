@@ -38,11 +38,13 @@
         private delegate IPHostEntry GetHostEntryHandler(string name);
         #endregion
 
+        #region Constructor
         public ConnectorService()
         {
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
             ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
         }
+        #endregion
 
         #region Private Methods
         private static void CreateCertificate(string certFile, string privateKeyFile)
@@ -205,20 +207,19 @@
             logger.Debug($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}");
             logger.Debug($"Server start...");
 
-            using (worker = new ConnectorWorker(config))
+            worker = new ConnectorWorker(config, cts);
+            worker.CleanupOldFiles();
+            worker.RestServiceHealthCheck();
+
+            logger.Info($"Start GRPC listening on port '{config.BindingPort}' on Host '{config.BindingHost}'...");
+            server = new Server()
             {
-                worker.CleanupOldFiles();
-                worker.RestServiceHealthCheck();
-            
-                logger.Info($"Start GRPC listening on port '{config.BindingPort}' on Host '{config.BindingHost}'...");
-                server = new Server()
-                {
-                    Services = { Connector.BindService(worker) },
-                    Ports = { new ServerPort(config.BindingHost, config.BindingPort, ServerCredentials.Insecure) },
-                };
-                server.Start();
-                logger.Info($"The GRPC server is ready...");
-            }
+                Services = { Connector.BindService(worker) },
+                Ports = { new ServerPort(config.BindingHost, config.BindingPort, ServerCredentials.Insecure) },
+            };
+            server.Start();
+            logger.Info($"The GRPC server is ready...");
+
         }
         #endregion
 
@@ -268,7 +269,7 @@
         {
             try
             {
-                logger.Info("Shutdown SSEtoSER...");
+                logger.Info("Shutdown connector service...");
                 cts?.Cancel();
                 server?.ShutdownAsync().Wait();
             }

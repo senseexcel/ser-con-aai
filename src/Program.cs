@@ -18,7 +18,9 @@
         private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
+        #region Properties
         public static ConnectorService Service { get; private set; }
+        #endregion
 
         static void Main(string[] args)
         {

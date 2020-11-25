@@ -46,7 +46,7 @@
                     //Check for cancellation
                     if (CancelRunning())
                         return;
-                    
+
                     var jobResults = new List<Ser.Engine.Rest.Client.JobResult>();
                     foreach (var managedTaskPair in ManagedTasks)
                     {
@@ -79,28 +79,54 @@
                         if (operationResult.Success.Value)
                         {
                             jobResults = operationResult?.Results?.ToList() ?? new List<Ser.Engine.Rest.Client.JobResult>();
-                            var runningResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ABORT).ToList();
-                            if (jobResults.Count == runningResults.Count)
-                            {
-                                //Find all success results
-                                var successClientResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
+                            if (jobResults.Count == 0)
+                                continue;
 
-                                //Download all success engine task result files
+                            var runningResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ABORT).ToList();
+                            if (runningResults.Count > 0)
+                            {
+                                managedTask.Message = "Report job is running...";
+                                managedTask.Status = 1;
+                                managedTask.InternalStatus = InternalTaskStatus.ENGINEISRUNNING;
+                                continue;
+                            }
+
+                            //Find all success results
+                            var successClientResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
+                            if (successClientResults.Count > 0)
+                            {
+                                if (managedTask.InternalStatus == InternalTaskStatus.DOWNLOADFILESSTART || 
+                                    managedTask.InternalStatus == InternalTaskStatus.DISTRIBUTESTART)
+                                {
+                                    continue;
+                                }
+
                                 var successResults = ConvertApiType<List<JobResult>>(successClientResults);
-                                DownloadResultFiles(managedTask.Id, successResults);
+                               
+                                //Download all success engine task result files
+                                if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
+                                {
+                                    DownloadResultFiles(managedTask, successResults);
+                                    continue;
+                                }
 
                                 //Distibute all success results
-                                Distibute(successResults, managedTask);
-                                managedTask.Status = 3;
+                                if (managedTask.InternalStatus == InternalTaskStatus.DOWNLOADFILESEND)
+                                {
+                                    Distibute(successResults, managedTask);
+                                    continue;
+                                }
 
-                                //All results that were not successful
-                                var otherClientResults = jobResults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
-                                var otherResults = ConvertApiType<List<JobResult>>(otherClientResults);
-
-                                //Write all results
+                                //Write success results
                                 managedTask.JobResults.AddRange(successResults);
-                                managedTask.JobResults.AddRange(otherResults);
                             }
+
+                            //All results that were not successful
+                            var otherClientResults = jobResults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
+                            var otherResults = ConvertApiType<List<JobResult>>(otherClientResults);
+
+                            //Write not success results
+                            managedTask.JobResults.AddRange(otherResults);
                         }
                         else
                         {
@@ -112,11 +138,8 @@
                             return;
 
                         //Clean up tasks that are done.
-                        if (managedTask.Status > 3 || managedTask.Status == -1)
-                        {
+                        if (managedTask.Status > 2 || managedTask.Status == -1)
                             CleanUp(managedTask);
-                            continue;
-                        }
                     }
 
                     //Wait for working Threads
@@ -133,7 +156,7 @@
         {
             if (runtimeOptions.Cancellation.IsCancellationRequested)
             {
-                logger.Debug("The watcher thread was canceled.");
+                logger.Info("The watcher thread was canceled.");
                 return true;
             }
             return false;
@@ -179,62 +202,93 @@
             return bufferList.ToArray();
         }
 
-        private void DownloadResultFiles(Guid taskId, List<JobResult> jobResults)
+        private void DownloadResultFiles(ManagedTask task, List<JobResult> jobResults)
         {
-            foreach (var jobResult in jobResults)
+            Task.Run(() =>
             {
-                foreach (var jobReport in jobResult.Reports)
+                try
                 {
-                    foreach (var path in jobReport.Paths)
+                    task.InternalStatus = InternalTaskStatus.DOWNLOADFILESSTART;
+                    foreach (var jobResult in jobResults)
                     {
-                        var filename = Path.GetFileName(path);
-                        logger.Debug($"Download file {filename} form task {taskId}.");
-                        var streamData = runtimeOptions.RestClient.DownloadFilesAsync(taskId, filename).Result;
-                        if (streamData != null)
+                        foreach (var jobReport in jobResult.Reports)
                         {
-                            var buffer = GetStreamBuffer(streamData);
-                            jobReport.Data.Add(new ReportData() { Filename = filename, DownloadData = buffer });
+                            foreach (var path in jobReport.Paths)
+                            {
+                                var filename = Path.GetFileName(path);
+                                logger.Debug($"Download file '{filename}' form task '{task.Id}'...");
+                                var streamData = runtimeOptions.RestClient.DownloadFilesAsync(task.Id, filename).Result;
+                                if (streamData != null)
+                                {
+                                    var buffer = GetStreamBuffer(streamData);
+                                    jobReport.Data.Add(new ReportData() { Filename = filename, DownloadData = buffer });
+                                }
+                                else
+                                    logger.Warn($"File '{filename}' for download not found.");
+                            }
                         }
-                        else
-                            logger.Warn($"File {filename} for download not found.");
                     }
+                    task.InternalStatus = InternalTaskStatus.DOWNLOADFILESEND;
                 }
-            }
+                catch (Exception ex)
+                {
+                    logger.Debug(ex, "The method 'DownloadResultFiles' failed.");
+                    task.Status = -1;
+                    task.InternalStatus = InternalTaskStatus.ERROR;
+                    task.Error = ex;
+                }
+            }, task.Cancellation.Token);
         }
 
         private void Distibute(List<JobResult> jobResults, ManagedTask task)
         {
-            runtimeOptions.Analyser?.SetCheckPoint("CheckStatus", "Start Delivery of reports");
-            task.Message = "Delivery Report, Please wait...";
-            var distribute = new DistributeManager();
-            var privateKeyPath = runtimeOptions.Config.Connection.Credentials.PrivateKey;
-            var privateKeyFullname = HelperUtilities.GetFullPathFromApp(privateKeyPath);
-            var distibuteOptions = new DistibuteOptions()
+            Task.Run(() =>
             {
-                SessionUser = task.Session.User,
-                CancelToken = task.Cancellation.Token,
-                PrivateKeyPath = privateKeyFullname
-            };
-            var result = distribute.Run(jobResults, distibuteOptions);
+                try
+                {
+                    task.InternalStatus = InternalTaskStatus.DISTRIBUTESTART;
+                    runtimeOptions.Analyser?.SetCheckPoint("CheckStatus", "Start Delivery of reports");
+                    task.Status = 2;
+                    task.Message = "Report job is distributed...";
+                    var distribute = new DistributeManager();
+                    var privateKeyPath = runtimeOptions.Config.Connection.Credentials.PrivateKey;
+                    var privateKeyFullname = HelperUtilities.GetFullPathFromApp(privateKeyPath);
+                    var distibuteOptions = new DistibuteOptions()
+                    {
+                        SessionUser = task.Session.User,
+                        CancelToken = task.Cancellation.Token,
+                        PrivateKeyPath = privateKeyFullname
+                    };
+                    var result = distribute.Run(jobResults, distibuteOptions);
+                    runtimeOptions.SessionHelper.Manager.MakeSocketFree(task?.Session ?? null);
+                    if (task.Cancellation.IsCancellationRequested)
+                    {
+                        task.Message = "The delivery was canceled by user.";
+                        return;
+                    }
 
-            runtimeOptions.SessionHelper.Manager.MakeSocketFree(task?.Session ?? null);
-            if (task.Cancellation.IsCancellationRequested)
-            {
-                task.Message = "The delivery was canceled by user.";
-                return;
-            }
-    
-            if (result != null)
-            {
-                logger.Debug($"Distribute result: {result}");
-                task.DistributeResult = result;
-                logger.Debug("The delivery was successfully.");
-            }
-            else
-            {
-                throw new Exception(distribute.ErrorMessage);
-            }
-            runtimeOptions.Analyser?.SetCheckPoint("CheckStatus", "Report(s) finished");
+                    if (result != null)
+                    {
+                        logger.Debug($"Distribute result: '{result}'");
+                        task.DistributeResult = result;
+                        logger.Debug("The delivery was successfully.");
+                        task.Status = 3;
+                    }
+                    else
+                    {
+                        throw new Exception(distribute.ErrorMessage);
+                    }
+                    runtimeOptions.Analyser?.SetCheckPoint("CheckStatus", "Report(s) finished");
+                    task.InternalStatus = InternalTaskStatus.DISTRIBUTEEND;
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, $"The managed task '{task.Id}' could not be distibuted.");
+                    task.Error = ex;
+                    task.Status = -1;
+                    task.InternalStatus = InternalTaskStatus.ERROR;
+                }
+            });
         }
 
         private void CleanUp(ManagedTask task)
@@ -260,7 +314,7 @@
                             logger.Debug($"The directory for the task '{task.Id}' was successfully deleted.");
                         else
                             logger.Warn($"The directory for the task '{task.Id}' could not be deleted.");
-                       
+
                         foreach (var guidItem in task.FileUploadIds)
                         {
                             deleteResult = runtimeOptions.RestClient.DeleteFilesAsync(guidItem).Result;
@@ -288,12 +342,12 @@
         #region Public Methods
         public void Run(RuntimeOptions options)
         {
+            logger.Info("Managed task pool is running...");
             runtimeOptions = options;
             var poolTask = Task.Factory.StartNew(() =>
             {
                 WatchForFinishTasks();
             }, runtimeOptions.Cancellation.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-            poolTask.Start();
         }
         #endregion
     }

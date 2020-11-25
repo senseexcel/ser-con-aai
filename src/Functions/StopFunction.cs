@@ -4,6 +4,7 @@
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Threading.Tasks;
     using NLog;
     using Ser.ConAai.Communication;
     using Ser.ConAai.Config;
@@ -53,49 +54,52 @@
         #endregion
 
         #region Public Methods
-        public void StopReportJobs(QlikRequest request, bool isTimeout = false)
+        public Task StopReportJobs(QlikRequest request, bool isTimeout = false)
         {
-            try
+            return Task.Run(() =>
             {
-                if (request.ManagedTaskId == "all")
+                try
                 {
-                    logger.Debug("All tasks will be stopped...");
-                    if (Options.TaskPool.ManagedTasks.Count == 0)
-                        logger.Warn("No stopping jobs.");
-
-                    var managedTasks = Options.TaskPool.ManagedTasks?.Values?.ToList() ?? new List<ManagedTask>();
-                    foreach (var managedTask in managedTasks)
+                    if (request.ManagedTaskId == "all")
                     {
-                        if (managedTask.Status == 1 || managedTask.Status == 2)
+                        logger.Debug("All tasks will be stopped...");
+                        if (Options.TaskPool.ManagedTasks.Count == 0)
+                            logger.Warn("No stopping jobs.");
+
+                        var managedTasks = Options.TaskPool.ManagedTasks?.Values?.ToList() ?? new List<ManagedTask>();
+                        foreach (var managedTask in managedTasks)
                         {
-                            var stopResult = Options.RestClient.StopTasksAsync(managedTask.Id).Result;
-                            if (stopResult.Success.Value)
+                            if (managedTask.Status == 1 || managedTask.Status == 2)
                             {
-                                if (isTimeout)
-                                    managedTask.Message = "The report job was canceled by timeout.";
+                                var stopResult = Options.RestClient.StopTasksAsync(managedTask.Id).Result;
+                                if (stopResult.Success.Value)
+                                {
+                                    if (isTimeout)
+                                        managedTask.Message = "The report job was canceled by timeout.";
+                                    else
+                                        managedTask.Message = "The task was aborted by user.";
+                                    managedTask.Status = 4;
+                                    managedTask.Cancellation.Cancel();
+                                }
                                 else
-                                    managedTask.Message = "The task was aborted by user.";
-                                managedTask.Status = 4;
-                                managedTask.Cancellation.Cancel();
-                            }
-                            else
-                            {
-                                logger.Warn("The jobs could not be stopped.");
-                                managedTask.Message = "The jobs could not be stopped.";
+                                {
+                                    logger.Warn("The jobs could not be stopped.");
+                                    managedTask.Message = "The jobs could not be stopped.";
+                                }
                             }
                         }
                     }
+                    else if (request.ManagedTaskId != null)
+                    {
+                        logger.Debug($"Managed task '{request.ManagedTaskId}' will be stopped...");
+                        StopReportJob(request, isTimeout);
+                    }
                 }
-                else if (request.ManagedTaskId != null)
+                catch (Exception ex)
                 {
-                    logger.Debug($"Managed task '{request.ManagedTaskId}' will be stopped...");
-                    StopReportJob(request, isTimeout);
+                    logger.Error(ex, "The stop function has an unknown error.");
                 }
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "The stop function has an unknown error.");
-            }
+            }, Options.Cancellation.Token);
         }
         #endregion
 

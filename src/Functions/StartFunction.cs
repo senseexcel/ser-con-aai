@@ -17,6 +17,7 @@
     using Ser.ConAai.Config;
     using Ser.ConAai.TaskObjects;
     using Ser.ConAai.Communication;
+    using System.Threading.Tasks;
     #endregion
 
     public class StartFunction : BaseFunction
@@ -302,121 +303,126 @@
         #endregion
 
         #region Public Methods
-        public ManagedTask StartReportJob(QlikRequest request, ManagedTask newManagedTask)
+        public Task StartReportJob(QlikRequest request, ManagedTask newManagedTask)
         {
-            try
+            return Task.Run(() =>
             {
-                logger.Debug("Create new job...");
-                logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
-                Options.Analyser?.ClearCheckPoints();
-                Options.Analyser?.Start();
-                Options.Analyser?.SetCheckPoint("CreateReports", "Start report generation");
-
-                MappedDiagnosticsLogicalContext.Set("jobId", newManagedTask.Id.ToString());
-
-                //Get Qlik session over jwt
-                logger.Debug("Get cookie over JWT session...");
-                newManagedTask.Session = Options.SessionHelper.GetSession(Options.Config.Connection, request);
-                if (newManagedTask.Session == null)
-                    throw new Exception("No session cookie generated (check qmc settings or connector config).");
-
-                //Connect to Qlik app
-                logger.Debug("Connecting to Qlik via websocket...");
-                Options.Analyser?.SetCheckPoint("CreateReports", "Connect to Qlik");
-                var fullConnectionConfig = new SerConnection
+                try
                 {
-                    App = request.AppId,
-                    ServerUri = Options.Config.Connection.ServerUri,
-                    Credentials = new SerCredentials()
+                    newManagedTask.InternalStatus = InternalTaskStatus.CREATEREPORTJOBSTART;
+                    logger.Debug("Create new job...");
+                    logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
+                    Options.Analyser?.ClearCheckPoints();
+                    Options.Analyser?.Start();
+                    Options.Analyser?.SetCheckPoint("CreateReports", "Start report generation");
+
+                    MappedDiagnosticsLogicalContext.Set("jobId", newManagedTask.Id.ToString());
+
+                    //Get Qlik session over jwt
+                    logger.Debug("Get cookie over JWT session...");
+                    newManagedTask.Session = Options.SessionHelper.GetSession(Options.Config.Connection, request);
+                    if (newManagedTask.Session == null)
+                        throw new Exception("No session cookie generated (check qmc settings or connector config).");
+
+                    //Connect to Qlik app
+                    logger.Debug("Connecting to Qlik via websocket...");
+                    Options.Analyser?.SetCheckPoint("CreateReports", "Connect to Qlik");
+                    var fullConnectionConfig = new SerConnection
                     {
-                        Type = QlikCredentialType.SESSION,
-                        Key = newManagedTask.Session.Cookie.Name,
-                        Value = newManagedTask.Session.Cookie.Value
-                    }
-                };
-                var qlikConnection = ConnectionManager.NewConnection(fullConnectionConfig, true);
-                newManagedTask.Session.QlikConn = qlikConnection ?? throw new Exception("The web socket connection to qlik could not be established (Connector).");
-
-                //Create full engine config
-                logger.Debug("Create configuration for the engine...");
-                Options.Analyser?.SetCheckPoint("CreateReports", "Gernerate Config Json");
-                var newEngineConfig = CreateEngineConfig(request, newManagedTask.Session);
-
-                //Remove emtpy Tasks without report infos
-                newEngineConfig.Tasks.RemoveAll(t => t.Reports.Count == 0);
-
-                foreach (var configTask in newEngineConfig.Tasks)
-                {
-                    if (configTask.Id == Guid.Empty)
-                        configTask.Id = Guid.NewGuid();
-                    
-                    foreach (var configReport in configTask.Reports)
-                    {
-                        //Important: Add bearer connection as last connection item.
-                        var firstConnection = configReport?.Connections?.FirstOrDefault() ?? null;
-                        if (firstConnection != null)
+                        App = request.AppId,
+                        ServerUri = Options.Config.Connection.ServerUri,
+                        Credentials = new SerCredentials()
                         {
-                            logger.Debug("Create bearer connection.");
-                            var newBearerConnection = CreateConnection(QlikCredentialType.JWT, newManagedTask.Session, firstConnection.App);
-                            configReport.Connections.Add(newBearerConnection);
+                            Type = QlikCredentialType.SESSION,
+                            Key = newManagedTask.Session.Cookie.Name,
+                            Value = newManagedTask.Session.Cookie.Value
                         }
+                    };
+                    var qlikConnection = ConnectionManager.NewConnection(fullConnectionConfig, true);
+                    newManagedTask.Session.QlikConn = qlikConnection ?? throw new Exception("The web socket connection to qlik could not be established (Connector).");
 
-                        //Check app Id
-                        var appList = Q2g.HelperQlik.Connection.PossibleApps;
-                        var activeApp = appList.FirstOrDefault(a => a.qDocId == firstConnection.App);
-                        if (activeApp == null)
-                            throw new Exception($"The app id {firstConnection.App} was not found. Please check the app id or the security rules.");
+                    //Create full engine config
+                    logger.Debug("Create configuration for the engine...");
+                    Options.Analyser?.SetCheckPoint("CreateReports", "Gernerate Config Json");
+                    var newEngineConfig = CreateEngineConfig(request, newManagedTask.Session);
 
-                        //Read content from lib and content libary
-                        logger.Debug("Get template data from qlik.");
-                        if (configReport.Template != null)
+                    //Remove emtpy Tasks without report infos
+                    newEngineConfig.Tasks.RemoveAll(t => t.Reports.Count == 0);
+
+                    foreach (var configTask in newEngineConfig.Tasks)
+                    {
+                        if (configTask.Id == Guid.Empty)
+                            configTask.Id = Guid.NewGuid();
+
+                        foreach (var configReport in configTask.Reports)
                         {
-                            var uploadsteam = FindTemplatePath(newManagedTask.Session, configReport.Template);
-                            logger.Debug("Upload template data to rest service.");
-                            var serfilename = Path.GetFileName(configReport.Template.Input);
-                            var uploadResult = Options.RestClient.UploadAsync(serfilename, false, uploadsteam).Result;
-                            if (uploadResult.Success.Value)
+                            //Important: Add bearer connection as last connection item.
+                            var firstConnection = configReport?.Connections?.FirstOrDefault() ?? null;
+                            if (firstConnection != null)
                             {
-                                logger.Debug($"Upload {uploadResult.OperationId} successfully.");
-                                newManagedTask.FileUploadIds.Add(uploadResult.OperationId.Value);
+                                logger.Debug("Create bearer connection.");
+                                var newBearerConnection = CreateConnection(QlikCredentialType.JWT, newManagedTask.Session, firstConnection.App);
+                                configReport.Connections.Add(newBearerConnection);
+                            }
+
+                            //Check app Id
+                            var appList = Q2g.HelperQlik.Connection.PossibleApps;
+                            var activeApp = appList.FirstOrDefault(a => a.qDocId == firstConnection.App);
+                            if (activeApp == null)
+                                throw new Exception($"The app id {firstConnection.App} was not found. Please check the app id or the security rules.");
+
+                            //Read content from lib and content libary
+                            logger.Debug("Get template data from qlik.");
+                            if (configReport.Template != null)
+                            {
+                                var uploadsteam = FindTemplatePath(newManagedTask.Session, configReport.Template);
+                                logger.Debug("Upload template data to rest service.");
+                                var serfilename = Path.GetFileName(configReport.Template.Input);
+                                var uploadResult = Options.RestClient.UploadAsync(serfilename, false, uploadsteam).Result;
+                                if (uploadResult.Success.Value)
+                                {
+                                    logger.Debug($"Upload {uploadResult.OperationId} successfully.");
+                                    newManagedTask.FileUploadIds.Add(uploadResult.OperationId.Value);
+                                }
+                                else
+                                    logger.Warn($"The Upload was failed. - Error: {uploadResult?.Error}");
+                                uploadsteam.Close();
                             }
                             else
-                                logger.Warn($"The Upload was failed. - Error: {uploadResult?.Error}");
-                            uploadsteam.Close();
-                        }
-                        else
-                        {
-                            logger.Debug("No Template found. - Use alternative mode.");
-                        }
+                            {
+                                logger.Debug("No Template found. - Use alternative mode.");
+                            }
 
-                        // Perfomance analyser for the engine
-                        configReport.General.UsePerfomanceAnalyzer = Options.Config.UsePerfomanceAnalyzer;
+                            // Perfomance analyser for the engine
+                            configReport.General.UsePerfomanceAnalyzer = Options.Config.UsePerfomanceAnalyzer;
+                        }
                     }
+
+                    //Append upload ids on config
+                    var jobJson = JObject.FromObject(newEngineConfig);
+                    jobJson = AppendUploadGuids(jobJson, newManagedTask.FileUploadIds);
+                    newManagedTask.JobScript = jobJson;
+
+                    //Use the connector in the same App, than wait for data reload
+                    Options.Analyser?.SetCheckPoint("CreateReports", "Start connector reporting task");
+                    var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)
+                    ?.SelectMany(r => r.Connections)
+                    ?.FirstOrDefault(c => c.App == newManagedTask.Session.AppId) ?? null;
+
+                    //Wait for data load in single App mode
+                    WaitForDataLoad(newManagedTask, scriptConnection);
+                    newManagedTask.InternalStatus = InternalTaskStatus.CREATEREPORTJOBEND;
                 }
-
-                //Append upload ids on config
-                var jobJson = JObject.FromObject(newEngineConfig);
-                jobJson = AppendUploadGuids(jobJson, newManagedTask.FileUploadIds);
-                newManagedTask.JobScript = jobJson;
-
-                //Use the connector in the same App, than wait for data reload
-                Options.Analyser?.SetCheckPoint("CreateReports", "Start connector reporting task");
-                var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)
-                ?.SelectMany(r => r.Connections)
-                ?.FirstOrDefault(c => c.App == newManagedTask.Session.AppId) ?? null;
-
-                //Wait for data load in single App mode
-                WaitForDataLoad(newManagedTask, scriptConnection);
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "The reporting order could not be executed properly.");
-                newManagedTask.Endtime = DateTime.Now;
-                newManagedTask.Status = -1;
-                newManagedTask.Error = ex;
-                Options.SessionHelper.Manager.MakeSocketFree(newManagedTask?.Session ?? null);
-            }
-            return newManagedTask;
+                catch (Exception ex)
+                {
+                    logger.Error(ex, "The reporting order could not be executed properly.");
+                    newManagedTask.Endtime = DateTime.Now;
+                    newManagedTask.Status = -1;
+                    newManagedTask.Error = ex;
+                    newManagedTask.InternalStatus = InternalTaskStatus.ERROR;
+                    Options.SessionHelper.Manager.MakeSocketFree(newManagedTask?.Session ?? null);
+                }
+            }, newManagedTask.Cancellation.Token);
         }
         #endregion
     }

@@ -24,7 +24,7 @@
     using Ser.ConAai.Communication;
     #endregion
 
-    public class ConnectorWorker : ConnectorBase, IDisposable
+    public class ConnectorWorker : ConnectorBase
     {
         #region Logger
         private static readonly Logger logger = LogManager.GetCurrentClassLogger();
@@ -45,7 +45,7 @@
         #endregion
 
         #region Connstructor
-        public ConnectorWorker(ConnectorConfig config)
+        public ConnectorWorker(ConnectorConfig config, CancellationTokenSource cancellation)
         {
             ValidationCallback.Connection = config.Connection;
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
@@ -67,7 +67,7 @@
                 SessionHelper = new SessionHelper(),
                 RestClient = new Ser.Engine.Rest.Client.RestClient(new HttpClient(), config.RestServiceUrl),
                 Analyser = analyser,
-                Cancellation = new CancellationTokenSource(),
+                Cancellation = cancellation,
                 TaskPool = new ManagedTaskPool()
             };
             RuntimeOptions.TaskPool.Run(RuntimeOptions);
@@ -151,7 +151,7 @@
         {
             try
             {
-                logger.Info($"The Capabilities are called.");
+                logger.Info($"The method 'GetCapabilities' is called...");
 
                 return Task.FromResult(new Capabilities
                 {
@@ -178,7 +178,7 @@
                              Name = nameof(ConnectorFunction.STATUS),
                              Params =
                              {
-                                new Parameter { Name = "TaskIds", DataType = DataType.String },
+                                new Parameter { Name = "TaskId", DataType = DataType.String },
                              },
                              ReturnType = DataType.String
                         },
@@ -189,7 +189,7 @@
                             Name = nameof(ConnectorFunction.STOP),
                             Params =
                             {
-                               new Parameter { Name = "TaskIds", DataType = DataType.String },
+                               new Parameter { Name = "TaskId", DataType = DataType.String },
                             },
                             ReturnType = DataType.String
                         },
@@ -200,7 +200,7 @@
                             Name = nameof(ConnectorFunction.RESULT),
                             Params =
                             {
-                               new Parameter { Name = "TaskIds", DataType = DataType.String },
+                               new Parameter { Name = "TaskId", DataType = DataType.String },
                             },
                             ReturnType = DataType.String
                         }
@@ -209,7 +209,7 @@
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "The Capabilities could not be called.");
+                logger.Error(ex, "The method 'GetCapabilities' failed.");
                 return null;
             }
         }
@@ -220,7 +220,7 @@
         {
             try
             {
-                logger.Debug("The execute function are called...");
+                logger.Debug("The method 'ExecuteFunction' is called...");
 
                 //Read function header
                 var functionHeader = context.RequestHeaders.ParseIMessageFirstOrDefault<FunctionRequestHeader>();
@@ -286,11 +286,8 @@
                         Status = 0
                     };
                     RuntimeOptions.TaskPool.ManagedTasks.TryAdd(newManagedTask.Id, newManagedTask);
-                    _ = Task.Run(() =>
-                      {
-                          var startFunction = new StartFunction(RuntimeOptions);
-                          var managedtask = startFunction.StartReportJob(request, newManagedTask);
-                      }, RuntimeOptions.Cancellation.Token);
+                    var startFunction = new StartFunction(RuntimeOptions);
+                    _ = startFunction.StartReportJob(request, newManagedTask);
                     response.TaskId = newManagedTask.Id;
                     #endregion
                 }
@@ -298,15 +295,12 @@
                 {
                     #region Function call SER.STOP
                     logger.Debug("Function call SER.STOP...");
-                    _ = Task.Run(() =>
-                    {
-                        var stopFunction = new StopFunction(RuntimeOptions);
-                        stopFunction.StopReportJobs(request);
-                    }, RuntimeOptions.Cancellation.Token);
+                    var stopFunction = new StopFunction(RuntimeOptions);
+                    _ = stopFunction.StopReportJobs(request);
                     if (request.ManagedTaskId == "all")
-                        response.Log = "All report jobs are stopped.";
+                        response.Log = "All report jobs is stopping...";
                     else
-                        response.Log = $"Report job '{request.ManagedTaskId}' is stopped.";
+                        response.Log = $"Report job '{request.ManagedTaskId}' is stopping...";
                     response.Status = 4;
                     #endregion
                 }
@@ -336,7 +330,7 @@
             }
             catch (Exception ex)
             {
-                logger.Error(ex, $"ExecuteFunction - {ex.Message}");
+                logger.Error(ex, $"The method 'ExecuteFunction' failed with error '{ex.Message}'.");
                 await responseStream.WriteAsync(GetResult(new QlikResponse()
                 {
                     Log = ex.Message,
@@ -347,11 +341,6 @@
             {
                 LogManager.Flush();
             }
-        }
-
-        public void Dispose()
-        {
-            RuntimeOptions?.Cancellation?.Cancel();
         }
         #endregion
     }

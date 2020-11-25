@@ -12,6 +12,18 @@
     using System.Text;
     #endregion
 
+    public enum InternalTaskStatus
+    {
+        CREATEREPORTJOBSTART,
+        CREATEREPORTJOBEND,
+        ENGINEISRUNNING,
+        DOWNLOADFILESSTART,
+        DOWNLOADFILESEND,
+        DISTRIBUTESTART,
+        DISTRIBUTEEND,
+        ERROR
+    }
+
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
                 NamingStrategyType = typeof(CamelCaseNamingStrategy))]
     public class ManagedTask
@@ -22,6 +34,7 @@
         public DateTime Endtime { get; set; }
         public DateTime? LastQlikFunctionCall { get; set; }
         public int Status { get; set; }
+        public InternalTaskStatus InternalStatus { get; set; }
         public string DistributeResult { get; set; }
         public SessionInfo Session { get; set; }
         public string Message { get; set; }
