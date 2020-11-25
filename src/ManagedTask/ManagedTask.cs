@@ -21,7 +21,8 @@
         DOWNLOADFILESEND,
         DISTRIBUTESTART,
         DISTRIBUTEEND,
-        ERROR
+        ERROR,
+        CLEANUP
     }
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
@@ -42,7 +43,7 @@
         public CancellationTokenSource Cancellation { get; set; }
         public List<Guid> FileUploadIds { get; set; } = new List<Guid>();
         public JObject JobScript { get; set; }
-        public List<JobResult> JobResults { get; set; }
+        public List<JobResult> JobResults { get; set; } = new List<JobResult>();
         #endregion
 
         #region Constructor

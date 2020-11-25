@@ -37,6 +37,10 @@
             var checkString = userJson.Replace("\r\n", "\n").ToLowerInvariant();
             if (Regex.IsMatch(checkString, "connections:[ \t]*\n[ \t]*{", RegexOptions.Singleline))
                 return true;
+            if (userJson.StartsWith("{\""))
+                return true;
+            if (userJson == "versions: all")
+                return true;
             return false;
         }
 

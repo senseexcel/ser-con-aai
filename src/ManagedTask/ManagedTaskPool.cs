@@ -48,27 +48,23 @@
                         return;
 
                     var jobResults = new List<Ser.Engine.Rest.Client.JobResult>();
-                    foreach (var managedTaskPair in ManagedTasks)
+                    var managedPoolTasks = ManagedTasks.Values.ToList();
+                    foreach (var managedTask in managedPoolTasks)
                     {
                         //Check for cancellation
                         if (CancelRunning())
                             return;
 
-                        var managedTask = managedTaskPair.Value;
+                        //Ignore tasks that are already marked for deletion.
+                        if (managedTask.InternalStatus == InternalTaskStatus.CLEANUP)
+                            continue;
 
                         //Check if qlik aborted the communication
                         if (managedTask.LastQlikFunctionCall != null)
                         {
                             var timeSpan = DateTime.Now - managedTask.LastQlikFunctionCall.Value;
                             if (timeSpan.TotalSeconds > runtimeOptions.Config.StopTimeout)
-                            {
-                                var stopRequest = new QlikRequest
-                                {
-                                    ManagedTaskId = managedTask.Id.ToString()
-                                };
-                                var stopFunction = new StopFunction(runtimeOptions);
-                                stopFunction.StopReportJobs(stopRequest, true);
-                            }
+                                StopManagedTask(managedTask);
                         }
 
                         //Check for cancellation
@@ -95,17 +91,16 @@
                             var successClientResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
                             if (successClientResults.Count > 0)
                             {
-                                if (managedTask.InternalStatus == InternalTaskStatus.DOWNLOADFILESSTART || 
+                                if (managedTask.InternalStatus == InternalTaskStatus.DOWNLOADFILESSTART ||
                                     managedTask.InternalStatus == InternalTaskStatus.DISTRIBUTESTART)
                                 {
                                     continue;
                                 }
 
-                                var successResults = ConvertApiType<List<JobResult>>(successClientResults);
-                               
                                 //Download all success engine task result files
                                 if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
                                 {
+                                    var successResults = ConvertApiType<List<JobResult>>(successClientResults);
                                     DownloadResultFiles(managedTask, successResults);
                                     continue;
                                 }
@@ -113,12 +108,9 @@
                                 //Distibute all success results
                                 if (managedTask.InternalStatus == InternalTaskStatus.DOWNLOADFILESEND)
                                 {
-                                    Distibute(successResults, managedTask);
+                                    Distibute(managedTask);
                                     continue;
                                 }
-
-                                //Write success results
-                                managedTask.JobResults.AddRange(successResults);
                             }
 
                             //All results that were not successful
@@ -138,8 +130,7 @@
                             return;
 
                         //Clean up tasks that are done.
-                        if (managedTask.Status > 2 || managedTask.Status == -1)
-                            CleanUp(managedTask);
+                        CleanUp(managedTask);
                     }
 
                     //Wait for working Threads
@@ -150,6 +141,16 @@
             {
                 logger.Error(ex, "The managed task watching failed.", ex);
             }
+        }
+
+        private void StopManagedTask(ManagedTask task)
+        {
+            var stopRequest = new QlikRequest
+            {
+                ManagedTaskId = task.Id.ToString()
+            };
+            var stopFunction = new StopFunction(runtimeOptions);
+            stopFunction.StopReportJobs(stopRequest, true);
         }
 
         private bool CancelRunning()
@@ -228,6 +229,7 @@
                             }
                         }
                     }
+                    task.JobResults.AddRange(jobResults);
                     task.InternalStatus = InternalTaskStatus.DOWNLOADFILESEND;
                 }
                 catch (Exception ex)
@@ -240,7 +242,7 @@
             }, task.Cancellation.Token);
         }
 
-        private void Distibute(List<JobResult> jobResults, ManagedTask task)
+        private void Distibute(ManagedTask task)
         {
             Task.Run(() =>
             {
@@ -259,8 +261,7 @@
                         CancelToken = task.Cancellation.Token,
                         PrivateKeyPath = privateKeyFullname
                     };
-                    var result = distribute.Run(jobResults, distibuteOptions);
-                    runtimeOptions.SessionHelper.Manager.MakeSocketFree(task?.Session ?? null);
+                    var result = distribute.Run(task.JobResults, distibuteOptions);
                     if (task.Cancellation.IsCancellationRequested)
                     {
                         task.Message = "The delivery was canceled by user.";
@@ -272,6 +273,7 @@
                         logger.Debug($"Distribute result: '{result}'");
                         task.DistributeResult = result;
                         logger.Debug("The delivery was successfully.");
+                        task.Endtime = DateTime.Now;
                         task.Status = 3;
                     }
                     else
@@ -295,42 +297,48 @@
         {
             try
             {
-                Task.Delay(runtimeOptions.Config.CleanupTimeout)
-                .ContinueWith((_) =>
+                if (task.Status > 2 || task.Status == -1)
                 {
-                    try
+                    task.InternalStatus = InternalTaskStatus.CLEANUP;
+                    task.Endtime = DateTime.Now;
+
+                    Task.Delay(runtimeOptions.Config.CleanupTimeout)
+                    .ContinueWith((_) =>
                     {
-                        logger.Debug($"Run clean up process for folder and socket connection...");
-
-                        if (ManagedTasks.TryRemove(task.Id, out var taskResult))
-                            logger.Debug($"Managed task '{task.Id}' was successfully removed from the managed pool.");
-                        else
-                            logger.Debug($"Managed task '{task.Id}' could not be removed from the pool.");
-
-                        runtimeOptions.SessionHelper.Manager.MakeSocketFree(task?.Session ?? null);
-
-                        var deleteResult = runtimeOptions.RestClient.DeleteFilesAsync(task.Id).Result;
-                        if (deleteResult.Success.Value)
-                            logger.Debug($"The directory for the task '{task.Id}' was successfully deleted.");
-                        else
-                            logger.Warn($"The directory for the task '{task.Id}' could not be deleted.");
-
-                        foreach (var guidItem in task.FileUploadIds)
+                        try
                         {
-                            deleteResult = runtimeOptions.RestClient.DeleteFilesAsync(guidItem).Result;
-                            if (deleteResult.Success.Value)
-                                logger.Debug($"The upload directory '{guidItem}' of the task was successfully deleted.");
-                            else
-                                logger.Warn($"The upload directory '{guidItem}' of the task could not be deleted.");
-                        }
+                            logger.Debug($"Run clean up process...");
 
-                        logger.Debug($"Cleanup of the task '{task.Id}' has been completed.");
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error(ex, $"Cleaning up the task '{task.Id}' failed.");
-                    }
-                });
+                            if (ManagedTasks.TryRemove(task.Id, out var taskResult))
+                                logger.Debug($"Managed task '{task.Id}' was successfully removed from the managed pool.");
+                            else
+                                logger.Debug($"Managed task '{task.Id}' could not be removed from the pool.");
+
+                            runtimeOptions.SessionHelper.Manager.MakeSocketFree(task?.Session ?? null);
+
+                            var deleteResult = runtimeOptions.RestClient.DeleteFilesAsync(task.Id).Result;
+                            if (deleteResult.Success.Value)
+                                logger.Debug($"The directory for the task '{task.Id}' was successfully deleted.");
+                            else
+                                logger.Warn($"The directory for the task '{task.Id}' could not be deleted.");
+
+                            foreach (var guidItem in task.FileUploadIds)
+                            {
+                                deleteResult = runtimeOptions.RestClient.DeleteFilesAsync(guidItem).Result;
+                                if (deleteResult.Success.Value)
+                                    logger.Debug($"The upload directory '{guidItem}' of the task was successfully deleted.");
+                                else
+                                    logger.Warn($"The upload directory '{guidItem}' of the task could not be deleted.");
+                            }
+
+                            logger.Debug($"Cleanup of the task '{task.Id}' has been completed.");
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Error(ex, $"Cleaning up the task '{task.Id}' failed.");
+                        }
+                    });
+                }
             }
             catch (Exception ex)
             {

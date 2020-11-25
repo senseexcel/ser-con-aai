@@ -130,12 +130,14 @@
                 {
                     logger.Debug("Status - Read main version...");
                     result.Version = Options.Config.PackageVersion;
+                    return result;
                 }
-                
-                if (request.VersionMode == "packages")
+
+                if  (request.VersionMode == "packages")
                 {
                     logger.Debug("Status - Read external package versions...");
                     result.ExternalPackagesInfo = Options.Config.ExternalPackageJson;
+                    return result;
                 }
 
                 if (request.ManagedTaskId == "all")
@@ -159,11 +161,15 @@
                     else
                     {
                         logger.Debug($"Status - No managed task id '{request.ManagedTaskId}' in pool found.");
+                        result.Log = "Status information is not available.";
+                        result.Status = -1;
                     }
                 }
                 else
                 {
                     logger.Trace("Status - No managed tasks with 'all' or 'id' found.");
+                    result.Log = "Status information is not available.";
+                    result.Status = -1;
                 }
             }
             catch (Exception ex)

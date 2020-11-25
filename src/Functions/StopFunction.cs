@@ -54,9 +54,9 @@
         #endregion
 
         #region Public Methods
-        public Task StopReportJobs(QlikRequest request, bool isTimeout = false)
+        public void StopReportJobs(QlikRequest request, bool isTimeout = false)
         {
-            return Task.Run(() =>
+            Task.Run(() =>
             {
                 try
                 {

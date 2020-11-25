@@ -283,11 +283,12 @@
                     {
                         StartTime = DateTime.Now,
                         Message = "Create new report job...",
+                        Cancellation = new CancellationTokenSource(),
                         Status = 0
                     };
                     RuntimeOptions.TaskPool.ManagedTasks.TryAdd(newManagedTask.Id, newManagedTask);
                     var startFunction = new StartFunction(RuntimeOptions);
-                    _ = startFunction.StartReportJob(request, newManagedTask);
+                    startFunction.StartReportJob(request, newManagedTask);
                     response.TaskId = newManagedTask.Id;
                     #endregion
                 }
@@ -296,7 +297,7 @@
                     #region Function call SER.STOP
                     logger.Debug("Function call SER.STOP...");
                     var stopFunction = new StopFunction(RuntimeOptions);
-                    _ = stopFunction.StopReportJobs(request);
+                    stopFunction.StopReportJobs(request);
                     if (request.ManagedTaskId == "all")
                         response.Log = "All report jobs is stopping...";
                     else

@@ -303,9 +303,9 @@
         #endregion
 
         #region Public Methods
-        public Task StartReportJob(QlikRequest request, ManagedTask newManagedTask)
+        public void StartReportJob(QlikRequest request, ManagedTask newManagedTask)
         {
-            return Task.Run(() =>
+            Task.Run(() =>
             {
                 try
                 {
