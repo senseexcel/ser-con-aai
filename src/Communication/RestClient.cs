@@ -11,13 +11,13 @@ namespace Ser.Engine.Rest.Client
     #pragma warning disable
 
     [System.CodeDom.Compiler.GeneratedCode("NSwag", "12.0.15.0 (NJsonSchema v9.13.22.0 (Newtonsoft.Json v12.0.0.0))")]
-    public partial class SerApiClient 
+    public partial class RestClient 
     {
         private string _baseUrl = "https://localhost:5001/api/v1";
         private System.Net.Http.HttpClient _httpClient;
         private System.Lazy<Newtonsoft.Json.JsonSerializerSettings> _settings;
     
-        public SerApiClient(System.Net.Http.HttpClient httpClient)
+        public RestClient(System.Net.Http.HttpClient httpClient, string serviceUrl)
         {
             _httpClient = httpClient; 
             _settings = new System.Lazy<Newtonsoft.Json.JsonSerializerSettings>(() => 
@@ -26,6 +26,7 @@ namespace Ser.Engine.Rest.Client
                 UpdateJsonSerializerSettings(settings);
                 return settings;
             });
+            SetServiceUrl(serviceUrl);
         }
     
         public string BaseUrl 
@@ -33,7 +34,14 @@ namespace Ser.Engine.Rest.Client
             get { return _baseUrl; }
             set { _baseUrl = value; }
         }
-    
+
+        private void SetServiceUrl(string serviceUrl)
+        {
+            var baseUri = new Uri(BaseUrl);
+            var baseUrl = $"{serviceUrl}{baseUri.PathAndQuery}";
+            BaseUrl = baseUrl;
+        }
+
         protected Newtonsoft.Json.JsonSerializerSettings JsonSerializerSettings { get { return _settings.Value; } }
     
         partial void UpdateJsonSerializerSettings(Newtonsoft.Json.JsonSerializerSettings settings);

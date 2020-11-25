@@ -5,6 +5,7 @@
     using NLog;
     using NLog.Config;
     using PeterKottas.DotNetCore.WindowsService;
+    using Ser.ConAai.Config;
     using System;
     using System.IO;
     using System.Linq;
@@ -17,7 +18,7 @@
         private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         #endregion
 
-        public static SSEtoSER Service { get; private set; }
+        public static ConnectorService Service { get; private set; }
 
         static void Main(string[] args)
         {
@@ -27,11 +28,11 @@
 
                 if (args.Length > 0 && args[0] == "VersionNumber")
                 {
-                    File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "Version.txt"), VersionUtils.GetMainVersion());
+                    File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "Version.txt"), ConnectorVersion.GetMainVersion());
                     return;
                 }
 
-                ServiceRunner<SSEtoSER>.Run(config =>
+                ServiceRunner<ConnectorService>.Run(config =>
                 {
                     config.SetDisplayName("Qlik Connector for AG Reporting");
                     config.SetDescription("AnalyticsGate Reporting Service");
@@ -40,7 +41,7 @@
                     {
                         serviceConfig.ServiceFactory((extraArguments, controller) =>
                         {
-                            Service = new SSEtoSER();
+                            Service = new ConnectorService();
                             return Service;
                         });
                         serviceConfig.OnStart((service, extraParams) =>

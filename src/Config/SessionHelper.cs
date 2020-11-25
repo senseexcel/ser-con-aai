@@ -1,18 +1,15 @@
-﻿namespace Ser.ConAai
+﻿namespace Ser.ConAai.Config
 {
     #region Usings
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using System.Net;
     using System.Net.Http;
-    using System.Security.Claims;
-    using System.Security.Cryptography.X509Certificates;
     using NLog;
-    using Q2g.HelperPem;
     using Q2g.HelperQlik;
     using Q2g.HelperQrs;
     using Ser.Api;
+    using Ser.ConAai.Communication;
     #endregion
 
     public class SessionHelper
@@ -51,7 +48,7 @@
             }
         }
 
-        public SessionInfo GetSession(SerConnection connection, DomainUser qlikUser, string appId)
+        public SessionInfo GetSession(SerConnection connection, QlikRequest request)
         {
             try
             {
@@ -59,8 +56,8 @@
                 {
                     var uri = connection.ServerUri;
                     var oldSession = Sessions?.FirstOrDefault(u => u.ConnectUri.OriginalString == uri.OriginalString
-                                                          && u.User.ToString() == qlikUser.ToString()
-                                                          && u.AppId == appId) ?? null;
+                                                          && u.User.ToString() == request.QlikUser.ToString()
+                                                          && u.AppId == request.AppId) ?? null;
                     if (oldSession != null)
                     {
                         var result = ValidateSession(oldSession);
@@ -70,8 +67,9 @@
                     }
                 }
 
-                var sessionInfo = Manager.CreateNewSession(connection, qlikUser, appId);
-                Sessions.Add(sessionInfo);
+                var sessionInfo = Manager.CreateNewSession(connection, request.QlikUser, request.AppId);
+                if (sessionInfo != null)
+                    Sessions.Add(sessionInfo);
                 return sessionInfo;
             }
             catch (Exception ex)

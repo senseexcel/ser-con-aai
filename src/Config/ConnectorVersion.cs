@@ -1,4 +1,4 @@
-﻿namespace Ser.ConAai
+﻿namespace Ser.ConAai.Config
 {
     #region Usings
     using System;
@@ -6,7 +6,7 @@
     using Newtonsoft.Json;
     #endregion
 
-    public class VersionUtils
+    public class ConnectorVersion
     {
         public static string GetExternalPackageJson()
         {

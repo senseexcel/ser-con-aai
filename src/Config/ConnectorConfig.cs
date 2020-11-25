@@ -1,4 +1,4 @@
-﻿namespace Ser.ConAai
+﻿namespace Ser.ConAai.Config
 {
     #region Usings
     using Microsoft.Extensions.PlatformAbstractions;
