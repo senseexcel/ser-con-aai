@@ -35,9 +35,15 @@
                 {
                     logger.Debug($"The managed task '{managedStopTask.Id}' was stopped.");
                     if (isTimeout)
+                    {
+                        logger.Info("The report job was canceled by timeout.");
                         managedStopTask.Message = "The report job was canceled by timeout.";
+                    }
                     else
+                    {
+                        logger.Info("The task was aborted by user.");
                         managedStopTask.Message = "The task was aborted by user.";
+                    }
                     managedStopTask.Status = 4;
                     managedStopTask.Cancellation.Cancel();
                 }
@@ -49,7 +55,7 @@
             }
             else
             {
-                logger.Warn($"No job found with the Id '{managedStopTask.Id}' to stop.");
+                logger.Warn($"No job was found with the id '{managedStopTask?.Id}' to stop.");
             }
         }
         #endregion

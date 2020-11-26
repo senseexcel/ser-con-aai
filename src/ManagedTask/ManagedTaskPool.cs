@@ -61,9 +61,12 @@
                             continue;
 
                         //Clean up stopped tasks
-                        if (managedTask.InternalStatus == InternalTaskStatus.STOPEND || 
+                        if (managedTask.InternalStatus == InternalTaskStatus.STOPEND ||
                             managedTask.InternalStatus == InternalTaskStatus.ERROR)
+                        {
                             CleanUp(managedTask);
+                            continue;
+                        }
 
                         //Check if qlik aborted the communication
                         if (managedTask.LastQlikFunctionCall != null)
