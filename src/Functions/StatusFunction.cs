@@ -163,14 +163,14 @@
                     }
                     else
                     {
-                        logger.Debug($"Status - No managed task id '{request.ManagedTaskId}' in pool found.");
+                        logger.Warn($"Status - No managed task id '{request.ManagedTaskId}' in pool found.");
                         result.Log = "Status information is not available.";
                         result.Status = -1;
                     }
                 }
                 else
                 {
-                    logger.Trace("Status - No managed tasks with 'all' or 'id' found.");
+                    logger.Warn("Status - No managed tasks with 'all' or 'id' found.");
                     result.Log = "Status information is not available.";
                     result.Status = -1;
                 }

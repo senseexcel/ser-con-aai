@@ -22,6 +22,8 @@
         DISTRIBUTESTART,
         DISTRIBUTEEND,
         ERROR,
+        STOPSTART,
+        STOPEND,
         CLEANUP
     }
 

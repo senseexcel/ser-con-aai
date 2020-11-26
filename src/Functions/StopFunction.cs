@@ -23,12 +23,12 @@
         #endregion
 
         #region Private Methods
-        private void StopReportJob(QlikRequest request, bool isTimeout = false)
+        private void StopReportJob(Guid taskId, bool isTimeout = false)
         {
-            var taskId = new Guid(request.ManagedTaskId);
             var managedStopTask = Options.TaskPool.ManagedTasks.Values.FirstOrDefault(t => t.Id == taskId);
             if (managedStopTask != null && managedStopTask.Status != 4)
             {
+                managedStopTask.InternalStatus = InternalTaskStatus.STOPSTART;
                 logger.Debug($"Stopping task id '{managedStopTask.Id}'...");
                 var stopResult = Options.RestClient.StopTasksAsync(managedStopTask.Id).Result;
                 if (stopResult.Success.Value)
@@ -40,6 +40,8 @@
                         managedStopTask.Message = "The task was aborted by user.";
                     managedStopTask.Status = 4;
                     managedStopTask.Cancellation.Cancel();
+                    managedStopTask.InternalStatus = InternalTaskStatus.STOPEND;
+                    return;
                 }
                 else
                 {
@@ -50,6 +52,7 @@
             {
                 logger.Warn($"No job found with the Id '{managedStopTask.Id}' to stop.");
             }
+            managedStopTask.InternalStatus = InternalTaskStatus.ENGINEISRUNNING;
         }
         #endregion
 
@@ -69,30 +72,20 @@
                         var managedTasks = Options.TaskPool.ManagedTasks?.Values?.ToList() ?? new List<ManagedTask>();
                         foreach (var managedTask in managedTasks)
                         {
-                            if (managedTask.Status == 1 || managedTask.Status == 2)
-                            {
-                                var stopResult = Options.RestClient.StopTasksAsync(managedTask.Id).Result;
-                                if (stopResult.Success.Value)
-                                {
-                                    if (isTimeout)
-                                        managedTask.Message = "The report job was canceled by timeout.";
-                                    else
-                                        managedTask.Message = "The task was aborted by user.";
-                                    managedTask.Status = 4;
-                                    managedTask.Cancellation.Cancel();
-                                }
-                                else
-                                {
-                                    logger.Warn("The jobs could not be stopped.");
-                                    managedTask.Message = "The jobs could not be stopped.";
-                                }
-                            }
+                            if (managedTask.Status >= 0 && managedTask.Status <= 2)
+                                StopReportJob(managedTask.Id, isTimeout);
+                            else
+                                logger.Warn($"The task '{managedTask.Id}' has a status that cannot be stopped.");
                         }
                     }
                     else if (request.ManagedTaskId != null)
                     {
                         logger.Debug($"Managed task '{request.ManagedTaskId}' will be stopped...");
-                        StopReportJob(request, isTimeout);
+                        StopReportJob(new Guid(request.ManagedTaskId), isTimeout);
+                    }
+                    else
+                    {
+                        logger.Warn($"The task id of the task to be stopped is empty.");
                     }
                 }
                 catch (Exception ex)

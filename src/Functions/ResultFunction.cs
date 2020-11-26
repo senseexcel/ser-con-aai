@@ -76,6 +76,7 @@
             }
             catch (Exception ex)
             {
+                result.SetErrorMessage(ex);
                 logger.Error(ex, "The result function has an unknown error.");
             }
             return null;

@@ -26,6 +26,7 @@
 
         #region Properties && Variables
         private RuntimeOptions runtimeOptions;
+        private int errorCount = 0;
         public ConcurrentDictionary<Guid, ManagedTask> ManagedTasks { get; }
         #endregion
 
@@ -55,9 +56,13 @@
                         if (CancelRunning())
                             return;
 
-                        //Ignore tasks that are already marked for deletion.
+                        //Ignore tasks that are already marked for deletion
                         if (managedTask.InternalStatus == InternalTaskStatus.CLEANUP)
                             continue;
+
+                        //Clean up stopped tasks
+                        if (managedTask.InternalStatus == InternalTaskStatus.STOPEND)
+                            CleanUp(managedTask);
 
                         //Check if qlik aborted the communication
                         if (managedTask.LastQlikFunctionCall != null)
@@ -130,7 +135,8 @@
                             return;
 
                         //Clean up tasks that are done.
-                        CleanUp(managedTask);
+                        if (managedTask.InternalStatus != InternalTaskStatus.CLEANUP)
+                            CleanUp(managedTask);
                     }
 
                     //Wait for working Threads
@@ -140,6 +146,10 @@
             catch (Exception ex)
             {
                 logger.Error(ex, "The managed task watching failed.", ex);
+
+                errorCount++;
+                if (errorCount <= 5)
+                    WatchForFinishTasks();
             }
         }
 
