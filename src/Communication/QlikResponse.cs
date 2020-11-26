@@ -42,6 +42,7 @@
                     x = x.InnerException;
                 }
                 Log = msg.ToString()?.Replace("\r\n", " -> ");
+                Log = Log.Replace("\"", "'");
             }
             catch (Exception ex)
             {
