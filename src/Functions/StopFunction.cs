@@ -40,19 +40,17 @@
                         managedStopTask.Message = "The task was aborted by user.";
                     managedStopTask.Status = 4;
                     managedStopTask.Cancellation.Cancel();
-                    managedStopTask.InternalStatus = InternalTaskStatus.STOPEND;
-                    return;
                 }
                 else
                 {
                     logger.Warn($"The managed task '{managedStopTask.Id}' could not stopped.");
                 }
+                managedStopTask.InternalStatus = InternalTaskStatus.STOPEND;
             }
             else
             {
                 logger.Warn($"No job found with the Id '{managedStopTask.Id}' to stop.");
             }
-            managedStopTask.InternalStatus = InternalTaskStatus.ENGINEISRUNNING;
         }
         #endregion
 
@@ -87,6 +85,7 @@
                     {
                         logger.Warn($"The task id of the task to be stopped is empty.");
                     }
+                    
                 }
                 catch (Exception ex)
                 {

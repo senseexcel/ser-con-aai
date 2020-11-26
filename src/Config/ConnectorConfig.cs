@@ -26,7 +26,7 @@
         public int BindingPort { get; set; } = 50059;
         public string BindingHost { get; set; } = "localhost";
         public string RestServiceUrl { get; set; } = "http://localhost:40263";
-        public int CleanupTimeout { get; set; } = 20000;
+        public int CleanupTimeout { get; set; } = 10;
         public SerConnection Connection { get; set; }
 
         public string Framework { get; private set; } = RuntimeInformation.FrameworkDescription;

@@ -69,7 +69,11 @@
                         {
                             var timeSpan = DateTime.Now - managedTask.LastQlikFunctionCall.Value;
                             if (timeSpan.TotalSeconds > runtimeOptions.Config.StopTimeout)
-                                StopManagedTask(managedTask);
+                            {
+                                if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING ||
+                                    managedTask.InternalStatus == InternalTaskStatus.DISTRIBUTESTART)
+                                    StopManagedTask(managedTask);
+                            }
                         }
 
                         //Check for cancellation
@@ -155,6 +159,7 @@
 
         private void StopManagedTask(ManagedTask task)
         {
+            task.InternalStatus = InternalTaskStatus.STOPSTART;
             var stopRequest = new QlikRequest
             {
                 ManagedTaskId = task.Id.ToString()
@@ -272,6 +277,7 @@
                         PrivateKeyPath = privateKeyFullname
                     };
                     var result = distribute.Run(task.JobResults, distibuteOptions);
+                    runtimeOptions.SessionHelper.Manager.MakeSocketFree(task.Session);
                     if (task.Cancellation.IsCancellationRequested)
                     {
                         task.Message = "The delivery was canceled by user.";
@@ -312,7 +318,7 @@
                     task.InternalStatus = InternalTaskStatus.CLEANUP;
                     task.Endtime = DateTime.Now;
 
-                    Task.Delay(runtimeOptions.Config.CleanupTimeout)
+                    Task.Delay(runtimeOptions.Config.CleanupTimeout * 1000)
                     .ContinueWith((_) =>
                     {
                         try
