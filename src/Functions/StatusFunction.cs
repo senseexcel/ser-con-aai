@@ -133,7 +133,7 @@
                     return result;
                 }
 
-                if  (request.VersionMode == "packages")
+                if (request.VersionMode == "packages")
                 {
                     logger.Debug("Status - Read external package versions...");
                     result.ExternalPackagesInfo = Options.Config.ExternalPackageJson;
@@ -155,7 +155,10 @@
                     {
                         result.Distribute = currentTask.DistributeResult;
                         result.Status = currentTask.Status;
-                        result.Log = currentTask.Message;
+                        if (currentTask.Error != null)
+                            result.SetErrorMessage(currentTask.Error);
+                        else
+                            result.Log = currentTask.Message;
                         currentTask.LastQlikFunctionCall = DateTime.Now;
                     }
                     else

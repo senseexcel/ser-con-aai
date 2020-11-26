@@ -218,6 +218,8 @@
                                                    IServerStreamWriter<BundledRows> responseStream,
                                                    ServerCallContext context)
         {
+            var response = new QlikResponse();
+
             try
             {
                 logger.Debug("The method 'ExecuteFunction' is called...");
@@ -274,7 +276,6 @@
                 }
                 #endregion
 
-                var response = new QlikResponse();
                 if (functionCall == ConnectorFunction.START)
                 {
                     #region Function call SER.START
@@ -289,7 +290,7 @@
                     RuntimeOptions.TaskPool.ManagedTasks.TryAdd(newManagedTask.Id, newManagedTask);
                     var startFunction = new StartFunction(RuntimeOptions);
                     startFunction.StartReportJob(request, newManagedTask);
-                    response.TaskId = newManagedTask.Id;
+                    response.TaskId = newManagedTask.Id.ToString();
                     #endregion
                 }
                 else if (functionCall == ConnectorFunction.STOP)
@@ -325,21 +326,17 @@
                 {
                     throw new Exception($"The id '{functionCall}' of the function call was unknown.");
                 }
-
-                logger.Trace($"Qlik status result: {JsonConvert.SerializeObject(response)}");
-                await responseStream.WriteAsync(GetResult(response));
             }
             catch (Exception ex)
             {
                 logger.Error(ex, $"The method 'ExecuteFunction' failed with error '{ex.Message}'.");
-                await responseStream.WriteAsync(GetResult(new QlikResponse()
-                {
-                    Log = ex.Message,
-                    Status = -1
-                }));
+                response.Status = - 1;
+                response.SetErrorMessage(ex);
             }
             finally
             {
+                logger.Trace($"Qlik status result: {JsonConvert.SerializeObject(response)}");
+                await responseStream.WriteAsync(GetResult(response));
                 LogManager.Flush();
             }
         }
