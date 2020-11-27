@@ -314,7 +314,7 @@
                     logger.Info($"Memory usage: {GC.GetTotalMemory(true)}");
                     Options.Analyser?.ClearCheckPoints();
                     Options.Analyser?.Start();
-                    Options.Analyser?.SetCheckPoint("CreateReports", "Start report generation");
+                    Options.Analyser?.SetCheckPoint("StartReportJob", "Start report generation");
 
                     MappedDiagnosticsLogicalContext.Set("jobId", newManagedTask.Id.ToString());
 
@@ -326,7 +326,7 @@
 
                     //Connect to Qlik app
                     logger.Debug("Connecting to Qlik via websocket...");
-                    Options.Analyser?.SetCheckPoint("CreateReports", "Connect to Qlik");
+                    Options.Analyser?.SetCheckPoint("StartReportJob", "Connect to Qlik");
                     var fullConnectionConfig = new SerConnection
                     {
                         App = request.AppId,
@@ -343,7 +343,7 @@
 
                     //Create full engine config
                     logger.Debug("Create configuration for the engine...");
-                    Options.Analyser?.SetCheckPoint("CreateReports", "Gernerate Config Json");
+                    Options.Analyser?.SetCheckPoint("StartReportJob", "Gernerate Config Json");
                     var newEngineConfig = CreateEngineConfig(request, newManagedTask.Session);
 
                     //Remove emtpy Tasks without report infos
@@ -404,13 +404,14 @@
                     newManagedTask.JobScript = jobJson;
 
                     //Use the connector in the same App, than wait for data reload
-                    Options.Analyser?.SetCheckPoint("CreateReports", "Start connector reporting task");
+                    Options.Analyser?.SetCheckPoint("StartReportJob", "Start connector reporting task");
                     var scriptConnection = newEngineConfig?.Tasks?.SelectMany(s => s.Reports)
                     ?.SelectMany(r => r.Connections)
                     ?.FirstOrDefault(c => c.App == newManagedTask.Session.AppId) ?? null;
 
                     //Wait for data load in single App mode
                     WaitForDataLoad(newManagedTask, scriptConnection);
+                    Options.Analyser?.SetCheckPoint("StartReportJob", "End report generation");
                     newManagedTask.InternalStatus = InternalTaskStatus.CREATEREPORTJOBEND;
                 }
                 catch (Exception ex)

@@ -229,6 +229,7 @@
                 try
                 {
                     task.InternalStatus = InternalTaskStatus.DOWNLOADFILESSTART;
+                    runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"Start - Download files");
                     foreach (var jobResult in jobResults)
                     {
                         foreach (var jobReport in jobResult.Reports)
@@ -249,6 +250,7 @@
                         }
                     }
                     task.JobResults.AddRange(jobResults);
+                    runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"End - Download files");
                     task.InternalStatus = InternalTaskStatus.DOWNLOADFILESEND;
                 }
                 catch (Exception ex)
@@ -268,7 +270,7 @@
                 try
                 {
                     task.InternalStatus = InternalTaskStatus.DISTRIBUTESTART;
-                    runtimeOptions.Analyser?.SetCheckPoint("CheckStatus", "Start Delivery of reports");
+                    runtimeOptions.Analyser?.SetCheckPoint("Distibute", "Start - Delivery of reports");
                     task.Status = 2;
                     task.Message = "Report job is distributed...";
                     var distribute = new DistributeManager();
@@ -300,7 +302,7 @@
                     {
                         throw new Exception(distribute.ErrorMessage);
                     }
-                    runtimeOptions.Analyser?.SetCheckPoint("CheckStatus", "Report(s) finished");
+                    runtimeOptions.Analyser?.SetCheckPoint("Distibute", "End - Delivery of reports");
                     task.InternalStatus = InternalTaskStatus.DISTRIBUTEEND;
                 }
                 catch (Exception ex)
@@ -328,6 +330,7 @@
                         try
                         {
                             logger.Debug($"Run clean up process...");
+                            runtimeOptions.Analyser?.SetCheckPoint("CleanUp", "Start - Cleanup");
 
                             if (ManagedTasks.TryRemove(task.Id, out var taskResult))
                                 logger.Debug($"Managed task '{task.Id}' was successfully removed from the managed pool.");
@@ -351,6 +354,7 @@
                                     logger.Warn($"The upload directory '{guidItem}' of the task could not be deleted.");
                             }
 
+                            runtimeOptions.Analyser?.SetCheckPoint("CleanUp", "End - Cleanup");
                             logger.Debug($"Cleanup of the task '{task.Id}' has been completed.");
                         }
                         catch (Exception ex)

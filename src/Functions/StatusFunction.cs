@@ -92,6 +92,7 @@
             var results = new JArray();
             try
             {
+                Options.Analyser?.SetCheckPoint("GetAllowedTasks", $"Start - Find all running tasks");
                 var session = Options.SessionHelper.GetSession(Options.Config.Connection, request);
                 var qrsHub = new QlikQrsHub(session.ConnectUri, session.Cookie);
                 foreach (var activeTask in activeTasks)
@@ -111,6 +112,7 @@
                             results.Add(CreateTaskResult(activeTask));
                     }
                 }
+                Options.Analyser?.SetCheckPoint("GetAllowedTasks", $"End - Find all running tasks");
             }
             catch (Exception ex)
             {
