@@ -66,19 +66,19 @@
           <HintPath>..\..\ser-distribute\src\bin\Release\$(TargetFramework)\SerDistribute.dll</HintPath>
         </Reference>
         <Reference Include="SerSystem">
-          <HintPath>..\..\ser-system\src\bin\Release\netcoreapp3.1\SerSystem.dll</HintPath>
+          <HintPath>..\..\ser-system\src\bin\Release\$(TargetFramework)\SerSystem.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Engine.Rest">
           <HintPath>..\..\ser-engine-rest\src\bin\Release\$(TargetFramework)\SerEngineRest.dll</HintPath>
         </Reference>
         <Reference Include="enigma.net">
-          <HintPath>..\..\..\QlikAPIs\enigma.net\src\bin\Release\netcoreapp3.1\enigma.net.dll</HintPath>
+          <HintPath>..\..\..\QlikAPIs\enigma.net\src\bin\Release\$(TargetFramework)\enigma.net.dll</HintPath>
         </Reference>
         <Reference Include="qlik-engineapi">
-          <HintPath>..\..\..\QlikAPIs\qlik-engineapi\src\qlik-engineapi\bin\Release\netcoreapp3.1\qlik-engineapi.dll</HintPath>
+          <HintPath>..\..\..\QlikAPIs\qlik-engineapi\src\qlik-engineapi\bin\Release\$(TargetFramework)\qlik-engineapi.dll</HintPath>
         </Reference>
         <Reference Include="qlik-sseapi">
-          <HintPath>..\..\..\QlikAPIs\qlik-sseapi\src\bin\Release\netcoreapp3.1\qlik-sseapi.dll</HintPath>
+          <HintPath>..\..\..\QlikAPIs\qlik-sseapi\src\bin\Release\$(TargetFramework)\qlik-sseapi.dll</HintPath>
         </Reference>
       </ItemGroup>
     </When>
@@ -103,19 +103,19 @@
           <HintPath>..\..\ser-distribute\src\bin\Debug\$(TargetFramework)\SerDistribute.dll</HintPath>
         </Reference>
         <Reference Include="SerSystem">
-          <HintPath>..\..\ser-system\src\bin\Debug\netcoreapp3.1\SerSystem.dll</HintPath>
+          <HintPath>..\..\ser-system\src\bin\Debug\$(TargetFramework)\SerSystem.dll</HintPath>
         </Reference>
         <Reference Include="Ser.Engine.Rest">
           <HintPath>..\..\ser-engine-rest\src\bin\Debug\$(TargetFramework)\SerEngineRest.dll</HintPath>
         </Reference>
         <Reference Include="enigma.net">
-          <HintPath>..\..\..\QlikAPIs\enigma.net\src\bin\Debug\netcoreapp3.1\enigma.net.dll</HintPath>
+          <HintPath>..\..\..\QlikAPIs\enigma.net\src\bin\Debug\$(TargetFramework)\enigma.net.dll</HintPath>
         </Reference>
         <Reference Include="qlik-engineapi">
-          <HintPath>..\..\..\QlikAPIs\qlik-engineapi\src\qlik-engineapi\bin\Debug\netcoreapp3.1\qlik-engineapi.dll</HintPath>
+          <HintPath>..\..\..\QlikAPIs\qlik-engineapi\src\qlik-engineapi\bin\Debug\$(TargetFramework)\qlik-engineapi.dll</HintPath>
         </Reference>
         <Reference Include="qlik-sseapi">
-          <HintPath>..\..\..\QlikAPIs\qlik-sseapi\src\bin\Debug\netcoreapp3.1\qlik-sseapi.dll</HintPath>
+          <HintPath>..\..\..\QlikAPIs\qlik-sseapi\src\bin\Debug\$(TargetFramework)\qlik-sseapi.dll</HintPath>
         </Reference>
       </ItemGroup>
     </Otherwise>
