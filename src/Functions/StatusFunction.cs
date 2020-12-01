@@ -132,6 +132,7 @@
                 {
                     logger.Debug("Status - Read main version...");
                     result.Version = Options.Config.PackageVersion;
+                    result.Status = 100;
                     return result;
                 }
 
