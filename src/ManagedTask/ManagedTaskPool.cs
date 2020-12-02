@@ -99,7 +99,7 @@
                                 managedTask.InternalStatus = InternalTaskStatus.ENGINEISRUNNING;
                                 continue;
                             }
-
+                          
                             //Find all success results
                             var successClientResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
                             if (successClientResults.Count > 0)
@@ -125,11 +125,27 @@
                                     continue;
                                 }
                             }
+                            else
+                            {
+                                var errorResults = jobResults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.ERROR).ToList();
+                                if (errorResults.Count == jobResults.Count)
+                                {
+                                    managedTask.Status = -1;
+                                    managedTask.InternalStatus = InternalTaskStatus.ERROR;
+                                    managedTask.Message = "An error has occurred. Please check the log file.";
+                                }
+                                else
+                                {
+                                    managedTask.Status = 5;
+                                    managedTask.InternalStatus = InternalTaskStatus.WARNING;
+                                    managedTask.Message = "There are warnings about this report job. Please check the log file.";
+                                }
+                            }
 
-                            //All results that were not successful
+                            //All results that were not successful also Error, Warning oder 
                             var otherClientResults = jobResults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
                             var otherResults = ConvertApiType<List<JobResult>>(otherClientResults);
-
+   
                             //Write not success results
                             managedTask.JobResults.AddRange(otherResults);
                         }

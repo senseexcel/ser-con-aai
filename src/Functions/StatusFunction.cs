@@ -6,6 +6,7 @@
     using System.Linq;
     using System.Net.Http;
     using System.Text;
+    using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using NLog;
     using Q2g.HelperQrs;
@@ -162,6 +163,7 @@
                             result.SetErrorMessage(currentTask.Error);
                         else
                             result.Log = currentTask.Message;
+                        result.JobResults = JArray.Parse(JsonConvert.SerializeObject(currentTask.JobResults));
                         currentTask.LastQlikFunctionCall = DateTime.Now;
                     }
                     else

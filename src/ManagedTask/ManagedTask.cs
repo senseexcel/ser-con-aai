@@ -22,6 +22,7 @@
         DISTRIBUTESTART,
         DISTRIBUTEEND,
         ERROR,
+        WARNING,
         STOPSTART,
         STOPEND,
         CLEANUP
