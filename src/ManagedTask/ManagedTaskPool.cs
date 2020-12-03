@@ -127,7 +127,7 @@
                             }
                             else
                             {
-                                var errorResults = jobResults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.ERROR).ToList();
+                                var errorResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ERROR).ToList();
                                 if (errorResults.Count == jobResults.Count)
                                 {
                                     managedTask.Status = -1;

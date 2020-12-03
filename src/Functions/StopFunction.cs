@@ -26,7 +26,7 @@
         private void StopReportJob(Guid taskId, bool isTimeout = false)
         {
             var managedStopTask = Options.TaskPool.ManagedTasks.Values.FirstOrDefault(t => t.Id == taskId);
-            if (managedStopTask != null && managedStopTask.Status != 4)
+            if (managedStopTask != null &&  managedStopTask.Status != 4 && managedStopTask?.Id != null)
             {
                 Options.Analyser?.SetCheckPoint("StopReportJob", $"Stop managed task {managedStopTask.Id} starts");
                 managedStopTask.InternalStatus = InternalTaskStatus.STOPSTART;
