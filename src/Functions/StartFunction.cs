@@ -189,17 +189,20 @@
 
         private Stream FindTemplatePath(SessionInfo session, SerTemplate template)
         {
-            template.Input = HttpUtility.UrlDecode(template.Input);
-            var result = HelperUtilities.NormalizeUri(template.Input);
-            var templateUri = result.Item1;
+            var inputPath = Uri.UnescapeDataString(template.Input.Replace("\\", "/"));
+            var inputPathWithHost = inputPath.Replace("://", ":/Host/");
+            var originalSegments = inputPathWithHost.Split('/');
+            var templateUri = new Uri(inputPathWithHost);
+            var normalizePath = HelperUtilities.NormalizeUri(inputPath);
+            if (normalizePath == null)
+                throw new Exception($"The input path '{template.Input}' is not correct.");
+            var normalizeSegments = normalizePath.Split('/');
+            var libaryName = originalSegments.ElementAtOrDefault(originalSegments.Length - 2) ?? null;
             if (templateUri.Scheme.ToLowerInvariant() == "content")
             {
-                var contentFiles = GetLibraryContent(session.QlikConn.CurrentApp, result.Item2);
-                logger.Debug($"File count in content library: {contentFiles?.Count}");
-                var modyPath = templateUri.AbsolutePath;
-                modyPath = modyPath.Replace("(", "%28");
-                modyPath = modyPath.Replace(")", "%29");
-                var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(modyPath));
+                var contentFiles = GetLibraryContent(session.QlikConn.CurrentApp, libaryName);
+                logger.Debug($"There {contentFiles?.Count} content library found...");
+                var filterFile = contentFiles.FirstOrDefault(c => c.EndsWith(normalizeSegments.LastOrDefault()));
                 if (filterFile != null)
                 {
                     var data = DownloadFile(filterFile, session.Cookie);
@@ -207,34 +210,27 @@
                     return new MemoryStream(data);
                 }
                 else
-                    throw new Exception($"No file in content library found.");
+                    throw new Exception($"No content library path found.");
             }
             else if (templateUri.Scheme.ToLowerInvariant() == "lib")
             {
-                var connUrl = session.QlikConn.CurrentApp.GetConnectionsAsync()
-                    .ContinueWith<string>((connections) =>
-                    {
-                        var libResult = connections.Result.FirstOrDefault(n => n.qName.ToLowerInvariant() == result.Item2) ?? null;
-                        if (libResult == null)
-                            return null;
-                        var libPath = libResult?.qConnectionString?.ToString();
-                        var relPath = templateUri?.LocalPath?.TrimStart(new char[] { '\\', '/' })?.Replace("/", "\\");
-                        if (relPath == null)
-                            return null;
-                        return $"{libPath}{relPath}";
-                    }).Result;
-
-                if (connUrl == null)
-                    throw new Exception($"No path in lib library found.");
-                else
-                {
-                    template.Input = Uri.EscapeDataString(Path.GetFileName(connUrl));
-                    return File.OpenRead(connUrl);
-                }
+                var allConnections = session.QlikConn.CurrentApp.GetConnectionsAsync().Result;
+                var libResult = allConnections.FirstOrDefault(n => n.qName == libaryName) ?? null;
+                if (libResult == null)
+                    throw new Exception($"The QName '{libaryName}' for lib path was not found.");
+                var libPath = libResult?.qConnectionString?.ToString();
+                var relPath = originalSegments?.LastOrDefault() ?? null;
+                if (String.IsNullOrEmpty(relPath))
+                    throw new Exception($"The relative filename for lib path '{relPath}' was not found.");
+                var fullLibPath = $"{libPath}{relPath}";
+                if (!File.Exists(fullLibPath))
+                    throw new Exception($"The input file '{fullLibPath}' was not found.");
+                template.Input = Uri.EscapeDataString(Path.GetFileName(fullLibPath));
+                return File.OpenRead(fullLibPath);
             }
             else
             {
-                throw new Exception($"Unknown Scheme in Filename Uri {template.Input}.");
+                throw new Exception($"Unknown Scheme in input Uri path '{template.Input}'.");
             }
         }
 
