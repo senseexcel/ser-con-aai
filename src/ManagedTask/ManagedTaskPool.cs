@@ -110,10 +110,11 @@
                                     continue;
                                 }
 
+                                var successResults = ConvertApiType<List<JobResult>>(successClientResults);
+
                                 //Download all success engine task result files
                                 if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
                                 {
-                                    var successResults = ConvertApiType<List<JobResult>>(successClientResults);
                                     DownloadResultFiles(managedTask, successResults);
                                     continue;
                                 }
@@ -142,12 +143,9 @@
                                 }
                             }
 
-                            //All results that were not successful also Error, Warning oder 
-                            var otherClientResults = jobResults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
-                            var otherResults = ConvertApiType<List<JobResult>>(otherClientResults);
-   
                             //Write not success results
-                            managedTask.JobResults.AddRange(otherResults);
+                            var convertResults = ConvertApiType<List<JobResult>>(jobResults);
+                            managedTask.JobResults.AddRange(convertResults);
                         }
                         else
                         {
@@ -265,7 +263,6 @@
                             }
                         }
                     }
-                    task.JobResults.AddRange(jobResults);
                     runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"End - Download files");
                     task.InternalStatus = InternalTaskStatus.DOWNLOADFILESEND;
                 }
