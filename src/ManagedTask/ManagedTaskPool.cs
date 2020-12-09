@@ -99,55 +99,22 @@
                                 managedTask.InternalStatus = InternalTaskStatus.ENGINEISRUNNING;
                                 continue;
                             }
-                          
-                            //Find all success results
-                            var successClientResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
-                            if (successClientResults.Count > 0)
-                            {
-                                if (managedTask.InternalStatus == InternalTaskStatus.DOWNLOADFILESSTART ||
-                                    managedTask.InternalStatus == InternalTaskStatus.DISTRIBUTESTART)
-                                {
-                                    continue;
-                                }
 
-                                var successResults = ConvertApiType<List<JobResult>>(successClientResults);
+                            if (managedTask.InternalStatus == InternalTaskStatus.DISTRIBUTESTART)
+                                continue;
+
+                            if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
+                            {
+                                var convertedResults = ConvertApiType<List<JobResult>>(jobResults);
+                                managedTask.JobResults.AddRange(convertedResults);
 
                                 //Download all success engine task result files
                                 if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
-                                {
-                                    DownloadResultFiles(managedTask, successResults);
-                                    managedTask.JobResults.AddRange(successResults);
-                                    continue;
-                                }
+                                    DownloadResultFiles(managedTask);
 
                                 //Distibute all success results
-                                if (managedTask.InternalStatus == InternalTaskStatus.DOWNLOADFILESEND)
-                                {
-                                    Distibute(managedTask);
-                                    continue;
-                                }
+                                Distibute(managedTask);
                             }
-                            else
-                            {
-                                var errorResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ERROR).ToList();
-                                if (errorResults.Count == jobResults.Count)
-                                {
-                                    managedTask.Status = -1;
-                                    managedTask.InternalStatus = InternalTaskStatus.ERROR;
-                                    managedTask.Message = "An error has occurred. Please check the log file.";
-                                }
-                                else
-                                {
-                                    managedTask.Status = 5;
-                                    managedTask.InternalStatus = InternalTaskStatus.WARNING;
-                                    managedTask.Message = "There are warnings about this report job. Please check the log file.";
-                                }
-                            }
-
-                            //Write all results were not success
-                            var otherClientResults = jobResults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
-                            var otherResults = ConvertApiType<List<JobResult>>(otherClientResults);
-                            managedTask.JobResults.AddRange(otherResults);
                         }
                         else
                         {
@@ -238,15 +205,14 @@
             return bufferList.ToArray();
         }
 
-        private void DownloadResultFiles(ManagedTask task, List<JobResult> jobResults)
+        private void DownloadResultFiles(ManagedTask task)
         {
-            Task.Run(() =>
+            try
             {
-                try
+                runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"Start - Download files");
+                foreach (var jobResult in task.JobResults)
                 {
-                    task.InternalStatus = InternalTaskStatus.DOWNLOADFILESSTART;
-                    runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"Start - Download files");
-                    foreach (var jobResult in jobResults)
+                    if (jobResult.Status == TaskStatusInfo.SUCCESS || jobResult.Status == TaskStatusInfo.WARNING)
                     {
                         foreach (var jobReport in jobResult.Reports)
                         {
@@ -265,17 +231,16 @@
                             }
                         }
                     }
-                    runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"End - Download files");
-                    task.InternalStatus = InternalTaskStatus.DOWNLOADFILESEND;
                 }
-                catch (Exception ex)
-                {
-                    logger.Debug(ex, "The method 'DownloadResultFiles' failed.");
-                    task.Status = -1;
-                    task.InternalStatus = InternalTaskStatus.ERROR;
-                    task.Error = ex;
-                }
-            }, task.Cancellation.Token);
+                runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"End - Download files");
+            }
+            catch (Exception ex)
+            {
+                logger.Debug(ex, "The method 'DownloadResultFiles' failed.");
+                task.Status = -1;
+                task.InternalStatus = InternalTaskStatus.ERROR;
+                task.Error = ex;
+            }
         }
 
         private void Distibute(ManagedTask task)

@@ -17,15 +17,14 @@
         CREATEREPORTJOBSTART,
         CREATEREPORTJOBEND,
         ENGINEISRUNNING,
-        DOWNLOADFILESSTART,
-        DOWNLOADFILESEND,
         DISTRIBUTESTART,
         DISTRIBUTEEND,
         ERROR,
         WARNING,
         STOPSTART,
         STOPEND,
-        CLEANUP
+        CLEANUP,
+        INACTIVE
     }
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
