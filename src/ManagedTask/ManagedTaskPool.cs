@@ -116,6 +116,7 @@
                                 if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
                                 {
                                     DownloadResultFiles(managedTask, successResults);
+                                    managedTask.JobResults.AddRange(successResults);
                                     continue;
                                 }
 
@@ -143,9 +144,10 @@
                                 }
                             }
 
-                            //Write not success results
-                            var convertResults = ConvertApiType<List<JobResult>>(jobResults);
-                            managedTask.JobResults.AddRange(convertResults);
+                            //Write all results were not success
+                            var otherClientResults = jobResults.Where(r => r.Status != Engine.Rest.Client.JobResultStatus.SUCCESS).ToList();
+                            var otherResults = ConvertApiType<List<JobResult>>(otherClientResults);
+                            managedTask.JobResults.AddRange(otherResults);
                         }
                         else
                         {
