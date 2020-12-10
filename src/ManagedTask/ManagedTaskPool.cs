@@ -112,7 +112,7 @@
                                 if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
                                     DownloadResultFiles(managedTask);
 
-                                //Distibute all success results
+                                //Distibute all results
                                 Distibute(managedTask);
                             }
                         }
