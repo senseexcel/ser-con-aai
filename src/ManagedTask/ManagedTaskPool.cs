@@ -103,7 +103,8 @@
                             if (managedTask.InternalStatus == InternalTaskStatus.DISTRIBUTESTART)
                                 continue;
 
-                            if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
+                            if (managedTask.InternalStatus == InternalTaskStatus.CREATEREPORTJOBEND || 
+                                managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
                             {
                                 var convertedResults = ConvertApiType<List<JobResult>>(jobResults);
                                 managedTask.JobResults.AddRange(convertedResults);

@@ -25,7 +25,7 @@
         {
             var distibuteArray = JArray.Parse(distibuteJson);
             var resultText = new StringBuilder(">>>");
-            resultText.Append($"{Environment.NewLine}{Environment.NewLine}{"Distibute Results".ToUpperInvariant()}:");
+            resultText.Append($"{Environment.NewLine}{Environment.NewLine}{"Results".ToUpperInvariant()}:");
             resultText.Append($"{Environment.NewLine}-------------------------------------------------------------------");
             foreach (JObject item in distibuteArray)
             {
