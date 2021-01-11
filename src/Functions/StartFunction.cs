@@ -349,6 +349,12 @@
                     {
                         if (configTask.Id == Guid.Empty)
                             configTask.Id = Guid.NewGuid();
+                        else
+                        {
+                            //Check the task is of unique
+                            if (newEngineConfig.Tasks.Count(t => t.Id == configTask.Id) > 1)
+                                throw new Exception("The task id is used twice. Please change the task id. This must always be unique.");
+                        }
 
                         foreach (var configReport in configTask.Reports)
                         {
