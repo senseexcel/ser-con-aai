@@ -21,7 +21,7 @@
     <PackageReference Include="FluentFTP" Version="33.0.2" />
     <PackageReference Include="GitVersionTask" Version="5.3.7" PrivateAssets="All" />
     <PackageReference Include="Google.Protobuf" Version="3.13.0" />
-    <PackageReference Include="Grpc" Version="2.32.0" />
+    <PackageReference Include="Grpc" Version="2.35.0" />
     <PackageReference Include="Grpc.Core" Version="2.32.0" />
     <PackageReference Include="Grpc.Core.Api" Version="2.32.0" />
     <PackageReference Include="Grpc.Tools" Version="2.32.0">
