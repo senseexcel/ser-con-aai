@@ -80,6 +80,9 @@
         <Reference Include="qlik-sseapi">
           <HintPath>..\..\..\QlikAPIs\qlik-sseapi\src\bin\Release\$(TargetFramework)\qlik-sseapi.dll</HintPath>
         </Reference>
+        <Reference Include="Ser.Engine.Rest.Client">
+          <HintPath>..\..\ser-engine-rest-client\src\bin\Release\$(TargetFramework)\SerEngineRestClient.dll</HintPath>
+        </Reference>
       </ItemGroup>
     </When>
     <Otherwise>
@@ -117,10 +120,13 @@
         <Reference Include="qlik-sseapi">
           <HintPath>..\..\..\QlikAPIs\qlik-sseapi\src\bin\Debug\$(TargetFramework)\qlik-sseapi.dll</HintPath>
         </Reference>
+        <Reference Include="Ser.Engine.Rest.Client">
+          <HintPath>..\..\ser-engine-rest-client\src\bin\Debug\$(TargetFramework)\SerEngineRestClient.dll</HintPath>
+        </Reference>
       </ItemGroup>
     </Otherwise>
   </Choose>
-  
+
   <ItemGroup>
     <None Update="App.config">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

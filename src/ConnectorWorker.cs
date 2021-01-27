@@ -22,6 +22,7 @@
     using Ser.ConAai.Config;
     using Ser.ConAai.TaskObjects;
     using Ser.ConAai.Communication;
+    using Ser.Engine.Rest.Client;
     #endregion
 
     public class ConnectorWorker : ConnectorBase
@@ -65,7 +66,7 @@
             {
                 Config = config,
                 SessionHelper = new SessionHelper(),
-                RestClient = new Ser.Engine.Rest.Client.RestClient(new HttpClient(), config.RestServiceUrl),
+                RestClient = new ReportingRestApiClient(new Uri(config.RestServiceUrl)),
                 Analyser = analyser,
                 Cancellation = cancellation,
                 TaskPool = new ManagedTaskPool()
@@ -75,7 +76,7 @@
         #endregion
 
         #region Private Methods
-        private Row GetParameter(IAsyncStreamReader<BundledRows> requestStream)
+        private static Row GetParameter(IAsyncStreamReader<BundledRows> requestStream)
         {
             try
             {
@@ -90,7 +91,7 @@
             }
         }
 
-        private string GetParameterValue(int index, Row row)
+        private static string GetParameterValue(int index, Row row)
         {
             try
             {
@@ -109,7 +110,7 @@
             }
         }
 
-        private BundledRows GetResult(object result)
+        private static BundledRows GetResult(object result)
         {
             var resultBundle = new BundledRows();
             var resultRow = new Row();
@@ -127,7 +128,7 @@
         public void CleanupOldFiles()
         {
             logger.Debug("Cleanup old files...");
-            Task.Delay(250).ContinueWith((_) => RuntimeOptions.RestClient.DeleteAllFilesAsync());
+            Task.Delay(250).ContinueWith((_) => RuntimeOptions.RestClient.Delete());
         }
 
         public void RestServiceHealthCheck()
@@ -135,11 +136,9 @@
             try
             {
                 logger.Debug("Check connection to rest service...");
-                var healthResult = RuntimeOptions.RestClient.HealthStatusAsync().Result;
-                if (healthResult.Success.Value)
-                    logger.Info($"The communication with rest service '{RuntimeOptions.Config.RestServiceUrl}' was successfully.");
-                else
-                    throw new Exception("The health check to the rest service was negativ.");
+                var healthResult = RuntimeOptions.RestClient.HealthStatus();
+                logger.Debug($"Health result is '{healthResult}'...");
+                logger.Info($"The communication with rest service '{RuntimeOptions.Config.RestServiceUrl}' was successfully.");
             }
             catch (Exception ex)
             {

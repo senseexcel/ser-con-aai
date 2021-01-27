@@ -187,7 +187,7 @@
             return webClient.DownloadData($"{Options.Config.Connection.ServerUri.AbsoluteUri}{relUrl}");
         }
 
-        private Stream FindTemplatePath(SessionInfo session, SerTemplate template)
+        private string FindTemplatePath(SessionInfo session, SerTemplate template)
         {
             var inputPath = Uri.UnescapeDataString(template.Input.Replace("\\", "/"));
             var inputPathWithHost = inputPath.Replace("://", ":/Host/");
@@ -206,8 +206,9 @@
                 if (filterFile != null)
                 {
                     var data = DownloadFile(filterFile, session.Cookie);
-                    template.Input = $"{Guid.NewGuid()}{Path.GetExtension(filterFile)}";
-                    return new MemoryStream(data);
+                    var templatePath = $"{Guid.NewGuid()}{Path.GetExtension(filterFile)}";
+                    template.Input = templatePath;
+                    return templatePath;
                 }
                 else
                     throw new Exception($"No content library path found.");
@@ -226,7 +227,7 @@
                 if (!File.Exists(fullLibPath))
                     throw new Exception($"The input file '{fullLibPath}' was not found.");
                 template.Input = Uri.EscapeDataString(Path.GetFileName(fullLibPath));
-                return File.OpenRead(fullLibPath);
+                return fullLibPath;
             }
             else
             {
@@ -234,13 +235,13 @@
             }
         }
 
-        private List<string> GetLibraryContentInternal(IDoc app, string qName)
+        private static List<string> GetLibraryContentInternal(IDoc app, string qName)
         {
             var libContent = app.GetLibraryContentAsync(qName).Result;
             return libContent.qItems.Select(u => u.qUrl).ToList();
         }
 
-        private List<string> GetLibraryContent(IDoc app, string contentName = "")
+        private static List<string> GetLibraryContent(IDoc app, string contentName = "")
         {
             try
             {
@@ -267,7 +268,7 @@
             }
         }
 
-        private JObject AppendUploadGuids(JObject jobJson, List<Guid> guidList)
+        private static JObject AppendUploadGuids(JObject jobJson, List<Guid> guidList)
         {
             var jarray = new JArray();
             foreach (var guidItem in guidList)
@@ -287,11 +288,8 @@
                 logger.Debug("Transfer script to the rest service...");
                 var jobJson = task.JobScript.ToString();
                 logger.Debug($"JSON-Script: {jobJson}");
-                var createTaskResult = Options.RestClient.CreateTaskWithIdAsync(task.Id, jobJson).Result;
-                if (createTaskResult.Success.Value)
-                    logger.Info($"The reporting request was successfully transferred to the rest service. - OperationId: {createTaskResult?.OperationId}");
-                else
-                    throw new Exception($"The reporting request could not be transferred to the rest service. - Error: {createTaskResult?.Error}");
+                var taskId = Options.RestClient.RunTask(jobJson, task.Id);
+                logger.Info($"The reporting request was successfully transferred and run with id '{taskId}' to the rest service...");
             }
             else
                 logger.Debug("Dataload check failed.");
@@ -377,18 +375,11 @@
                             logger.Debug("Get template data from qlik.");
                             if (configReport.Template != null)
                             {
-                                var uploadsteam = FindTemplatePath(newManagedTask.Session, configReport.Template);
+                                var templatePath = FindTemplatePath(newManagedTask.Session, configReport.Template);
                                 logger.Debug("Upload template data to rest service.");
-                                var serfilename = Path.GetFileName(configReport.Template.Input);
-                                var uploadResult = Options.RestClient.UploadAsync(serfilename, false, uploadsteam).Result;
-                                if (uploadResult.Success.Value)
-                                {
-                                    logger.Debug($"Upload {uploadResult.OperationId} successfully.");
-                                    newManagedTask.FileUploadIds.Add(uploadResult.OperationId.Value);
-                                }
-                                else
-                                    logger.Warn($"The Upload was failed. - Error: {uploadResult?.Error}");
-                                uploadsteam.Close();
+                                var uploadId = Options.RestClient.Upload(templatePath);
+                                logger.Debug($"Upload with id {uploadId} was successfully.");
+                                newManagedTask.FileUploadIds.Add(uploadId);
                             }
                             else
                             {

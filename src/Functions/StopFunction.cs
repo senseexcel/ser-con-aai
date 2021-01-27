@@ -31,8 +31,8 @@
                 Options.Analyser?.SetCheckPoint("StopReportJob", $"Stop managed task {managedStopTask.Id} starts");
                 managedStopTask.InternalStatus = InternalTaskStatus.STOPSTART;
                 logger.Debug($"Stopping task id '{managedStopTask.Id}'...");
-                var stopResult = Options.RestClient.StopTasksAsync(managedStopTask.Id).Result;
-                if (stopResult.Success.Value)
+                var stopResult = Options.RestClient.StopTask(managedStopTask.Id);
+                if (stopResult)
                 {
                     logger.Debug($"The managed task '{managedStopTask.Id}' was stopped.");
                     if (isTimeout)
@@ -72,7 +72,7 @@
                     if (request.ManagedTaskId == "all")
                     {
                         logger.Debug("All tasks will be stopped...");
-                        if (Options.TaskPool.ManagedTasks.Count == 0)
+                        if (Options.TaskPool.ManagedTasks.IsEmpty)
                             logger.Warn("No stopping jobs.");
 
                         var managedTasks = Options.TaskPool.ManagedTasks?.Values?.ToList() ?? new List<ManagedTask>();

@@ -9,6 +9,7 @@
     using System.Threading;
     using System.Threading.Tasks;
     using Newtonsoft.Json;
+    using Newtonsoft.Json.Linq;
     using NLog;
     using Q2g.HelperQlik;
     using Ser.Api;
@@ -48,7 +49,7 @@
                     if (CancelRunning())
                         return;
 
-                    var jobResults = new List<Ser.Engine.Rest.Client.JobResult>();
+                    var jobResults = new List<JobResult>();
                     var managedPoolTasks = ManagedTasks.Values.ToList();
                     foreach (var managedTask in managedPoolTasks)
                     {
@@ -84,14 +85,14 @@
                         if (CancelRunning())
                             return;
 
-                        var operationResult = runtimeOptions.RestClient.TaskWithIdAsync(managedTask.Id).Result;
-                        if (operationResult.Success.Value)
+                        var jobresultArray = runtimeOptions.RestClient.GetTasks(managedTask.Id);
+                        if (jobresultArray.Count > 0)
                         {
-                            jobResults = operationResult?.Results?.ToList() ?? new List<Ser.Engine.Rest.Client.JobResult>();
+                            jobResults = JsonConvert.DeserializeObject<List<JobResult>>(jobresultArray.ToString());
                             if (jobResults.Count == 0)
                                 continue;
 
-                            var runningResults = jobResults.Where(r => r.Status == Engine.Rest.Client.JobResultStatus.ABORT).ToList();
+                            var runningResults = jobResults.Where(r => r.Status == TaskStatusInfo.ABORT).ToList();
                             if (runningResults.Count > 0)
                             {
                                 managedTask.Message = "Report job is running...";
@@ -166,7 +167,7 @@
             return false;
         }
 
-        private T ConvertApiType<T>(object value)
+        private static T ConvertApiType<T>(object value)
         {
             try
             {
@@ -178,32 +179,6 @@
                 logger.Error(ex, "Convert type failed.");
                 return default;
             }
-        }
-
-        private byte[] GetStreamBuffer(Engine.Rest.Client.FileResponse result)
-        {
-            List<byte> bufferList = new List<byte>();
-            var contentLength = result.Headers["Content-Length"].FirstOrDefault();
-            if (contentLength != null)
-            {
-                var bufferLength = Convert.ToInt32(contentLength);
-                var readLength = -1;
-                while (readLength != 0)
-                {
-                    var buffer = new byte[bufferLength];
-                    readLength = result.Stream.Read(buffer, 0, bufferLength);
-                    bufferList.AddRange(buffer.Take(readLength));
-                }
-                return bufferList.ToArray();
-            }
-            else
-            {
-                var mem = new MemoryStream();
-                result.Stream.CopyTo(mem);
-                var buffer = mem?.GetBuffer() ?? null;
-                bufferList.AddRange(buffer);
-            }
-            return bufferList.ToArray();
         }
 
         private void DownloadResultFiles(ManagedTask task)
@@ -221,11 +196,11 @@
                             {
                                 var filename = Path.GetFileName(path);
                                 logger.Debug($"Download file '{filename}' form task '{task.Id}'...");
-                                var streamData = runtimeOptions.RestClient.DownloadFilesAsync(task.Id, filename).Result;
-                                if (streamData != null)
+                                var fileData = runtimeOptions.RestClient.Download(task.Id);
+                                if (fileData != null)
                                 {
-                                    var buffer = GetStreamBuffer(streamData);
-                                    jobReport.Data.Add(new ReportData() { Filename = filename, DownloadData = buffer });
+                                    logger.Trace($"File Data {fileData.Length} found...");
+                                    jobReport.Data.Add(new ReportData() { Filename = filename, DownloadData = fileData });
                                 }
                                 else
                                     logger.Warn($"File '{filename}' for download not found.");
@@ -320,16 +295,16 @@
 
                             runtimeOptions.SessionHelper.Manager.MakeSocketFree(task?.Session ?? null);
 
-                            var deleteResult = runtimeOptions.RestClient.DeleteFilesAsync(task.Id).Result;
-                            if (deleteResult.Success.Value)
+                            var deleteResult = runtimeOptions.RestClient.Delete(task.Id);
+                            if (deleteResult)
                                 logger.Debug($"The directory for the task '{task.Id}' was successfully deleted.");
                             else
                                 logger.Warn($"The directory for the task '{task.Id}' could not be deleted.");
 
                             foreach (var guidItem in task.FileUploadIds)
                             {
-                                deleteResult = runtimeOptions.RestClient.DeleteFilesAsync(guidItem).Result;
-                                if (deleteResult.Success.Value)
+                                deleteResult = runtimeOptions.RestClient.Delete(guidItem);
+                                if (deleteResult)
                                     logger.Debug($"The upload directory '{guidItem}' of the task was successfully deleted.");
                                 else
                                     logger.Warn($"The upload directory '{guidItem}' of the task could not be deleted.");
