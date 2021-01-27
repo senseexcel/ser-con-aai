@@ -62,11 +62,12 @@
                 });
             }
 
+            var restClient = new ReportingRestApiClient(new Uri(config?.RestServiceUrl?.TrimEnd('/')));
             RuntimeOptions = new RuntimeOptions()
             {
                 Config = config,
                 SessionHelper = new SessionHelper(),
-                RestClient = new ReportingRestApiClient(new Uri(config.RestServiceUrl)),
+                RestClient = restClient,
                 Analyser = analyser,
                 Cancellation = cancellation,
                 TaskPool = new ManagedTaskPool()

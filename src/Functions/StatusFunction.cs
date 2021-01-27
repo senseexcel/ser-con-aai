@@ -27,7 +27,7 @@
         #endregion
 
         #region Private Methods
-        private JObject CreateTaskResult(ManagedTask task)
+        private static JObject CreateTaskResult(ManagedTask task)
         {
             return JObject.FromObject(new
             {
@@ -39,7 +39,7 @@
             });
         }
 
-        private JObject CreateAuditMatrixParameters(DomainUser user)
+        private static JObject CreateAuditMatrixParameters(DomainUser user)
         {
             return JObject.FromObject(new
             {

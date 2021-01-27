@@ -64,7 +64,7 @@
             }
         }
 
-        private Uri QlikConnectionCheck(string configJson, string serverUrl)
+        private static Uri QlikConnectionCheck(string configJson, string serverUrl)
         {
 
             try
