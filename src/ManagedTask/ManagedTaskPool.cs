@@ -184,7 +184,7 @@
                             {
                                 var filename = Path.GetFileName(path);
                                 logger.Debug($"Download file '{filename}' form task '{task.Id}'...");
-                                var fileData = runtimeOptions.RestClient.DownloadData(task.Id);
+                                var fileData = runtimeOptions.RestClient.DownloadData(task.Id, filename);
                                 if (fileData != null)
                                 {
                                     logger.Trace($"File Data {fileData.Length} found...");
