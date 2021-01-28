@@ -57,7 +57,7 @@
             });
         }
 
-        private bool HasReadRights(QlikQrsHub qrsHub, ManagedTask task)
+        private static bool HasReadRights(QlikQrsHub qrsHub, ManagedTask task)
         {
             try
             {
@@ -163,7 +163,7 @@
                             result.SetErrorMessage(currentTask.Error);
                         else
                             result.Log = currentTask.Message;
-                        result.JobResults = JArray.Parse(JsonConvert.SerializeObject(currentTask.JobResults));
+                        result.JobResults = JArray.FromObject(currentTask.JobResults);
                         currentTask.LastQlikFunctionCall = DateTime.Now;
                     }
                     else

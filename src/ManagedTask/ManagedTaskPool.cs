@@ -88,7 +88,9 @@
                         var jobresultArray = runtimeOptions.RestClient.GetTasks(managedTask.Id);
                         if (jobresultArray.Count > 0)
                         {
-                            jobResults = JsonConvert.DeserializeObject<List<JobResult>>(jobresultArray.ToString());
+                            var test = jobresultArray.ToString();
+                            
+                            jobResults = jobresultArray?.ToObject<List<JobResult>>() ?? new List<JobResult>();
                             if (jobResults.Count == 0)
                                 continue;
 
@@ -107,8 +109,7 @@
                             if (managedTask.InternalStatus == InternalTaskStatus.CREATEREPORTJOBEND || 
                                 managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
                             {
-                                var convertedResults = ConvertApiType<List<JobResult>>(jobResults);
-                                managedTask.JobResults.AddRange(convertedResults);
+                                managedTask.JobResults = jobResults;
 
                                 //Download all success engine task result files
                                 if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
@@ -120,9 +121,10 @@
                         }
                         else
                         {
-                            logger.Warn("The response of the operation job result was wrong.");
+                            logger.Info("No active tasks found...");
+                            continue;
                         }
-
+                       
                         //Check for cancellation
                         if (CancelRunning())
                             return;
@@ -167,20 +169,6 @@
             return false;
         }
 
-        private static T ConvertApiType<T>(object value)
-        {
-            try
-            {
-                var json = JsonConvert.SerializeObject(value);
-                return JsonConvert.DeserializeObject<T>(json);
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "Convert type failed.");
-                return default;
-            }
-        }
-
         private void DownloadResultFiles(ManagedTask task)
         {
             try
@@ -196,7 +184,7 @@
                             {
                                 var filename = Path.GetFileName(path);
                                 logger.Debug($"Download file '{filename}' form task '{task.Id}'...");
-                                var fileData = runtimeOptions.RestClient.Download(task.Id);
+                                var fileData = runtimeOptions.RestClient.DownloadData(task.Id);
                                 if (fileData != null)
                                 {
                                     logger.Trace($"File Data {fileData.Length} found...");

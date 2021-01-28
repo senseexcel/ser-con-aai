@@ -187,7 +187,7 @@
             return webClient.DownloadData($"{Options.Config.Connection.ServerUri.AbsoluteUri}{relUrl}");
         }
 
-        private string FindTemplatePath(SessionInfo session, SerTemplate template)
+        private byte[] FindTemplatePath(SessionInfo session, SerTemplate template)
         {
             var inputPath = Uri.UnescapeDataString(template.Input.Replace("\\", "/"));
             var inputPathWithHost = inputPath.Replace("://", ":/Host/");
@@ -206,9 +206,8 @@
                 if (filterFile != null)
                 {
                     var data = DownloadFile(filterFile, session.Cookie);
-                    var templatePath = $"{Guid.NewGuid()}{Path.GetExtension(filterFile)}";
-                    template.Input = templatePath;
-                    return templatePath;
+                    template.Input = $"{Guid.NewGuid()}{Path.GetExtension(filterFile)}";
+                    return data;
                 }
                 else
                     throw new Exception($"No content library path found.");
@@ -227,7 +226,7 @@
                 if (!File.Exists(fullLibPath))
                     throw new Exception($"The input file '{fullLibPath}' was not found.");
                 template.Input = Uri.EscapeDataString(Path.GetFileName(fullLibPath));
-                return fullLibPath;
+                return File.ReadAllBytes(fullLibPath);
             }
             else
             {
@@ -375,9 +374,9 @@
                             logger.Debug("Get template data from qlik.");
                             if (configReport.Template != null)
                             {
-                                var templatePath = FindTemplatePath(newManagedTask.Session, configReport.Template);
+                                var uploadData = FindTemplatePath(newManagedTask.Session, configReport.Template);
                                 logger.Debug("Upload template data to rest service.");
-                                var uploadId = Options.RestClient.Upload(templatePath);
+                                var uploadId = Options.RestClient.UploadData(uploadData, configReport.Template.Input);
                                 logger.Debug($"Upload with id {uploadId} was successfully.");
                                 newManagedTask.FileUploadIds.Add(uploadId);
                             }
