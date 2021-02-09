@@ -253,32 +253,35 @@
                 var functionCall = (ConnectorFunction)functionHeader.FunctionId;
                 logger.Debug($"Function id: {functionCall}");
 
-                #region Switch qlik user to app owner
-                if (domainUser?.UserId == "sa_scheduler" && domainUser?.UserDirectory == "INTERNAL")
-                {
-                    try
-                    {
-                        var oldUser = domainUser.ToString();
-                        domainUser = new DomainUser("INTERNAL\\ser_scheduler");
-                        logger.Debug($"Change Qlik user '{oldUser}' to task service user '{domainUser}'.");
-                        var connection = RuntimeOptions.Config.Connection;
-                        var tmpsession = RuntimeOptions.SessionHelper.GetSession(connection, request);
-                        if (tmpsession == null)
-                            throw new Exception("No session cookie generated. (Qlik Task)");
-                        var qrsHub = new QlikQrsHub(RuntimeOptions.Config.Connection.ServerUri, tmpsession.Cookie);
-                        domainUser = request.GetAppOwner(qrsHub, qlikAppId);
-                        if (domainUser == null)
-                            throw new Exception("The owner of the App could not found.");
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error(ex, "Could not switch the task user to real qlik user.");
-                    }
-                }
-                #endregion
-
                 if (functionCall == ConnectorFunction.START)
                 {
+                    #region Switch qlik user to app owner
+                    if (domainUser?.UserId == "sa_scheduler" && domainUser?.UserDirectory == "INTERNAL")
+                    {
+                        try
+                        {
+                            var oldUser = domainUser.ToString();
+                            domainUser = new DomainUser("INTERNAL\\ser_scheduler");
+                            logger.Debug($"Change Qlik user '{oldUser}' to task service user '{domainUser}'.");
+                            var connection = RuntimeOptions.Config.Connection;
+                            var tmpsession = RuntimeOptions.SessionHelper.Manager.CreateNewSession(connection, domainUser, qlikAppId);
+                            if (tmpsession == null)
+                                throw new Exception("No session cookie generated. (Qlik Task)");
+                            var qrsHub = new QlikQrsHub(RuntimeOptions.Config.Connection.ServerUri, tmpsession.Cookie);
+                            domainUser = request.GetAppOwner(qrsHub, qlikAppId);
+                            if (domainUser == null)
+                                throw new Exception("The owner of the App could not found.");
+                            logger.Debug($"App owner '{domainUser}' found.");
+                            request.QlikUser = domainUser;
+                            tmpsession.QlikConn.Close();
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Error(ex, "Could not switch the task user to real qlik user.");
+                        }
+                    }
+                    #endregion
+
                     #region Function call SER.START
                     logger.Debug("Function call SER.START...");
                     var newManagedTask = new ManagedTask()
