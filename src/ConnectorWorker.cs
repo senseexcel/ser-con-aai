@@ -273,7 +273,6 @@
                                 throw new Exception("The owner of the App could not found.");
                             logger.Debug($"App owner '{domainUser}' found.");
                             request.QlikUser = domainUser;
-                            tmpsession.QlikConn.Close();
                         }
                         catch (Exception ex)
                         {
