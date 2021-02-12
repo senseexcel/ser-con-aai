@@ -60,13 +60,19 @@
                                                           && u.AppId == request.AppId) ?? null;
                     if (oldSession != null)
                     {
+                        logger.Debug("Old session found...");
                         var result = ValidateSession(oldSession);
                         if (result)
+                        {
+                            logger.Debug("Old session is working...");
                             return oldSession;
+                        }
+                        logger.Debug("Old session not working, i remove it...");
                         Sessions.Remove(oldSession);
                     }
                 }
 
+                logger.Debug("Create new Websocket session...");
                 var sessionInfo = Manager.CreateNewSession(connection, request.QlikUser, request.AppId);
                 if (sessionInfo != null)
                     Sessions.Add(sessionInfo);
