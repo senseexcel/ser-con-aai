@@ -49,9 +49,9 @@
 
 		 # filename of the JWT certificate, you can define
 		 # relative paths or absolute paths
-		 cert: %appdata%\senseexcel\reporting\serconnector.pem
+		 cert: %appdata%\AnalyticsGate\AGR\certificates\serconnector.pem
 
-		 privateKey: %appdata%\senseexcel\reporting\serconnector_private.key
+		 privateKey: %appdata%\AnalyticsGate\AGR\certificates\serconnector_private.key
 	 }
   }
 }
