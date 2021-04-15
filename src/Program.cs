@@ -36,7 +36,7 @@
 
                 ServiceRunner<ConnectorService>.Run(config =>
                 {
-                    config.SetDisplayName("AGR Connector for Qlik");
+                    config.SetDisplayName("AGR Connector Service for Qlik");
                     config.SetDescription("AnalyticsGate Reporting Service");
                     var name = config.GetDefaultName();
                     config.Service(serviceConfig =>
