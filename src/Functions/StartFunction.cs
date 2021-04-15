@@ -6,18 +6,18 @@
     using System.IO;
     using System.Linq;
     using System.Net;
-    using System.Web;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using NLog;
     using Q2g.HelperPem;
     using Q2g.HelperQlik;
     using Qlik.EngineAPI;
-    using Ser.Api;
     using Ser.ConAai.Config;
     using Ser.ConAai.TaskObjects;
     using Ser.ConAai.Communication;
     using System.Threading.Tasks;
+    using Ser.Api;
+    using Ser.Api.Model;
     #endregion
 
     public class StartFunction : BaseFunction
@@ -171,7 +171,7 @@
                 if (!String.IsNullOrEmpty(dataAppId))
                     conn.App = dataAppId;
 
-                conn.LicenseServer = Options?.Config?.Connection?.LicenseServer ?? new List<SerServer>();
+                conn.LicenseServers = Options?.Config?.Connection?.LicenseServers ?? new List<SerServer>();
                 return conn;
             }
             catch (Exception ex)

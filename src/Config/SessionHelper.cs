@@ -8,7 +8,7 @@
     using NLog;
     using Q2g.HelperQlik;
     using Q2g.HelperQrs;
-    using Ser.Api;
+    using Ser.Api.Model;
     using Ser.ConAai.Communication;
     #endregion
 

@@ -6,6 +6,7 @@
     using Newtonsoft.Json.Serialization;
     using NLog;
     using Ser.Api;
+    using Ser.Api.Model;
     using System;
     using System.IO;
     using System.Runtime.InteropServices;
