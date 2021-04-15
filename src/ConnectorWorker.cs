@@ -49,10 +49,6 @@
         #region Connstructor
         public ConnectorWorker(ConnectorConfig config, CancellationTokenSource cancellation)
         {
-            ValidationCallback.Connection = config.Connection;
-            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-            ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
-
             PerfomanceAnalyser analyser = null;
             if (config.UsePerfomanceAnalyzer)
             {

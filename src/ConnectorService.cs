@@ -38,14 +38,6 @@
         private delegate IPHostEntry GetHostEntryHandler(string name);
         #endregion
 
-        #region Constructor
-        public ConnectorService()
-        {
-            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-            ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
-        }
-        #endregion
-
         #region Private Methods
         private static void CreateCertificate(string certFile, string privateKeyFile)
         {
@@ -79,7 +71,7 @@
                 configObject.connection.serverUri = serverUri;
                 ConnectorConfig connectorConfig = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
 
-                ValidationCallback.Connection = connectorConfig.Connection;
+                ServerCertificateValidation.Connection = connectorConfig.Connection;
                 var qlikUser = new DomainUser("INTERNAL\\ser_scheduler");
                 var taskManager = new SessionHelper();
                 var session = taskManager.GetSession(connectorConfig.Connection, new QlikRequest() { QlikUser = qlikUser });
@@ -122,7 +114,7 @@
                     return result;
 
                 logger.Debug("Search for certificate domain.");
-                var alternativeUris = ConnectionFallbackHelper.AlternativeUris ?? new List<Uri>();
+                var alternativeUris = ServerCertificateValidation.AlternativeUris ?? new List<Uri>();
                 foreach (var alternativeUri in alternativeUris)
                 {
                     logger.Info($"Check server uri \"{alternativeUri.AbsoluteUri}\" with certificate domain.");
@@ -179,16 +171,17 @@
         {
             // Find the right server uri
             var serverUriObj = ConfigObject?.connection?.serverUri;
-            if (serverUriObj == null)
+            if (serverUriObj == null || serverUri.OriginalString != serverUriObj.Value)
             {
-                logger.Info($">>> Write the correct server uri '{serverUri?.AbsoluteUri?.Trim('/')}' in the config file - run in alternative mode. <<<");
-                ConfigObject.connection.serverUri = serverUri;
+                logger.Warn($"Write the correct server uri '{serverUri?.AbsoluteUri?.Trim('/')}' in the config file.");
+                logger.Warn(">>> Run in alternative mode. <<<");
             }
-
-            var config = JsonConvert.DeserializeObject<ConnectorConfig>(ConfigObject.ToString());
+        
+            ConnectorConfig config = JsonConvert.DeserializeObject<ConnectorConfig>(ConfigObject.ToString());
+            config.Connection.ServerUri = serverUri;
             if (config.StopTimeout < 5)
                 config.StopTimeout = 5;
-
+           
             //Start Rest Service
             var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
             var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
@@ -219,7 +212,6 @@
             };
             server.Start();
             logger.Info($"The GRPC server is ready...");
-
         }
         #endregion
 
