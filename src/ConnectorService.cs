@@ -171,14 +171,14 @@
         {
             // Find the right server uri
             var serverUriObj = ConfigObject?.connection?.serverUri;
-            if (serverUriObj == null || serverUri.OriginalString != serverUriObj.Value)
+            if (serverUriObj != null && serverUri.OriginalString != serverUriObj.Value)
             {
                 logger.Warn($"Write the correct server uri '{serverUri?.AbsoluteUri?.Trim('/')}' in the config file.");
                 logger.Warn(">>> Run in alternative mode. <<<");
             }
-        
+
+            ConfigObject.connection.serverUri = serverUri;
             ConnectorConfig config = JsonConvert.DeserializeObject<ConnectorConfig>(ConfigObject.ToString());
-            config.Connection.ServerUri = serverUri;
             if (config.StopTimeout < 5)
                 config.StopTimeout = 5;
            
