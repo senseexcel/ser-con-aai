@@ -393,7 +393,7 @@
                             foreach (var connection in configReport.Connections)
                             {
                                 connection.LicenseServers.Add(new SerServer() { ServerUri = new Uri("https://license.analyticsgate.com"), Location = "de", Priority = 1 });
-                                connection.RendererServers.Add(new SerServer() { ServerUri = new Uri("https://localhost:53775"), Location = "default", Priority = 1 });
+                                connection.RendererServers.Add(new SerServer() { ServerUri = new Uri("https://localhost:53775"), Location = "default", Priority = 100 });
                             }
                         }
                     }
