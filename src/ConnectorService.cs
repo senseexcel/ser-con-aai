@@ -20,9 +20,11 @@
     using System.Threading.Tasks;
     using System.Threading;
     using Q2g.HelperQlik;
+    using Ser.ConAai.Config;
+    using Ser.ConAai.Communication;
     #endregion
 
-    public class SSEtoSER : MicroService, IMicroService
+    public class ConnectorService : MicroService, IMicroService
     {
         #region Logger
         private static readonly Logger logger = LogManager.GetCurrentClassLogger();
@@ -30,17 +32,11 @@
 
         #region Properties & Variables
         private Server server;
-        private SerEvaluator serEvaluator;
+        private ConnectorWorker worker;
         private CancellationTokenSource cts;
         private dynamic ConfigObject = null;
         private delegate IPHostEntry GetHostEntryHandler(string name);
         #endregion
-
-        public SSEtoSER()
-        {
-            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-            ServicePointManager.ServerCertificateValidationCallback += ValidationCallback.ValidateRemoteCertificate;
-        }
 
         #region Private Methods
         private static void CreateCertificate(string certFile, string privateKeyFile)
@@ -60,7 +56,7 @@
             }
         }
 
-        private Uri QlikConnectionCheck(string configJson, string serverUrl)
+        private static Uri QlikConnectionCheck(string configJson, string serverUrl)
         {
 
             try
@@ -75,10 +71,10 @@
                 configObject.connection.serverUri = serverUri;
                 ConnectorConfig connectorConfig = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
 
-                ValidationCallback.Connection = connectorConfig.Connection;
+                ServerCertificateValidation.Connection = connectorConfig.Connection;
                 var qlikUser = new DomainUser("INTERNAL\\ser_scheduler");
                 var taskManager = new SessionHelper();
-                var session = taskManager.GetSession(connectorConfig.Connection, qlikUser, null);
+                var session = taskManager.GetSession(connectorConfig.Connection, new QlikRequest() { QlikUser = qlikUser });
                 if (session?.Cookie != null)
                 {
                     logger.Info("The connection to Qlik Sense was successful.");
@@ -118,7 +114,7 @@
                     return result;
 
                 logger.Debug("Search for certificate domain.");
-                var alternativeUris = ConnectionFallbackHelper.AlternativeUris ?? new List<Uri>();
+                var alternativeUris = ServerCertificateValidation.AlternativeUris ?? new List<Uri>();
                 foreach (var alternativeUri in alternativeUris)
                 {
                     logger.Info($"Check server uri \"{alternativeUri.AbsoluteUri}\" with certificate domain.");
@@ -175,23 +171,24 @@
         {
             // Find the right server uri
             var serverUriObj = ConfigObject?.connection?.serverUri;
-            if (serverUriObj == null)
+            if (serverUriObj != null && serverUri.OriginalString != serverUriObj.Value)
             {
-                logger.Info($">>> Write the correct server uri '{serverUri?.AbsoluteUri?.Trim('/')}' in the config file - run in alternative mode. <<<");
-                ConfigObject.connection.serverUri = serverUri;
+                logger.Warn($"Write the correct server uri '{serverUri?.AbsoluteUri?.Trim('/')}' in the config file.");
+                logger.Warn(">>> Run in alternative mode. <<<");
             }
 
-            var config = JsonConvert.DeserializeObject<ConnectorConfig>(ConfigObject.ToString());
+            ConfigObject.connection.serverUri = serverUri;
+            ConnectorConfig config = JsonConvert.DeserializeObject<ConnectorConfig>(ConfigObject.ToString());
             if (config.StopTimeout < 5)
                 config.StopTimeout = 5;
-
+           
             //Start Rest Service
             var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
             var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
             StartRestServer(arguments.ToArray());
-            config.PackageVersion = VersionUtils.GetMainVersion();
+            config.PackageVersion = ConnectorVersion.GetMainVersion();
             logger.Info($"MainVersion: {config.PackageVersion}");
-            config.ExternalPackageJson = VersionUtils.GetExternalPackageJson();
+            config.ExternalPackageJson = ConnectorVersion.GetExternalPackageJson();
             var packages = JArray.Parse(config.ExternalPackageJson);
             foreach (var package in packages)
                 logger.Info($"Package: {JsonConvert.SerializeObject(package)}");
@@ -203,18 +200,18 @@
             logger.Debug($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}");
             logger.Debug($"Server start...");
 
-            using (serEvaluator = new SerEvaluator(config))
-            {
-                server = new Server()
-                {
-                    Services = { Connector.BindService(serEvaluator) },
-                    Ports = { new ServerPort(config.BindingHost, config.BindingPort, ServerCredentials.Insecure) },
-                };
+            worker = new ConnectorWorker(config, cts);
+            worker.CleanupOldFiles();
+            worker.RestServiceHealthCheck();
 
-                server.Start();
-                logger.Info($"gRPC listening on port {config.BindingPort} on Host {config.BindingHost}");
-                logger.Info($"Ready...");
-            }
+            logger.Info($"Start GRPC listening on port '{config.BindingPort}' on Host '{config.BindingHost}'...");
+            server = new Server()
+            {
+                Services = { Connector.BindService(worker) },
+                Ports = { new ServerPort(config.BindingHost, config.BindingPort, ServerCredentials.Insecure) },
+            };
+            server.Start();
+            logger.Info($"The GRPC server is ready...");
         }
         #endregion
 
@@ -264,7 +261,7 @@
         {
             try
             {
-                logger.Info("Shutdown SSEtoSER...");
+                logger.Info("Shutdown connector service...");
                 cts?.Cancel();
                 server?.ShutdownAsync().Wait();
             }

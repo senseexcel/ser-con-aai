@@ -1,4 +1,4 @@
-﻿namespace Ser.ConAai
+﻿namespace Ser.ConAai.Functions
 {
     #region Usings
     using System;
@@ -11,6 +11,7 @@
     using Q2g.HelperQrs;
     using Q2g.HelperQlik;
     using NLog;
+    using Ser.ConAai.TaskObjects;
     #endregion
 
     public static class ScriptCheck
@@ -20,7 +21,7 @@
         #endregion
 
         #region public methods
-        public static bool DataLoadCheck(Uri serverUri, string scriptAppId, SessionInfo info, int timeout)
+        public static bool DataLoadCheck(Uri serverUri, string scriptAppId, ManagedTask task, int timeout)
         {
             try
             {
@@ -30,9 +31,9 @@
                 if (timeout <= 0)
                     return true;
 
-                var reloadTime = GetLastReloadTime(serverUri, info.Cookie, scriptAppId);
+                var reloadTime = GetLastReloadTime(serverUri, task.Session.Cookie, scriptAppId);
                 var tsConn = new CancellationTokenSource(timeout);
-                var session = GetConnection(info, tsConn.Token);
+                var session = GetConnection(task.Session, tsConn.Token);
                 var ts = new CancellationTokenSource(timeout);
                 if (session != null)
                 {
@@ -44,16 +45,17 @@
                     return false;
                 if (reloadTime != null)
                 {
+                    task.Message = "Wait for data load...";
                     logger.Debug("Reload - Wait for finish scripts.");
                     while (true)
                     {
                         Thread.Sleep(1000);
                         if (ts.Token.IsCancellationRequested)
                             return false;
-                        var taskStatus = GetTaskStatus(serverUri, info.Cookie, scriptAppId);
+                        var taskStatus = GetTaskStatus(serverUri, task.Session.Cookie, scriptAppId);
                         if (taskStatus != 2)
                             return true;
-                        var tempLoad = GetLastReloadTime(serverUri, info.Cookie, scriptAppId);
+                        var tempLoad = GetLastReloadTime(serverUri, task.Session.Cookie, scriptAppId);
                         if (tempLoad == null)
                             return false;
                         if (reloadTime.Value.Ticks < tempLoad.Value.Ticks)
