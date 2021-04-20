@@ -389,11 +389,14 @@
                             // Perfomance analyser for the engine
                             configReport.General.UsePerfomanceAnalyzer = Options.Config.UsePerfomanceAnalyzer;
 
-                            //Add default server
+                            //Add all server uris
                             foreach (var connection in configReport.Connections)
                             {
                                 connection.LicenseServers.Add(new SerServer() { ServerUri = new Uri("https://license.analyticsgate.com"), Location = "de", Priority = 1 });
+                                connection.LicenseServers.AddRange(Options.Config.Connection.LicenseServers);
+
                                 connection.RendererServers.Add(new SerServer() { ServerUri = new Uri("https://localhost:53775"), Location = "default", Priority = 100 });
+                                connection.RendererServers.AddRange(Options.Config.Connection.RendererServers);
                             }
                         }
                     }
