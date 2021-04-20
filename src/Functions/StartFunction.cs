@@ -287,7 +287,7 @@
             {
                 logger.Debug("Transfer script to the rest service...");
                 var jobJson = task.JobScript.ToString();
-                logger.Debug($"JSON-Script: {jobJson}");
+                logger.Trace($"JSON-Script: {jobJson}");
                 var taskId = Options.RestClient.RunTask(jobJson, task.Id);
                 logger.Info($"The reporting request was successfully transferred and run with id '{taskId}' to the rest service...");
             }
