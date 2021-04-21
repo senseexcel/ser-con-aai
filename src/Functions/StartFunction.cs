@@ -171,7 +171,6 @@
                 if (!String.IsNullOrEmpty(dataAppId))
                     conn.App = dataAppId;
 
-                conn.LicenseServers = Options?.Config?.Connection?.LicenseServers ?? new List<SerServer>();
                 return conn;
             }
             catch (Exception ex)
