@@ -9,7 +9,8 @@
     <Copyright>Copyright (c) $([System.DateTime]::Today.ToString('yyyy'))</Copyright>
     <Company>akquinet finance &amp; controlling GmbH</Company>
     <Configuration>Release</Configuration>
-    <Version>5.0.0</Version>
+    <AssemblyVersion>5.1.2.0</AssemblyVersion>
+    <FileVersion>5.1.2.0</FileVersion>  
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -19,7 +20,6 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="FluentFTP" Version="33.1.6" />
-    <PackageReference Include="GitVersionTask" Version="5.5.1" PrivateAssets="All" />
     <PackageReference Include="Google.Protobuf" Version="3.15.8" />
     <PackageReference Include="Grpc" Version="2.37.0" />
     <PackageReference Include="Grpc.Core" Version="2.37.0" />
@@ -141,10 +141,11 @@
     </None>
   </ItemGroup>
 
-  <Target Name="GitVersion" BeforeTargets="AfterBuild">
-    <Message Importance="High" Text="++++++ GitVersion: $(GitVersion_InformationalVersion) ++++++" />
-    <Exec Command="%HOMEPATH%\Documents\DevTools\nugetinfo\NugetInfo.exe %HOMEPATH%\.nuget\packages %HOMEPATH%\Documents\Entwicklung\Reporting\ser-con-aai\src net5.0" />
-    <Message Importance="High" Text="!!!!! CHANGE VERSION NUMBER in VersionUtils.cs by Line 33 !!!!!" />
+  <Target Name="ShowAssemblyVersion" BeforeTargets="AfterBuild">
+    <GetAssemblyIdentity AssemblyFiles="$(TargetPath)">
+      <Output TaskParameter="Assemblies" ItemName="MyAssemblyIdentities" />
+    </GetAssemblyIdentity>
+    <Message Importance="High" Text="++++++ AssemblyVersion: %(MyAssemblyIdentities.Version) ++++++" />
   </Target>
   
 </Project>
