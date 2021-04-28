@@ -218,15 +218,7 @@
                     task.Status = 2;
                     task.Message = "Report job is distributed...";
                     var distribute = new DistributeManager();
-                    var privateKeyPath = runtimeOptions.Config.Connection.Credentials.PrivateKey;
-                    var privateKeyFullname = HelperUtilities.GetFullPathFromApp(privateKeyPath);
-                    var distibuteOptions = new DistibuteOptions()
-                    {
-                        SessionUser = task.Session.User,
-                        CancelToken = task.Cancellation.Token,
-                        PrivateKeyPath = privateKeyFullname
-                    };
-                    var result = distribute.Run(task.JobResults, distibuteOptions);
+                    var result = distribute.Run(task.JobResults, task.Cancellation.Token);
                     runtimeOptions.SessionHelper.Manager.MakeSocketFree(task.Session);
                     if (task.Cancellation.IsCancellationRequested)
                     {
