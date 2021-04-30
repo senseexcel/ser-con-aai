@@ -85,46 +85,44 @@
                         if (CancelRunning())
                             return;
 
-                        var jobresultArray = runtimeOptions.RestClient.GetTasks(managedTask.Id);
-                        if (jobresultArray.Count > 0)
+                        var restStatusJson = runtimeOptions.RestClient.GetStatus(managedTask.Id);
+                        var restStatus = JsonConvert.DeserializeObject<RestTaskStatus>(restStatusJson);
+                        if(restStatus == null)
                         {
-                            var test = jobresultArray.ToString();
-                            
-                            jobResults = jobresultArray?.ToObject<List<JobResult>>() ?? new List<JobResult>();
-                            if (jobResults.Count == 0)
-                                continue;
-
-                            var runningResults = jobResults.Where(r => r.Status == TaskStatusInfo.ABORT).ToList();
-                            if (runningResults.Count > 0)
-                            {
-                                managedTask.Message = "Report job is running...";
-                                managedTask.Status = 1;
-                                managedTask.InternalStatus = InternalTaskStatus.ENGINEISRUNNING;
-                                continue;
-                            }
-
-                            if (managedTask.InternalStatus == InternalTaskStatus.DISTRIBUTESTART)
-                                continue;
-
-                            if (managedTask.InternalStatus == InternalTaskStatus.CREATEREPORTJOBEND || 
-                                managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
-                            {
-                                managedTask.JobResults = jobResults;
-
-                                //Download all success engine task result files
-                                if (managedTask.InternalStatus == InternalTaskStatus.ENGINEISRUNNING)
-                                    DownloadResultFiles(managedTask);
-
-                                //Distibute all results
-                                Distibute(managedTask);
-                            }
-                        }
-                        else
-                        {
-                            logger.Info("No active tasks found...");
+                            //Achtung was ist wenn es die id nicht mehr gibt?
                             continue;
                         }
-                       
+                        else if (restStatus.Status == 1)
+                        {
+                            managedTask.Message = restStatus.ProcessMessage;
+                            managedTask.Status = 1;
+                            managedTask.InternalStatus = InternalTaskStatus.ENGINEISRUNNING;
+                            continue;
+                        }
+                        else if (restStatus.Status == 2)
+                        {
+                            managedTask.Message = restStatus.ProcessMessage;
+                            managedTask.Status = 2;
+                            managedTask.InternalStatus = InternalTaskStatus.DISTRIBUTESTART;
+                            continue;
+                        }
+                        else if (restStatus.Status == 3)
+                        {
+                            managedTask.Message = restStatus.ProcessMessage;
+                            managedTask.Status = 3;
+                            managedTask.DistributeResult = restStatus.DistributeResult;
+                            managedTask.JobResults = JsonConvert.DeserializeObject<List<JobResult>>(restStatus.JsonJobResults);
+                            managedTask.InternalStatus = InternalTaskStatus.DISTRIBUTEEND;
+                        }
+                        else if(restStatus.Status == -1)
+                        {
+                            managedTask.Message = restStatus.ProcessMessage;
+                            managedTask.Error = new Exception(restStatus.ErrorMessage);
+                            managedTask.Status = -1;
+                            managedTask.JobResults = JsonConvert.DeserializeObject<List<JobResult>>(restStatus.JsonJobResults);
+                            managedTask.InternalStatus = InternalTaskStatus.ERROR;
+                        }
+
                         //Check for cancellation
                         if (CancelRunning())
                             return;
@@ -169,87 +167,87 @@
             return false;
         }
 
-        private void DownloadResultFiles(ManagedTask task)
-        {
-            try
-            {
-                runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"Start - Download files");
-                foreach (var jobResult in task.JobResults)
-                {
-                    if (jobResult.Status == TaskStatusInfo.SUCCESS || jobResult.Status == TaskStatusInfo.WARNING)
-                    {
-                        foreach (var jobReport in jobResult.Reports)
-                        {
-                            foreach (var path in jobReport.Paths)
-                            {
-                                var filename = Path.GetFileName(path);
-                                logger.Debug($"Download file '{filename}' form task '{task.Id}'...");
-                                var fileData = runtimeOptions.RestClient.DownloadData(task.Id, filename);
-                                if (fileData != null)
-                                {
-                                    logger.Trace($"File Data {fileData.Length} found...");
-                                    jobReport.Data.Add(new ReportData() { Filename = filename, DownloadData = fileData });
-                                }
-                                else
-                                    logger.Warn($"File '{filename}' for download not found.");
-                            }
-                        }
-                    }
-                }
-                runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"End - Download files");
-            }
-            catch (Exception ex)
-            {
-                logger.Debug(ex, "The method 'DownloadResultFiles' failed.");
-                task.Status = -1;
-                task.InternalStatus = InternalTaskStatus.ERROR;
-                task.Error = ex;
-            }
-        }
+        //private void DownloadResultFiles(ManagedTask task)
+        //{
+        //    try
+        //    {
+        //        runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"Start - Download files");
+        //        foreach (var jobResult in task.JobResults)
+        //        {
+        //            if (jobResult.Status == TaskStatusInfo.SUCCESS || jobResult.Status == TaskStatusInfo.WARNING)
+        //            {
+        //                foreach (var jobReport in jobResult.Reports)
+        //                {
+        //                    foreach (var path in jobReport.Paths)
+        //                    {
+        //                        var filename = Path.GetFileName(path);
+        //                        logger.Debug($"Download file '{filename}' form task '{task.Id}'...");
+        //                        var fileData = runtimeOptions.RestClient.DownloadData(task.Id, filename);
+        //                        if (fileData != null)
+        //                        {
+        //                            logger.Trace($"File Data {fileData.Length} found...");
+        //                            jobReport.Data.Add(new ReportData() { Filename = filename, DownloadData = fileData });
+        //                        }
+        //                        else
+        //                            logger.Warn($"File '{filename}' for download not found.");
+        //                    }
+        //                }
+        //            }
+        //        }
+        //        runtimeOptions.Analyser?.SetCheckPoint("DownloadResultFiles", $"End - Download files");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        logger.Debug(ex, "The method 'DownloadResultFiles' failed.");
+        //        task.Status = -1;
+        //        task.InternalStatus = InternalTaskStatus.ERROR;
+        //        task.Error = ex;
+        //    }
+        //}
 
-        private void Distibute(ManagedTask task)
-        {
-            Task.Run(() =>
-            {
-                try
-                {
-                    task.InternalStatus = InternalTaskStatus.DISTRIBUTESTART;
-                    runtimeOptions.Analyser?.SetCheckPoint("Distibute", "Start - Delivery of reports");
-                    task.Status = 2;
-                    task.Message = "Report job is distributed...";
-                    var distribute = new DistributeManager();
-                    var result = distribute.Run(task.JobResults, task.Cancellation.Token);
-                    runtimeOptions.SessionHelper.Manager.MakeSocketFree(task.Session);
-                    if (task.Cancellation.IsCancellationRequested)
-                    {
-                        task.Message = "The delivery was canceled by user.";
-                        return;
-                    }
+        //private void Distibute(ManagedTask task)
+        //{
+        //    Task.Run(() =>
+        //    {
+        //        try
+        //        {
+        //            task.InternalStatus = InternalTaskStatus.DISTRIBUTESTART;
+        //            runtimeOptions.Analyser?.SetCheckPoint("Distibute", "Start - Delivery of reports");
+        //            task.Status = 2;
+        //            task.Message = "Report job is distributed...";
+        //            var distribute = new DistributeManager();
+        //            var result = distribute.Run(task.JobResults, task.Cancellation.Token);
+        //            runtimeOptions.SessionHelper.Manager.MakeSocketFree(task.Session);
+        //            if (task.Cancellation.IsCancellationRequested)
+        //            {
+        //                task.Message = "The delivery was canceled by user.";
+        //                return;
+        //            }
 
-                    if (result != null)
-                    {
-                        logger.Debug($"Distribute result: '{result}'");
-                        task.DistributeResult = result;
-                        logger.Debug("The delivery was successfully.");
-                        task.Endtime = DateTime.Now;
-                        task.Status = 3;
-                    }
-                    else
-                    {
-                        throw new Exception(distribute.ErrorMessage);
-                    }
-                    runtimeOptions.Analyser?.SetCheckPoint("Distibute", "End - Delivery of reports");
-                    task.InternalStatus = InternalTaskStatus.DISTRIBUTEEND;
-                }
-                catch (Exception ex)
-                {
-                    logger.Error(ex, $"The managed task '{task.Id}' could not be distibuted.");
-                    task.Error = ex;
-                    task.Status = -1;
-                    task.InternalStatus = InternalTaskStatus.ERROR;
-                }
-            });
-        }
+        //            if (result != null)
+        //            {
+        //                logger.Debug($"Distribute result: '{result}'");
+        //                task.DistributeResult = result;
+        //                logger.Debug("The delivery was successfully.");
+        //                task.Endtime = DateTime.Now;
+        //                task.Status = 3;
+        //            }
+        //            else
+        //            {
+        //                throw new Exception(distribute.ErrorMessage);
+        //            }
+        //            runtimeOptions.Analyser?.SetCheckPoint("Distibute", "End - Delivery of reports");
+        //            task.InternalStatus = InternalTaskStatus.DISTRIBUTEEND;
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            logger.Error(ex, $"The managed task '{task.Id}' could not be distibuted.");
+        //            task.Error = ex;
+        //            task.Status = -1;
+        //            task.InternalStatus = InternalTaskStatus.ERROR;
+        //        }
+        //    });
+        //}
 
         private void CleanUp(ManagedTask task)
         {
