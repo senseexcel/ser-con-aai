@@ -178,6 +178,8 @@
                     logger.Warn("Status - No managed tasks with 'all' or 'id' found.");
                     result.Log = "Status information is not available.";
                     result.Status = -1;
+                    if (QlikRequest.Error != null)
+                        result.SetErrorMessage(QlikRequest.Error);
                 }
             }
             catch (Exception ex)

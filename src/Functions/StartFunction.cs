@@ -102,8 +102,11 @@
                             }
                             else if (childProp?.Name == "mail")
                             {
-                                if (child?.mailServer?.privateKey == null)
-                                    child.mailServer.privateKey = Options?.Config?.Connection?.Credentials?.PrivateKey;
+                                if (child?.mailServer != null)
+                                {
+                                    if (child?.mailServer?.privateKey == null)
+                                        child.mailServer.privateKey = Options?.Config?.Connection?.Credentials?.PrivateKey;
+                                }
                             }
                         }
                     }

@@ -29,6 +29,7 @@
         public DomainUser QlikUser { get; set; }
         public string AppId { get; set; }
         public string JsonScript { get; set; }
+        public static Exception Error { get; set; }
         #endregion
 
         #region Private Methods
@@ -99,7 +100,8 @@
             }
             catch (Exception ex)
             {
-                throw new Exception("The request is incorrect and could not be parsed.", ex);
+                Error = new Exception("The request is incorrect and could not be parsed.", ex);
+                throw Error;
             }
         }
 

@@ -85,11 +85,16 @@
                         if (CancelRunning())
                             return;
 
+                        //Check report was created
+                        if(managedTask.InternalStatus == InternalTaskStatus.CREATEREPORTJOBSTART)
+                        {
+                            continue;
+                        }
+
                         var restStatusJson = runtimeOptions.RestClient.GetStatus(managedTask.Id);
                         var restStatus = JsonConvert.DeserializeObject<RestTaskStatus>(restStatusJson);
-                        if(restStatus == null)
+                        if(restStatus == null && managedTask.InternalStatus == InternalTaskStatus.CREATEREPORTJOBEND)
                         {
-                            //Achtung was ist wenn es die id nicht mehr gibt?
                             continue;
                         }
                         else if (restStatus.Status == 1)
