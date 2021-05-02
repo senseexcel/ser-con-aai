@@ -95,12 +95,12 @@
                             else if (connection?.ToString() == "@CONFIGCONNECTION@")
                                 child.connections = new JArray(newUserConnections);
                             var childProp = (child as JObject).Parent as JProperty;
-                            if (childProp?.Name == "hub")
+                            if (childProp?.Name?.StartsWith("hub") ?? false)
                             {
                                 if (child?.owner == null)
                                     child.owner = session.User.ToString();
                             }
-                            else if (childProp?.Name == "mail")
+                            else if (childProp?.Name?.StartsWith("mail") ?? false)
                             {
                                 if (child?.mailServer != null)
                                 {
