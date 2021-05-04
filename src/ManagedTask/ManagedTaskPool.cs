@@ -4,19 +4,15 @@
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
-    using System.IO;
     using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
     using Newtonsoft.Json;
-    using Newtonsoft.Json.Linq;
     using NLog;
-    using Q2g.HelperQlik;
     using Ser.Api;
     using Ser.ConAai.Communication;
     using Ser.ConAai.Config;
     using Ser.ConAai.Functions;
-    using Ser.Distribute;
     #endregion
 
     public class ManagedTaskPool

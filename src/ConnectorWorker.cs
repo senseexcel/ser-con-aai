@@ -3,8 +3,6 @@
     #region Usings
     using System;
     using System.Linq;
-    using System.Net;
-    using System.Net.Http;
     using System.Threading;
     using System.Threading.Tasks;
     using System.IO;
@@ -14,7 +12,6 @@
     using Ser.Api;
     using Q2g.HelperQrs;
     using Qlik.Sse;
-    using Q2g.HelperQlik;
     using static Qlik.Sse.Connector;
     using Ser.Diagnostics;
     using Ser.Gerneral;
