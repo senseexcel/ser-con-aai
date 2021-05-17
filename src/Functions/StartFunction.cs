@@ -94,6 +94,20 @@
                                 child.connections = new JArray(newUserConnections);
                             else if (connection?.ToString() == "@CONFIGCONNECTION@")
                                 child.connections = new JArray(newUserConnections);
+                            var childProp = (child as JObject).Parent as JProperty;
+                            if (childProp?.Name?.StartsWith("hub") ?? false)
+                            {
+                                if (child?.owner == null)
+                                    child.owner = session.User.ToString();
+                            }
+                            else if (childProp?.Name?.StartsWith("mail") ?? false)
+                            {
+                                if (child?.mailServer != null)
+                                {
+                                    if (child?.mailServer?.privateKey == null)
+                                        child.mailServer.privateKey = Options?.Config?.Connection?.Credentials?.PrivateKey;
+                                }
+                            }
                         }
                     }
 

@@ -12,6 +12,7 @@
     using System.Text;
     #endregion
 
+    #region Enumerations
     public enum InternalTaskStatus
     {
         CREATEREPORTJOBSTART,
@@ -26,6 +27,7 @@
         CLEANUP,
         INACTIVE
     }
+    #endregion
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
                 NamingStrategyType = typeof(CamelCaseNamingStrategy))]

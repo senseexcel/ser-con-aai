@@ -9,8 +9,8 @@
     <Copyright>Copyright (c) $([System.DateTime]::Today.ToString('yyyy'))</Copyright>
     <Company>akquinet finance &amp; controlling GmbH</Company>
     <Configuration>Release</Configuration>
-    <AssemblyVersion>5.1.2.0</AssemblyVersion>
-    <FileVersion>5.1.2.0</FileVersion>  
+    <AssemblyVersion>5.2.0.0</AssemblyVersion>
+    <FileVersion>5.2.0.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -19,12 +19,12 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="FluentFTP" Version="33.1.6" />
+    <PackageReference Include="FluentFTP" Version="34.0.0" />
     <PackageReference Include="Google.Protobuf" Version="3.15.8" />
-    <PackageReference Include="Grpc" Version="2.37.0" />
-    <PackageReference Include="Grpc.Core" Version="2.37.0" />
-    <PackageReference Include="Grpc.Core.Api" Version="2.37.0" />
-    <PackageReference Include="Grpc.Tools" Version="2.37.0">
+    <PackageReference Include="Grpc" Version="2.37.1" />
+    <PackageReference Include="Grpc.Core" Version="2.37.1" />
+    <PackageReference Include="Grpc.Core.Api" Version="2.37.1" />
+    <PackageReference Include="Grpc.Tools" Version="2.37.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -37,97 +37,50 @@
     <PackageReference Include="Portable.BouncyCastle" Version="1.8.10" />
     <PackageReference Include="prometheus-net" Version="4.1.1" />
     <PackageReference Include="prometheus-net.AspNetCore" Version="4.1.1" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.1.3" />
-    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="6.1.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.1.4" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="6.1.4" />
     <PackageReference Include="System.Drawing.Common" Version="5.0.2" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.10.2" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.11.0" />
     <PackageReference Include="System.Interactive.Async" Version="5.0.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="5.0.0" />
     <PackageReference Include="YamlDotNet" Version="11.1.1" />
   </ItemGroup>
 
-  <Choose>
-    <When Condition="'$(Configuration)' == 'Release'">
-      <PropertyGroup>
-        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-      </PropertyGroup>
-      <ItemGroup>
-        <Reference Include="Ser.Api">
-          <HintPath>..\..\ser-api\src\bin\Release\$(TargetFramework)\SerApi.dll</HintPath>
-        </Reference>
-        <Reference Include="Q2gHelperPem">
-          <HintPath>..\..\q2g-helper-pem\src\bin\Release\$(TargetFramework)\Q2gHelperPem.dll</HintPath>
-        </Reference>
-        <Reference Include="Q2gHelperQrs">
-          <HintPath>..\..\q2g-helper-qrs\src\bin\Release\$(TargetFramework)\Q2gHelperQrs.dll</HintPath>
-        </Reference>
-        <Reference Include="Q2g.HelperQlik">
-          <HintPath>..\..\q2g-helper-qlik\src\bin\Release\$(TargetFramework)\Q2gHelperQlik.dll</HintPath>
-        </Reference>
-        <Reference Include="Ser.Distribute">
-          <HintPath>..\..\ser-distribute\src\bin\Release\$(TargetFramework)\SerDistribute.dll</HintPath>
-        </Reference>
-        <Reference Include="SerSystem">
-          <HintPath>..\..\ser-system\src\bin\Release\$(TargetFramework)\SerSystem.dll</HintPath>
-        </Reference>
-        <Reference Include="Ser.Engine.Rest">
-          <HintPath>..\..\ser-engine-rest\src\bin\Release\$(TargetFramework)\SerEngineRest.dll</HintPath>
-        </Reference>
-        <Reference Include="enigma.net">
-          <HintPath>..\..\..\QlikAPIs\enigma.net\src\bin\Release\$(TargetFramework)\enigma.net.dll</HintPath>
-        </Reference>
-        <Reference Include="qlik-engineapi">
-          <HintPath>..\..\..\QlikAPIs\qlik-engineapi\src\qlik-engineapi\bin\Release\$(TargetFramework)\qlik-engineapi.dll</HintPath>
-        </Reference>
-        <Reference Include="qlik-sseapi">
-          <HintPath>..\..\..\QlikAPIs\qlik-sseapi\src\bin\Release\$(TargetFramework)\qlik-sseapi.dll</HintPath>
-        </Reference>
-        <Reference Include="Ser.Engine.Rest.Client">
-          <HintPath>..\..\ser-engine-rest-client\src\bin\Release\$(TargetFramework)\SerEngineRestClient.dll</HintPath>
-        </Reference>
-      </ItemGroup>
-    </When>
-    <Otherwise>
-      <PropertyGroup>
-        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-      </PropertyGroup>
-      <ItemGroup>
-        <Reference Include="Ser.Api">
-          <HintPath>..\..\ser-api\src\bin\Debug\$(TargetFramework)\SerApi.dll</HintPath>
-        </Reference>
-        <Reference Include="Q2gHelperPem">
-          <HintPath>..\..\q2g-helper-pem\src\bin\Debug\$(TargetFramework)\Q2gHelperPem.dll</HintPath>
-        </Reference>
-        <Reference Include="Q2gHelperQrs">
-          <HintPath>..\..\q2g-helper-qrs\src\bin\Debug\$(TargetFramework)\Q2gHelperQrs.dll</HintPath>
-        </Reference>
-        <Reference Include="Q2g.HelperQlik">
-          <HintPath>..\..\q2g-helper-qlik\src\bin\Debug\$(TargetFramework)\Q2gHelperQlik.dll</HintPath>
-        </Reference>
-        <Reference Include="Ser.Distribute">
-          <HintPath>..\..\ser-distribute\src\bin\Debug\$(TargetFramework)\SerDistribute.dll</HintPath>
-        </Reference>
-        <Reference Include="SerSystem">
-          <HintPath>..\..\ser-system\src\bin\Debug\$(TargetFramework)\SerSystem.dll</HintPath>
-        </Reference>
-        <Reference Include="Ser.Engine.Rest">
-          <HintPath>..\..\ser-engine-rest\src\bin\Debug\$(TargetFramework)\SerEngineRest.dll</HintPath>
-        </Reference>
-        <Reference Include="enigma.net">
-          <HintPath>..\..\..\QlikAPIs\enigma.net\src\bin\Debug\$(TargetFramework)\enigma.net.dll</HintPath>
-        </Reference>
-        <Reference Include="qlik-engineapi">
-          <HintPath>..\..\..\QlikAPIs\qlik-engineapi\src\qlik-engineapi\bin\Debug\$(TargetFramework)\qlik-engineapi.dll</HintPath>
-        </Reference>
-        <Reference Include="qlik-sseapi">
-          <HintPath>..\..\..\QlikAPIs\qlik-sseapi\src\bin\Debug\$(TargetFramework)\qlik-sseapi.dll</HintPath>
-        </Reference>
-        <Reference Include="Ser.Engine.Rest.Client">
-          <HintPath>..\..\ser-engine-rest-client\src\bin\Debug\$(TargetFramework)\SerEngineRestClient.dll</HintPath>
-        </Reference>
-      </ItemGroup>
-    </Otherwise>
-  </Choose>
+  <ItemGroup>
+    <Reference Include="Ser.Api">
+      <HintPath>..\..\ser-api\src\bin\$(Configuration)\$(TargetFramework)\SerApi.dll</HintPath>
+    </Reference>
+    <Reference Include="Q2gHelperPem">
+      <HintPath>..\..\q2g-helper-pem\src\bin\$(Configuration)\$(TargetFramework)\Q2gHelperPem.dll</HintPath>
+    </Reference>
+    <Reference Include="Q2gHelperQrs">
+      <HintPath>..\..\q2g-helper-qrs\src\bin\$(Configuration)\$(TargetFramework)\Q2gHelperQrs.dll</HintPath>
+    </Reference>
+    <Reference Include="Q2g.HelperQlik">
+      <HintPath>..\..\q2g-helper-qlik\src\bin\$(Configuration)\$(TargetFramework)\Q2gHelperQlik.dll</HintPath>
+    </Reference>
+    <Reference Include="Ser.Distribute">
+      <HintPath>..\..\ser-distribute\src\bin\$(Configuration)\$(TargetFramework)\SerDistribute.dll</HintPath>
+    </Reference>
+    <Reference Include="SerSystem">
+      <HintPath>..\..\ser-system\src\bin\$(Configuration)\$(TargetFramework)\SerSystem.dll</HintPath>
+    </Reference>
+    <Reference Include="Ser.Engine.Rest">
+      <HintPath>..\..\ser-engine-rest\src\bin\$(Configuration)\$(TargetFramework)\SerEngineRest.dll</HintPath>
+    </Reference>
+    <Reference Include="enigma.net">
+      <HintPath>..\..\..\QlikAPIs\enigma.net\src\bin\$(Configuration)\$(TargetFramework)\enigma.net.dll</HintPath>
+    </Reference>
+    <Reference Include="qlik-engineapi">
+      <HintPath>..\..\..\QlikAPIs\qlik-engineapi\src\qlik-engineapi\bin\$(Configuration)\$(TargetFramework)\qlik-engineapi.dll</HintPath>
+    </Reference>
+    <Reference Include="qlik-sseapi">
+      <HintPath>..\..\..\QlikAPIs\qlik-sseapi\src\bin\$(Configuration)\$(TargetFramework)\qlik-sseapi.dll</HintPath>
+    </Reference>
+    <Reference Include="Ser.Engine.Rest.Client">
+      <HintPath>..\..\ser-engine-rest-client\src\bin\$(Configuration)\$(TargetFramework)\SerEngineRestClient.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 
   <ItemGroup>
     <None Update="App.config">
@@ -147,5 +100,5 @@
     </GetAssemblyIdentity>
     <Message Importance="High" Text="++++++ AssemblyVersion: %(MyAssemblyIdentities.Version) ++++++" />
   </Target>
-  
+
 </Project>
