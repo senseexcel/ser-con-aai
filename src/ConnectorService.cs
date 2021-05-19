@@ -63,7 +63,10 @@
             {
                 logger.Debug($"Use Url: {serverUrl}");
                 if (String.IsNullOrEmpty(serverUrl))
+                {
+                    logger.Info("No special url set up in the configuration file.");
                     return null;
+                }
                 dynamic configObject = JObject.Parse(configJson);
                 var serverUri = new Uri($"{serverUrl}");
                 if (!serverUrl.EndsWith("/ser"))
@@ -98,7 +101,7 @@
 
                 // Check with alternative txt
                 var alternativeTxtPath = Path.Combine(AppContext.BaseDirectory, "alternativdns.txt");
-                logger.Debug($"Take from 'alternativdns.txt'. from {alternativeTxtPath}");
+                logger.Debug($"Take from 'alternativdns.txt'. from '{alternativeTxtPath}'");
                 if (File.Exists(alternativeTxtPath))
                 {
                     var content = File.ReadAllText(alternativeTxtPath)?.Trim();
@@ -106,6 +109,10 @@
                     result = QlikConnectionCheck(configJson, content);
                     if (result != null)
                         return result;
+                }
+                else
+                {
+                    logger.Info("No 'alternativdns.txt' file found.");
                 }
 
                 logger.Debug("Take from config.hjson.");
