@@ -9,6 +9,7 @@
     using System;
     using System.IO;
     using System.Linq;
+    using System.Reflection;
     using System.Xml;
     #endregion
 
@@ -22,11 +23,27 @@
         public static ConnectorService Service { get; private set; }
         #endregion
 
+        #region Private Methods
+        private static void SetLoggerSettings(string configName)
+        {
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, configName);
+            if (!File.Exists(path))
+            {
+                var root = new FileInfo(path).Directory?.Parent?.Parent?.Parent;
+                var files = root.GetFiles("App.config", SearchOption.AllDirectories).ToList();
+                path = files.FirstOrDefault()?.FullName;
+            }
+
+            LogManager.Configuration = new XmlLoggingConfiguration(path);
+        }
+        #endregion
+
+        #region Public Methods
         static void Main(string[] args)
         {
             try
             {
-                SetLoggerSettings();
+                SetLoggerSettings("App.config");
 
                 if (args.Length > 0 && args[0] == "VersionNumber")
                 {
@@ -69,53 +86,6 @@
             {
                 logger.Error(ex);
                 Environment.Exit(1);
-            }
-        }
-
-        #region Private Methods
-        private static XmlReader GetXmlReader(string path)
-        {
-            var jsonContent = File.ReadAllText(path);
-            var xdoc = JsonConvert.DeserializeXNode(jsonContent);
-            return xdoc.CreateReader();
-        }
-
-        private static void SetLoggerSettings()
-        {
-            var path = String.Empty;
-
-            try
-            {
-                var files = Directory.GetFiles(AppContext.BaseDirectory, "*.*", SearchOption.TopDirectoryOnly)
-                                     .Where(f => f.ToLowerInvariant().EndsWith("\\app.config") ||
-                                                 f.ToLowerInvariant().EndsWith("\\app.json")).ToList();
-                if (files != null && files.Count > 0)
-                {
-                    if (files.Count > 1)
-                        throw new Exception("Too many logger configs found.");
-
-                    path = files.FirstOrDefault();
-                    var extention = Path.GetExtension(path);
-                    switch (extention)
-                    {
-                        case ".json":
-                            logger.Factory.Configuration = new XmlLoggingConfiguration(GetXmlReader(path), Path.GetFileName(path));
-                            break;
-                        case ".config":
-                            logger.Factory.Configuration = new XmlLoggingConfiguration(path);
-                            break;
-                        default:
-                            throw new Exception($"unknown log format {extention}.");
-                    }
-                }
-                else
-                {
-                    throw new Exception("No logger config loaded.");
-                }
-            }
-            catch
-            {
-                Console.WriteLine($"The logger setting are invalid!!!\nPlease check the {path} in the app folder.");
             }
         }
         #endregion

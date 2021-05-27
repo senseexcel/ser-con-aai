@@ -3,6 +3,7 @@
     #region Usings
     using System;
     using System.IO;
+    using System.Reflection;
     using Newtonsoft.Json;
     #endregion
 
@@ -29,8 +30,10 @@
 
         public static string GetMainVersion()
         {
-            //Get package versions from json file (msbuild)
-            return "5.1.3";
+            var appVersion = Assembly.GetExecutingAssembly().GetName().Version;
+            if (appVersion == null)
+                return "unknown";
+            return $"{appVersion.Major}.{appVersion.Minor}.{appVersion.Build}";
         }
     }
 }
