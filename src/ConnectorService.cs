@@ -70,7 +70,10 @@
                 dynamic configObject = JObject.Parse(configJson);
                 var serverUri = new Uri($"{serverUrl}");
                 if (!serverUrl.EndsWith("/ser"))
-                    serverUri = new Uri($"{serverUrl}/ser");
+                {
+                    var uriBuilder = new UriBuilder(serverUrl) { Path = "ser" };
+                    serverUri = uriBuilder.Uri;
+                }
                 configObject.connection.serverUri = serverUri;
                 ConnectorConfig connectorConfig = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
 
@@ -188,7 +191,7 @@
             ConnectorConfig config = JsonConvert.DeserializeObject<ConnectorConfig>(ConfigObject.ToString());
             if (config.StopTimeout < 5)
                 config.StopTimeout = 5;
-           
+
             //Start Rest Service
             var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
             var arguments = new List<string>() { $"--Mode=NoService", $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
