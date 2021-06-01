@@ -166,9 +166,9 @@
             }, cts.Token);
         }
 
-        private Task StartRestServer(string[] arguments)
+        private void StartRestServer(string[] arguments)
         {
-            return Task.Run(() =>
+            Task.Run(() =>
             {
                 Ser.Engine.Rest.Program.Main(arguments);
             }, cts.Token);
@@ -191,7 +191,7 @@
            
             //Start Rest Service
             var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
-            var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
+            var arguments = new List<string>() { $"--Mode=NoService", $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
             StartRestServer(arguments.ToArray());
             config.PackageVersion = ConnectorVersion.GetMainVersion();
             logger.Info($"MainVersion: {config.PackageVersion}");
