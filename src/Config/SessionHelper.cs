@@ -72,7 +72,7 @@
                     }
                 }
 
-                logger.Debug("Create new Websocket session...");
+                logger.Debug("Create new Qlik Session...");
                 var sessionInfo = Manager.CreateNewSession(connection, request.QlikUser, request.AppId);
                 if (sessionInfo != null)
                     Sessions.Add(sessionInfo);
