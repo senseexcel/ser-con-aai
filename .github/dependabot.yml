@@ -1,0 +1,80 @@
+version: 2
+updates:
+- package-ecosystem: nuget
+  directory: "/src"
+  schedule:
+    interval: daily
+  open-pull-requests-limit: 10
+  target-branch: development
+  assignees:
+  - mossbeard
+  ignore:
+  - dependency-name: FluentFTP
+    versions:
+    - 33.1.7
+  - dependency-name: Swashbuckle.AspNetCore.Annotations
+    versions:
+    - 6.1.3
+  - dependency-name: System.IdentityModel.Tokens.Jwt
+    versions:
+    - 6.10.2
+  - dependency-name: Swashbuckle.AspNetCore
+    versions:
+    - 6.1.3
+  - dependency-name: Grpc.Core.Api
+    versions:
+    - 2.35.0
+    - 2.36.0
+    - 2.36.1
+    - 2.36.4
+    - 2.37.0
+  - dependency-name: Grpc
+    versions:
+    - 2.35.0
+    - 2.36.0
+    - 2.36.1
+    - 2.36.4
+    - 2.37.0
+  - dependency-name: Google.Protobuf
+    versions:
+    - 3.14.0
+    - 3.15.0
+    - 3.15.1
+    - 3.15.2
+    - 3.15.3
+    - 3.15.4
+    - 3.15.5
+    - 3.15.6
+    - 3.15.7
+    - 3.15.8
+  - dependency-name: Grpc.Core
+    versions:
+    - 2.35.0
+    - 2.36.0
+    - 2.36.1
+    - 2.36.4
+    - 2.37.0
+  - dependency-name: Grpc.Tools
+    versions:
+    - 2.35.0
+    - 2.36.0
+    - 2.36.1
+    - 2.36.4
+    - 2.37.0
+  - dependency-name: System.Drawing.Common
+    versions:
+    - 5.0.0
+    - 5.0.1
+    - 5.0.2
+  - dependency-name: prometheus-net
+    versions:
+    - 4.1.1
+  - dependency-name: prometheus-net.AspNetCore
+    versions:
+    - 4.1.1
+  - dependency-name: GitVersionTask
+    versions:
+    - 5.5.1
+  - dependency-name: System.Text.Encoding.CodePages
+    versions:
+    - 5.0.0
