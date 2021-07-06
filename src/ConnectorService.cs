@@ -194,8 +194,11 @@
 
             //Start Rest Service
             var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
-            var arguments = new List<string>() { $"--Mode=NoService", $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
-            StartRestServer(arguments.ToArray());
+            if (!config.UseExternalRestService)
+            {
+                var arguments = new List<string>() { $"--Mode=NoService", $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
+                StartRestServer(arguments.ToArray());
+            }
             config.PackageVersion = ConnectorVersion.GetMainVersion();
             logger.Info($"MainVersion: {config.PackageVersion}");
             config.ExternalPackageJson = ConnectorVersion.GetExternalPackageJson();
