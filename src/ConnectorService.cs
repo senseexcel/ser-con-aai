@@ -86,6 +86,8 @@
                     logger.Info("The connection to Qlik Sense was successful.");
                     return serverUri;
                 }
+
+                logger.Warn($"Connection check to qlik with url '{serverUrl}' was not successfully...");
                 return null;
             }
             catch (Exception ex)
