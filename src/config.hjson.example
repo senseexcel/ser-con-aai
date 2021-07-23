@@ -22,6 +22,9 @@
   # Connection to rest service
   # restServiceUrl: http://localhost:40263
 
+  # Use external rest service
+  # useExternalRestService: true
+
   # Connection settings to Qlik
   connection:
   {

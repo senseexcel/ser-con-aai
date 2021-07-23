@@ -63,11 +63,17 @@
             {
                 logger.Debug($"Use Url: {serverUrl}");
                 if (String.IsNullOrEmpty(serverUrl))
+                {
+                    logger.Info("No special url set up in the configuration file.");
                     return null;
+                }
                 dynamic configObject = JObject.Parse(configJson);
                 var serverUri = new Uri($"{serverUrl}");
                 if (!serverUrl.EndsWith("/ser"))
-                    serverUri = new Uri($"{serverUrl}/ser");
+                {
+                    var uriBuilder = new UriBuilder(serverUrl) { Path = "ser" };
+                    serverUri = uriBuilder.Uri;
+                }
                 configObject.connection.serverUri = serverUri;
                 ConnectorConfig connectorConfig = JsonConvert.DeserializeObject<ConnectorConfig>(configObject.ToString());
 
@@ -80,6 +86,8 @@
                     logger.Info("The connection to Qlik Sense was successful.");
                     return serverUri;
                 }
+
+                logger.Warn($"Connection check to qlik with url '{serverUrl}' was not successfully...");
                 return null;
             }
             catch (Exception ex)
@@ -98,7 +106,7 @@
 
                 // Check with alternative txt
                 var alternativeTxtPath = Path.Combine(AppContext.BaseDirectory, "alternativdns.txt");
-                logger.Debug($"Take from 'alternativdns.txt'. from {alternativeTxtPath}");
+                logger.Debug($"Take from 'alternativdns.txt'. from '{alternativeTxtPath}'");
                 if (File.Exists(alternativeTxtPath))
                 {
                     var content = File.ReadAllText(alternativeTxtPath)?.Trim();
@@ -106,6 +114,10 @@
                     result = QlikConnectionCheck(configJson, content);
                     if (result != null)
                         return result;
+                }
+                else
+                {
+                    logger.Info("No 'alternativdns.txt' file found.");
                 }
 
                 logger.Debug("Take from config.hjson.");
@@ -159,9 +171,9 @@
             }, cts.Token);
         }
 
-        private Task StartRestServer(string[] arguments)
+        private void StartRestServer(string[] arguments)
         {
-            return Task.Run(() =>
+            Task.Run(() =>
             {
                 Ser.Engine.Rest.Program.Main(arguments);
             }, cts.Token);
@@ -181,11 +193,14 @@
             ConnectorConfig config = JsonConvert.DeserializeObject<ConnectorConfig>(ConfigObject.ToString());
             if (config.StopTimeout < 5)
                 config.StopTimeout = 5;
-           
+
             //Start Rest Service
             var rootContentFolder = HelperUtilities.GetFullPathFromApp(config.WorkingDir);
-            var arguments = new List<string>() { $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
-            StartRestServer(arguments.ToArray());
+            if (!config.UseExternalRestService)
+            {
+                var arguments = new List<string>() { $"--Mode=NoService", $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
+                StartRestServer(arguments.ToArray());
+            }
             config.PackageVersion = ConnectorVersion.GetMainVersion();
             logger.Info($"MainVersion: {config.PackageVersion}");
             config.ExternalPackageJson = ConnectorVersion.GetExternalPackageJson();

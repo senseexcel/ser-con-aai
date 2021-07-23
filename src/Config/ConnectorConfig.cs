@@ -27,6 +27,7 @@
         public int BindingPort { get; set; } = 50059;
         public string BindingHost { get; set; } = "localhost";
         public string RestServiceUrl { get; set; } = "http://localhost:40263";
+        public bool UseExternalRestService { get; set; }
         public int CleanupTimeout { get; set; } = 10;
         public SerConnection Connection { get; set; }
 

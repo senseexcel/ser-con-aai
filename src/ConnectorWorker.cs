@@ -244,7 +244,7 @@
                 var request = QlikRequest.Parse(domainUser, qlikAppId, userJson);
 
                 var functionCall = (ConnectorFunction)functionHeader.FunctionId;
-                logger.Debug($"Function id: {functionCall}");
+                logger.Debug($"Call Function id: '{functionCall}' from client '{context?.Peer}'.");
 
                 if (functionCall == ConnectorFunction.START)
                 {
