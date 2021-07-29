@@ -23,6 +23,7 @@
         #region Properties
         public string WorkingDir { get; set; }
         public int StopTimeout { get; set; } = 10;
+        public int RestTimeout { get; set; } = 30;
         public bool UsePerfomanceAnalyzer { get; set; } = false;
         public int BindingPort { get; set; } = 50059;
         public string BindingHost { get; set; } = "localhost";

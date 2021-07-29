@@ -22,6 +22,9 @@
   # Connection to rest service
   # restServiceUrl: http://localhost:40263
 
+  # Connection timeout to rest
+  # restTimeout: 30
+
   # Use external rest service
   # useExternalRestService: true
 

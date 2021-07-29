@@ -158,16 +158,23 @@
         {
             return Task.Run(() =>
             {
-                var serverUri = CheckAlternativeUris(json);
-                while (serverUri == null)
+                try
                 {
-                    logger.Error("There is no connection to Qlik.");
-                    logger.Error("Please edit the right url in the connector config and check the qlik services.");
-                    logger.Error("The connection to qlik is checked every 20 seconds.");
-                    Thread.Sleep(20000);
-                    serverUri = CheckAlternativeUris(json);
+                    var serverUri = CheckAlternativeUris(json);
+                    while (serverUri == null)
+                    {
+                        logger.Error("There is no connection to Qlik.");
+                        logger.Error("Please edit the right url in the connector config and check the qlik services.");
+                        logger.Error("The connection to qlik is checked every 20 seconds.");
+                        Thread.Sleep(20000);
+                        serverUri = CheckAlternativeUris(json);
+                    }
+                    StartupConnector(serverUri);
                 }
-                StartupConnector(serverUri);
+                catch (Exception ex)
+                {
+                    logger.Error(ex);
+                }
             }, cts.Token);
         }
 

@@ -56,7 +56,7 @@
                 });
             }
 
-            var restClient = new ReportingRestApiClient(new Uri(config?.RestServiceUrl?.TrimEnd('/')));
+            var restClient = new ReportingRestApiClient(new Uri(config?.RestServiceUrl?.TrimEnd('/')), config.RestTimeout);
             RuntimeOptions = new RuntimeOptions()
             {
                 Config = config,
