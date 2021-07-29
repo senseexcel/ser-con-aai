@@ -326,7 +326,7 @@
             catch (Exception ex)
             {
                 logger.Error(ex, $"The method 'ExecuteFunction' failed with error '{ex.Message}'.");
-                response.Status = - 1;
+                response.Status = -1;
                 response.SetErrorMessage(ex);
             }
             finally
