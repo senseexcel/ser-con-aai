@@ -20,7 +20,6 @@
     using Ser.ConAai.TaskObjects;
     using Ser.ConAai.Communication;
     using Ser.Engine.Rest.Client;
-    using Ser.Engine.Rest.Controllers;
     #endregion
 
     public class ConnectorWorker : ConnectorBase
