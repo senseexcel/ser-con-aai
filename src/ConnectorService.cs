@@ -222,6 +222,15 @@
             logger.Debug($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}");
             logger.Debug($"Server start...");
 
+            // Wait for slow IO perfomance
+            if (config.StartRestTimeout < 0)
+                config.StartRestTimeout = 0;
+            if (config.StartRestTimeout > 120)
+                config.StartRestTimeout = 120;
+
+            logger.Debug($"Connector start timeout is '{config.StartRestTimeout}' seconds...");
+            Thread.Sleep(config.StartRestTimeout * 1000);
+
             worker = new ConnectorWorker(config, cts);
             worker.CleanupOldFiles();
             worker.RestServiceHealthCheck();
