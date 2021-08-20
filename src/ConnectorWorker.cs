@@ -260,6 +260,7 @@
                             if (tmpsession == null)
                                 throw new Exception("No session cookie generated. (Qlik Task)");
                             var qrsHub = new QlikQrsHub(RuntimeOptions.Config.Connection.ServerUri, tmpsession.Cookie);
+                            qrsHub.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
                             domainUser = request.GetAppOwner(qrsHub, qlikAppId);
                             if (domainUser == null)
                                 throw new Exception("The owner of the App could not found.");
