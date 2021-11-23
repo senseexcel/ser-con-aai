@@ -68,7 +68,7 @@
             };
             RuntimeOptions.TaskPool.Run(RuntimeOptions);
 
-            var rendererClient = new ReportingRendererApiClient(new Uri(config?.RestServiceUrl?.TrimEnd('/')), config.RestTimeout);
+            var rendererClient = new ReportingRendererApiClient(new Uri(config?.RendererServiceUrl?.TrimEnd('/')), config.RestTimeout);
             var rendererVersion = rendererClient.GetVersion();
             logger.Info($"Renderer Version: {rendererVersion}");
             config.PackageVersions.Add($"AnalyticsGate Renderer: {rendererVersion}");

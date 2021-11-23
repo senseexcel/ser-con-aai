@@ -31,6 +31,7 @@
         public int BindingPort { get; set; } = 50059;
         public string BindingHost { get; set; } = "localhost";
         public string RestServiceUrl { get; set; } = "http://localhost:40263";
+        public string RendererServiceUrl { get; set; } = "https://localhost:40271";
         public bool UseExternalRestService { get; set; }
         public int CleanupTimeout { get; set; } = 10;
         public SerConnection Connection { get; set; }
@@ -41,6 +42,7 @@
         public string AppVersion { get; private set; } = PlatformServices.Default.Application.ApplicationVersion;
         public string AppName { get; private set; } = PlatformServices.Default.Application.ApplicationName;
         public List<string> PackageVersions { get; set; } = new List<string>();
+        public string PackageVersion { get; set; }
         public string ExternalPackageJson { get; set; }
         #endregion
 

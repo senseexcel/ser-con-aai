@@ -211,6 +211,7 @@
 
             var mainVersion = ConnectorVersion.GetMainVersion();
             config.PackageVersions.Add($"AnalyticsGate Version: {mainVersion}");
+            config.PackageVersion = mainVersion;
             logger.Info($"Connector Version: {mainVersion}");
 
             config.ExternalPackageJson = ConnectorVersion.GetExternalPackageJson();
