@@ -81,6 +81,9 @@
     <Reference Include="Ser.Engine.Rest.Client">
       <HintPath>..\..\ser-engine-rest-client\src\bin\$(Configuration)\$(TargetFramework)\SerEngineRestClient.dll</HintPath>
     </Reference>
+    <Reference Include="ReportingRendererServiceClient">
+      <HintPath>..\..\..\ReportingRenderer\reporting-renderer-service-client\src\bin\$(Configuration)\$(TargetFramework)\ReportingRendererServiceClient.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>

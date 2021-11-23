@@ -20,6 +20,7 @@
     using Ser.ConAai.TaskObjects;
     using Ser.ConAai.Communication;
     using Ser.Engine.Rest.Client;
+    using AG.Renderer.Rest.Client;
     #endregion
 
     public class ConnectorWorker : ConnectorBase
@@ -66,6 +67,9 @@
                 TaskPool = new ManagedTaskPool()
             };
             RuntimeOptions.TaskPool.Run(RuntimeOptions);
+
+            var rendererClient = new ReportingRendererApiClient(new Uri(config?.RestServiceUrl?.TrimEnd('/')), config.RestTimeout);
+            config.PackageVersions.Append($"AnalyticsGate Renderer: {rendererClient.GetVersion()}");
         }
         #endregion
 

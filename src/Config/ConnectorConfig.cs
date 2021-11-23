@@ -10,6 +10,7 @@
     using System;
     using System.IO;
     using System.Runtime.InteropServices;
+    using System.Text;
     #endregion
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
@@ -38,7 +39,7 @@
         public string Architecture { get; private set; } = RuntimeInformation.OSArchitecture.ToString();
         public string AppVersion { get; private set; } = PlatformServices.Default.Application.ApplicationVersion;
         public string AppName { get; private set; } = PlatformServices.Default.Application.ApplicationName;
-        public string PackageVersion { get; set; }
+        public StringBuilder PackageVersions { get; set; } = new StringBuilder();
         public string ExternalPackageJson { get; set; }
         #endregion
 

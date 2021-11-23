@@ -208,8 +208,10 @@
                 var arguments = new List<string>() { $"--Mode=NoService", $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
                 StartRestServer(arguments.ToArray());
             }
-            config.PackageVersion = ConnectorVersion.GetMainVersion();
-            logger.Info($"MainVersion: {config.PackageVersion}");
+
+            config.PackageVersions.Append($"AnalyticsGate Reporting: {ConnectorVersion.GetMainVersion()}");
+            logger.Info($"MainVersion: {config.PackageVersions.ToString()}");
+
             config.ExternalPackageJson = ConnectorVersion.GetExternalPackageJson();
             var packages = JArray.Parse(config.ExternalPackageJson);
             foreach (var package in packages)
