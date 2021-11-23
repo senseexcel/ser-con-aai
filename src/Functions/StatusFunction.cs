@@ -131,7 +131,7 @@
                 if (request.VersionMode == "all")
                 {
                     logger.Debug("Status - Read main versions...");
-                    result.Version = Options.Config.PackageVersions.ToString();
+                    result.Version = String.Join("|", Options.Config.PackageVersions);
                     result.Status = 100;
                     return result;
                 }

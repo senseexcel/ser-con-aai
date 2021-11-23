@@ -209,8 +209,9 @@
                 StartRestServer(arguments.ToArray());
             }
 
-            config.PackageVersions.Append($"AnalyticsGate Reporting: {ConnectorVersion.GetMainVersion()}");
-            logger.Info($"MainVersion: {config.PackageVersions.ToString()}");
+            var mainVersion = ConnectorVersion.GetMainVersion();
+            config.PackageVersions.Add($"AnalyticsGate Version: {mainVersion}");
+            logger.Info($"Connector Version: {mainVersion}");
 
             config.ExternalPackageJson = ConnectorVersion.GetExternalPackageJson();
             var packages = JArray.Parse(config.ExternalPackageJson);

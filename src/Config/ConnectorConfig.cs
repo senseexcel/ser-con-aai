@@ -8,6 +8,7 @@
     using Ser.Api;
     using Ser.Api.Model;
     using System;
+    using System.Collections.Generic;
     using System.IO;
     using System.Runtime.InteropServices;
     using System.Text;
@@ -39,7 +40,7 @@
         public string Architecture { get; private set; } = RuntimeInformation.OSArchitecture.ToString();
         public string AppVersion { get; private set; } = PlatformServices.Default.Application.ApplicationVersion;
         public string AppName { get; private set; } = PlatformServices.Default.Application.ApplicationName;
-        public StringBuilder PackageVersions { get; set; } = new StringBuilder();
+        public List<string> PackageVersions { get; set; } = new List<string>();
         public string ExternalPackageJson { get; set; }
         #endregion
 

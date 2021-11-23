@@ -71,7 +71,7 @@
             var rendererClient = new ReportingRendererApiClient(new Uri(config?.RestServiceUrl?.TrimEnd('/')), config.RestTimeout);
             var rendererVersion = rendererClient.GetVersion();
             logger.Info($"Renderer Version: {rendererVersion}");
-            config.PackageVersions.Append($"AnalyticsGate Renderer: {rendererVersion}");
+            config.PackageVersions.Add($"AnalyticsGate Renderer: {rendererVersion}");
         }
         #endregion
 
