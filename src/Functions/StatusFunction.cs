@@ -131,9 +131,15 @@
                 if (request.VersionMode == "all")
                 {
                     logger.Debug("Status - Read main versions...");
-                    //For Future new versions of connector and renderer
-                    //result.Version = String.Join("|", Options.Config.PackageVersions);
                     result.Version = Options.Config.PackageVersion;
+                    result.Status = 100;
+                    return result;
+                }
+
+                if (request.VersionMode == "versions")
+                {
+                    logger.Debug("Status - Read all versions...");
+                    result.Version = String.Join("|", Options.Config.PackageVersions);
                     result.Status = 100;
                     return result;
                 }
