@@ -20,7 +20,7 @@
     using Ser.ConAai.TaskObjects;
     using Ser.ConAai.Communication;
     using Ser.Engine.Rest.Client;
-    using Ser.Engine.Rest.Controllers;
+    using AG.Renderer.Rest.Client;
     #endregion
 
     public class ConnectorWorker : ConnectorBase
@@ -56,7 +56,7 @@
                 });
             }
 
-            var restClient = new ReportingRestApiClient(new Uri(config?.RestServiceUrl?.TrimEnd('/')));
+            var restClient = new ReportingRestApiClient(new Uri(config?.RestServiceUrl?.TrimEnd('/')), config.RestTimeout);
             RuntimeOptions = new RuntimeOptions()
             {
                 Config = config,
@@ -67,6 +67,11 @@
                 TaskPool = new ManagedTaskPool()
             };
             RuntimeOptions.TaskPool.Run(RuntimeOptions);
+
+            var rendererClient = new ReportingRendererApiClient(new Uri(config?.RendererServiceUrl?.TrimEnd('/')), config.RestTimeout);
+            var rendererVersion = rendererClient.GetVersion();
+            logger.Info($"Renderer Version: {rendererVersion}");
+            config.PackageVersions.Add($"AnalyticsGate Renderer: {rendererVersion}");
         }
         #endregion
 
@@ -261,6 +266,7 @@
                             if (tmpsession == null)
                                 throw new Exception("No session cookie generated. (Qlik Task)");
                             var qrsHub = new QlikQrsHub(RuntimeOptions.Config.Connection.ServerUri, tmpsession.Cookie);
+                            qrsHub.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
                             domainUser = request.GetAppOwner(qrsHub, qlikAppId);
                             if (domainUser == null)
                                 throw new Exception("The owner of the App could not found.");
@@ -326,7 +332,7 @@
             catch (Exception ex)
             {
                 logger.Error(ex, $"The method 'ExecuteFunction' failed with error '{ex.Message}'.");
-                response.Status = - 1;
+                response.Status = -1;
                 response.SetErrorMessage(ex);
             }
             finally

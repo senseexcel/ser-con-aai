@@ -22,6 +22,15 @@
   # Connection to rest service
   # restServiceUrl: http://localhost:40263
 
+  # Connection to renderer service
+  # rendererServiceUrl: https://localhost:40271
+
+  # Connection timeout to rest
+  # restTimeout: 30
+
+  # Waits a certain time before starting the service.
+  # StartRestTimeout: 0
+
   # Use external rest service
   # useExternalRestService: true
 

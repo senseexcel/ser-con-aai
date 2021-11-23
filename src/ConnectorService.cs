@@ -158,16 +158,23 @@
         {
             return Task.Run(() =>
             {
-                var serverUri = CheckAlternativeUris(json);
-                while (serverUri == null)
+                try
                 {
-                    logger.Error("There is no connection to Qlik.");
-                    logger.Error("Please edit the right url in the connector config and check the qlik services.");
-                    logger.Error("The connection to qlik is checked every 20 seconds.");
-                    Thread.Sleep(20000);
-                    serverUri = CheckAlternativeUris(json);
+                    var serverUri = CheckAlternativeUris(json);
+                    while (serverUri == null)
+                    {
+                        logger.Error("There is no connection to Qlik.");
+                        logger.Error("Please edit the right url in the connector config and check the qlik services.");
+                        logger.Error("The connection to qlik is checked every 20 seconds.");
+                        Thread.Sleep(20000);
+                        serverUri = CheckAlternativeUris(json);
+                    }
+                    StartupConnector(serverUri);
                 }
-                StartupConnector(serverUri);
+                catch (Exception ex)
+                {
+                    logger.Error(ex);
+                }
             }, cts.Token);
         }
 
@@ -201,8 +208,12 @@
                 var arguments = new List<string>() { $"--Mode=NoService", $"--Urls={config.RestServiceUrl}", $"--contentRoot={rootContentFolder}" };
                 StartRestServer(arguments.ToArray());
             }
-            config.PackageVersion = ConnectorVersion.GetMainVersion();
-            logger.Info($"MainVersion: {config.PackageVersion}");
+
+            var mainVersion = ConnectorVersion.GetMainVersion();
+            config.PackageVersions.Add($"AnalyticsGate Version: {mainVersion}");
+            config.PackageVersion = mainVersion;
+            logger.Info($"Connector Version: {mainVersion}");
+
             config.ExternalPackageJson = ConnectorVersion.GetExternalPackageJson();
             var packages = JArray.Parse(config.ExternalPackageJson);
             foreach (var package in packages)
@@ -214,6 +225,15 @@
             logger.Debug("Service running...");
             logger.Debug($"Start Service on Port \"{config.BindingPort}\" with Host \"{config.BindingHost}");
             logger.Debug($"Server start...");
+
+            // Wait for slow IO perfomance
+            if (config.StartRestTimeout < 0)
+                config.StartRestTimeout = 0;
+            if (config.StartRestTimeout > 120)
+                config.StartRestTimeout = 120;
+
+            logger.Debug($"Connector start timeout is '{config.StartRestTimeout}' seconds...");
+            Thread.Sleep(config.StartRestTimeout * 1000);
 
             worker = new ConnectorWorker(config, cts);
             worker.CleanupOldFiles();

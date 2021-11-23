@@ -8,8 +8,10 @@
     using Ser.Api;
     using Ser.Api.Model;
     using System;
+    using System.Collections.Generic;
     using System.IO;
     using System.Runtime.InteropServices;
+    using System.Text;
     #endregion
 
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore,
@@ -23,10 +25,13 @@
         #region Properties
         public string WorkingDir { get; set; }
         public int StopTimeout { get; set; } = 10;
+        public int RestTimeout { get; set; } = 30;
+        public int StartRestTimeout { get; set; } = 0;
         public bool UsePerfomanceAnalyzer { get; set; } = false;
         public int BindingPort { get; set; } = 50059;
         public string BindingHost { get; set; } = "localhost";
         public string RestServiceUrl { get; set; } = "http://localhost:40263";
+        public string RendererServiceUrl { get; set; } = "https://localhost:40271";
         public bool UseExternalRestService { get; set; }
         public int CleanupTimeout { get; set; } = 10;
         public SerConnection Connection { get; set; }
@@ -36,6 +41,7 @@
         public string Architecture { get; private set; } = RuntimeInformation.OSArchitecture.ToString();
         public string AppVersion { get; private set; } = PlatformServices.Default.Application.ApplicationVersion;
         public string AppName { get; private set; } = PlatformServices.Default.Application.ApplicationName;
+        public List<string> PackageVersions { get; set; } = new List<string>();
         public string PackageVersion { get; set; }
         public string ExternalPackageJson { get; set; }
         #endregion
