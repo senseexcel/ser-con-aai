@@ -9,8 +9,8 @@
     <Copyright>Copyright (c) $([System.DateTime]::Today.ToString('yyyy'))</Copyright>
     <Company>akquinet finance &amp; controlling GmbH</Company>
     <Configuration>Release</Configuration>
-    <AssemblyVersion>5.2.0.0</AssemblyVersion>
-    <FileVersion>5.2.0.0</FileVersion>
+    <AssemblyVersion>5.2.1.0</AssemblyVersion>
+    <FileVersion>5.2.1.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -19,31 +19,31 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="FluentFTP" Version="35.0.5" />
-    <PackageReference Include="Google.Protobuf" Version="3.19.1" />
-    <PackageReference Include="Grpc" Version="2.41.1" />
-    <PackageReference Include="Grpc.Core" Version="2.41.1" />
-    <PackageReference Include="Grpc.Core.Api" Version="2.41.1" />
-    <PackageReference Include="Grpc.Tools" Version="2.41.1">
+    <PackageReference Include="FluentFTP" Version="36.1.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.19.4" />
+    <PackageReference Include="Grpc" Version="2.43.0" />
+    <PackageReference Include="Grpc.Core" Version="2.43.0" />
+    <PackageReference Include="Grpc.Core.Api" Version="2.43.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.43.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Hjson" Version="3.0.0" />
     <PackageReference Include="ImpromptuInterface" Version="7.0.1" />
-    <PackageReference Include="Markdig" Version="0.26.0" />
+    <PackageReference Include="Markdig" Version="0.27.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-    <PackageReference Include="NLog" Version="4.7.12" />
+    <PackageReference Include="NLog" Version="4.7.13" />
     <PackageReference Include="PeterKottas.DotNetCore.WindowsService" Version="2.0.12" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />
-    <PackageReference Include="prometheus-net" Version="5.0.1" />
-    <PackageReference Include="prometheus-net.AspNetCore" Version="5.0.1" />
+    <PackageReference Include="prometheus-net" Version="5.0.2" />
+    <PackageReference Include="prometheus-net.AspNetCore" Version="5.0.2" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.2.3" />
     <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="6.2.3" />
-    <PackageReference Include="System.Drawing.Common" Version="5.0.2" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.14.0" />
-    <PackageReference Include="System.Interactive.Async" Version="5.0.0" />
-    <PackageReference Include="System.Resources.Extensions" Version="5.0.0" />
-    <PackageReference Include="System.Text.Encoding.CodePages" Version="5.0.0" />
+    <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.15.1" />
+    <PackageReference Include="System.Interactive.Async" Version="6.0.1" />
+    <PackageReference Include="System.Resources.Extensions" Version="6.0.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="6.0.0" />
     <PackageReference Include="YamlDotNet" Version="11.2.1" />
   </ItemGroup>
 
@@ -70,13 +70,13 @@
       <HintPath>..\..\ser-engine-rest\src\bin\$(Configuration)\$(TargetFramework)\SerEngineRest.dll</HintPath>
     </Reference>
     <Reference Include="enigma.net">
-      <HintPath>..\..\..\QlikAPIs\enigma.net\src\bin\$(Configuration)\$(TargetFramework)\enigma.net.dll</HintPath>
+      <HintPath>..\..\..\..\QlikAPIs\enigma.net\src\bin\$(Configuration)\$(TargetFramework)\enigma.net.dll</HintPath>
     </Reference>
     <Reference Include="qlik-engineapi">
-      <HintPath>..\..\..\QlikAPIs\qlik-engineapi\src\qlik-engineapi\bin\$(Configuration)\$(TargetFramework)\qlik-engineapi.dll</HintPath>
+      <HintPath>..\..\..\..\QlikAPIs\qlik-engineapi\src\qlik-engineapi\bin\$(Configuration)\$(TargetFramework)\qlik-engineapi.dll</HintPath>
     </Reference>
     <Reference Include="qlik-sseapi">
-      <HintPath>..\..\..\QlikAPIs\qlik-sseapi\src\bin\$(Configuration)\$(TargetFramework)\qlik-sseapi.dll</HintPath>
+      <HintPath>..\..\..\..\QlikAPIs\qlik-sseapi\src\bin\$(Configuration)\$(TargetFramework)\qlik-sseapi.dll</HintPath>
     </Reference>
     <Reference Include="Ser.Engine.Rest.Client">
       <HintPath>..\..\ser-engine-rest-client\src\bin\$(Configuration)\$(TargetFramework)\SerEngineRestClient.dll</HintPath>
