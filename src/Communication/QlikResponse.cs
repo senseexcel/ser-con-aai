@@ -22,6 +22,7 @@
         public string ExternalPackagesInfo { get; set; }
         public JArray ManagedTasks { get; set; } = new JArray();
         public JArray JobResults { get; set; } = new JArray();
+        public string EncryptText { get; set; }
         #endregion
 
         #region Public Methods

@@ -29,6 +29,7 @@
         public DomainUser QlikUser { get; set; }
         public string AppId { get; set; }
         public string JsonScript { get; set; }
+        public string EncryptText { get; set; }
         public static Exception Error { get; set; }
         #endregion
 
@@ -95,7 +96,8 @@
                     AppId = appId,
                     JsonScript = jsonScript,
                     ManagedTaskId = jsonObject?.taskId ?? null,
-                    VersionMode = jsonObject?.versions ?? null
+                    VersionMode = jsonObject?.versions ?? null,
+                    EncryptText = jsonObject?.encryptText ?? null
                 };
             }
             catch (Exception ex)

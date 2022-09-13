@@ -9,8 +9,8 @@
     <Copyright>Copyright (c) $([System.DateTime]::Today.ToString('yyyy'))</Copyright>
     <Company>akquinet finance &amp; controlling GmbH</Company>
     <Configuration>Release</Configuration>
-    <AssemblyVersion>5.2.1.0</AssemblyVersion>
-    <FileVersion>5.2.1.0</FileVersion>
+    <AssemblyVersion>5.3.0.0</AssemblyVersion>
+    <FileVersion>5.3.0.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -70,19 +70,19 @@
       <HintPath>..\..\ser-engine-rest\src\bin\$(Configuration)\$(TargetFramework)\SerEngineRest.dll</HintPath>
     </Reference>
     <Reference Include="enigma.net">
-      <HintPath>..\..\..\..\QlikAPIs\enigma.net\src\bin\$(Configuration)\$(TargetFramework)\enigma.net.dll</HintPath>
+      <HintPath>..\..\..\..\..\QlikAPIs\00_Temp\enigma.net\src\bin\$(Configuration)\$(TargetFramework)\enigma.net.dll</HintPath>
     </Reference>
     <Reference Include="qlik-engineapi">
-      <HintPath>..\..\..\..\QlikAPIs\qlik-engineapi\src\qlik-engineapi\bin\$(Configuration)\$(TargetFramework)\qlik-engineapi.dll</HintPath>
+      <HintPath>..\..\..\..\..\QlikAPIs\00_Temp\qlik-engineapi\src\qlik-engineapi\bin\$(Configuration)\$(TargetFramework)\qlik-engineapi.dll</HintPath>
     </Reference>
     <Reference Include="qlik-sseapi">
-      <HintPath>..\..\..\..\QlikAPIs\qlik-sseapi\src\bin\$(Configuration)\$(TargetFramework)\qlik-sseapi.dll</HintPath>
+      <HintPath>..\..\..\..\..\QlikAPIs\00_Temp\qlik-sseapi\src\bin\$(Configuration)\$(TargetFramework)\qlik-sseapi.dll</HintPath>
     </Reference>
     <Reference Include="Ser.Engine.Rest.Client">
       <HintPath>..\..\ser-engine-rest-client\src\bin\$(Configuration)\$(TargetFramework)\SerEngineRestClient.dll</HintPath>
     </Reference>
     <Reference Include="ReportingRendererServiceClient">
-      <HintPath>..\..\..\ReportingRenderer\reporting-renderer-service-client\src\bin\$(Configuration)\$(TargetFramework)\ReportingRendererServiceClient.dll</HintPath>
+      <HintPath>..\..\..\..\ReportingRenderer\00_Temp\ag-renderer-client\src\bin\$(Configuration)\$(TargetFramework)\AgRendererClient.dll</HintPath>
     </Reference>
   </ItemGroup>
 

@@ -20,7 +20,7 @@
     using Ser.ConAai.TaskObjects;
     using Ser.ConAai.Communication;
     using Ser.Engine.Rest.Client;
-    using AG.Renderer.Rest.Client;
+    using AgRendererClient;
     #endregion
 
     public class ConnectorWorker : ConnectorBase
@@ -35,7 +35,8 @@
             START = 1,
             STATUS = 2,
             STOP = 3,
-            RESULT = 4
+            RESULT = 4,
+            ENCRYPT = 5
         }
         #endregion
 
@@ -202,6 +203,17 @@
                                new Parameter { Name = "TaskId", DataType = DataType.String },
                             },
                             ReturnType = DataType.String
+                        },
+                        new FunctionDefinition
+                        {
+                            FunctionId = 5,
+                            FunctionType = FunctionType.Scalar,
+                            Name = nameof(ConnectorFunction.ENCRYPT),
+                            Params =
+                            {
+                               new Parameter { Name = "Text", DataType = DataType.String },
+                            },
+                            ReturnType = DataType.String
                         }
                     }
                 });
@@ -322,6 +334,14 @@
                     logger.Debug("Function call SER.STATUS...");
                     var statusFunction = new StatusFunction(RuntimeOptions);
                     response = statusFunction.GetStatusResponse(request);
+                    #endregion
+                }
+                else if(functionCall == ConnectorFunction.ENCRYPT)
+                {
+                    #region Function call SER.ENCRYPT
+                    logger.Debug("Function call SER.ENCRYPT...");
+                    var encryptFunction = new EncryptFunction(RuntimeOptions);
+                    response = encryptFunction.GetEncryptedText(request);
                     #endregion
                 }
                 else
