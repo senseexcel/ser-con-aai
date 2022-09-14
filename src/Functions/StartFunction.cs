@@ -18,6 +18,8 @@
     using System.Threading.Tasks;
     using Ser.Api;
     using Ser.Api.Model;
+    using AgApi;
+    using Ser.Gerneral;
     #endregion
 
     public class StartFunction : BaseFunction
@@ -117,8 +119,7 @@
                         // For file access
                         lock (threadObject)
                         {
-                            var path = HelperUtilities.GetFullPathFromApp(privateKey);
-                            var crypter = new TextCrypter(path);
+                            var privateKeyPath = SystemGeneral.GetFullPathFromApp(privateKey);
                             var value = report?.template?.outputPassword ?? null;
                             if (value == null)
                                 value = report?.template?.outputpassword ?? null;
@@ -128,8 +129,24 @@
                                 if (value.Type == JTokenType.Boolean)
                                     password = password.ToLowerInvariant();
                                 bool useBase64Password = report?.template?.useBase64Password ?? false;
-                                if (useBase64Password == true)
-                                    report.template.outputPassword = crypter.DecryptText(password);
+                                if (useBase64Password == true && File.Exists(privateKeyPath))
+                                {
+                                    EncryptionType type = report?.template?.encryptType;
+                                    if (type == EncryptionType.RSA256)
+                                    {
+                                        var textCrypter = new TextCrypter(privateKeyPath);
+                                        report.template.outputPassword = textCrypter.DecryptText(password);
+                                    }
+                                    else if (type == EncryptionType.AES256)
+                                    {
+                                        var aesCrypter = new AesCrypter(privateKeyPath);
+                                        report.template.outputPassword = aesCrypter.DecryptText(password);
+                                    }
+                                    else
+                                    {
+                                        throw new Exception($"Unknown encryption type '{type}'.");
+                                    }
+                                }
                                 else
                                     report.template.outputPassword = password;
                             }
