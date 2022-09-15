@@ -110,6 +110,11 @@
                                         child.mailServer.privateKey = Options?.Config?.Connection?.Credentials?.PrivateKey;
                                 }
                             }
+                            else if (childProp?.Name?.StartsWith("ftp") ?? false)
+                            {
+                                if (child?.privateKey == null)
+                                    child.privateKey = Options?.Config?.Connection?.Credentials?.PrivateKey;
+                            }
                         }
                     }
 
