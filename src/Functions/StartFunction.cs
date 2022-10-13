@@ -188,7 +188,7 @@
                         {
                             Type = type,
                             Key = "Authorization",
-                            Value = $"Bearer { token }"
+                            Value = $"Bearer {token}"
                         };
                         break;
                     case QlikCredentialType.SESSION:
@@ -427,11 +427,13 @@
                             //Add all server uris
                             foreach (var connection in configReport.Connections)
                             {
-                                connection.LicenseServers.Add(new SerServer() { ServerUri = new Uri("https://license.analyticsgate.com"), Location = "de", Priority = 1 });
                                 connection.LicenseServers.AddRange(Options.Config.Connection.LicenseServers);
+                                if (connection.LicenseServers.Count == 0)
+                                    connection.LicenseServers.Add(new SerServer() { ServerUri = new Uri("https://license.analyticsgate.com"), Location = "de", Priority = 1 });
 
-                                connection.RendererServers.Add(new SerServer() { ServerUri = new Uri("https://localhost:40271"), Location = "default", Priority = 100 });
                                 connection.RendererServers.AddRange(Options.Config.Connection.RendererServers);
+                                if (connection.RendererServers.Count == 0)
+                                    connection.RendererServers.Add(new SerServer() { ServerUri = new Uri("https://localhost:40271"), Location = "default", Priority = 100 });
                             }
                         }
                     }
